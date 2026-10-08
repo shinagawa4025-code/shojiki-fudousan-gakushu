@@ -48,7 +48,18 @@ header.app-header h1 {
   letter-spacing: 0.01em;
 }
 
-.global-search-wrap { margin-bottom: 10px; }
+.global-search-wrap { margin-bottom: 10px; display: flex; gap: 8px; align-items: center; }
+.global-search-wrap .global-search-input { flex: 1; }
+.theme-toggle-btn {
+  flex-shrink: 0;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 1.1rem;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+}
 
 .global-search-input {
   width: 100%;
@@ -594,4 +605,79 @@ footer.app-footer {
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.25);
     --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, 0.35), 0 6px 16px rgba(0, 0, 0, 0.3);
   }
+}
+
+/* 手動ダークモード(端末設定がライトでも強制適用) */
+:root[data-theme="dark"] {
+  --color-bg: #141a22;
+  --color-surface: #1c2530;
+  --color-surface-muted: #232e3b;
+  --color-border: #313e4d;
+  --color-text: #e7ecf2;
+  --color-text-muted: #94a3b5;
+  --color-primary: #5b8fc7;
+  --color-primary-dark: #3f6c9c;
+  --color-accent: #4fa89f;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, 0.35), 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* 設定ビュー */
+.settings-card { margin-bottom: 16px; }
+.settings-card-title { margin-top: 0; }
+.settings-file-input { font-size: 0.85rem; }
+.settings-import-status { font-size: 0.85rem; margin-top: 8px; padding: 8px 10px; border-radius: var(--radius); }
+.settings-import-ok { background: #dcefe2; color: var(--color-beg); }
+.settings-import-ng { background: #f6dede; color: var(--color-adv); }
+.settings-range-label { display: flex; flex-direction: column; gap: 6px; font-size: 0.88rem; max-width: 320px; }
+.settings-range { width: 100%; }
+
+/* 今日の復習 */
+.card-grid.single-col { grid-template-columns: 1fr; max-width: 420px; }
+.flip-card-tall { height: 360px; }
+.review-empty { text-align: center; }
+.grade-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.grade-btn { flex: 1 1 auto; font-size: 0.8rem; padding: 8px 6px; min-height: 40px; }
+.grade-again { background: var(--color-adv); }
+.grade-again:hover { background: #8a2e2e; }
+.grade-hard { background: var(--color-int); }
+.grade-hard:hover { background: #87600f; }
+.grade-good { background: var(--color-primary); }
+.grade-easy { background: var(--color-beg); }
+.grade-easy:hover { background: #2c5c3d; }
+.tts-btn {
+  position: absolute;
+  top: 8px;
+  right: 56px;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* 計算機 */
+.calc-card { margin-top: 12px; }
+.calc-card-title { margin-top: 0; }
+.calc-field-grid { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; max-width: 420px; }
+.calc-field { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--color-text-muted); }
+.calc-field input[type="number"], .calc-field select {
+  padding: 9px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.calc-field-checkbox { flex-direction: row; align-items: center; font-size: 0.88rem; }
+.calc-field-checkbox input { width: 18px; height: 18px; }
+.calc-result-grid { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 14px; }
+.calc-result-col { flex: 1 1 200px; }
+.calc-result-col h4 { margin: 0 0 6px; color: var(--color-primary-dark); }
+.calc-disclaimer { font-size: 0.76rem; color: var(--color-text-muted); margin-top: 14px; }
+.calc-note { font-size: 0.8rem; color: var(--color-text-muted); }
+
+@media (min-width: 1024px) {
+  .calc-field-grid { max-width: 480px; }
 }

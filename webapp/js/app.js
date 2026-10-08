@@ -2,9 +2,31 @@
 (function () {
   Router.register(`topics`, window.Views.topics);
   Router.register(`glossary`, window.Views.glossary);
+  Router.register(`review`, window.Views.review);
   Router.register(`quiz`, window.Views.quiz);
+  Router.register(`calculators`, window.Views.calculators);
   Router.register(`sources`, window.Views.sources);
   Router.register(`summary`, window.Views.summary);
+  Router.register(`settings`, window.Views.settings);
+
+  function initThemeToggle() {
+    const btn = document.getElementById(`theme-toggle-btn`);
+    if (!btn) return;
+    function isDarkNow() {
+      const pref = ThemeManager.getPreference();
+      if (pref === `dark`) return true;
+      if (pref === `light`) return false;
+      return window.matchMedia && window.matchMedia(`(prefers-color-scheme: dark)`).matches;
+    }
+    function refreshIcon() {
+      btn.textContent = isDarkNow() ? `☀️` : `🌙`;
+    }
+    btn.addEventListener(`click`, () => {
+      ThemeManager.setPreference(isDarkNow() ? `light` : `dark`);
+      refreshIcon();
+    });
+    refreshIcon();
+  }
 
   function initGlobalSearch() {
     const input = document.getElementById(`global-search-input`);
@@ -70,5 +92,9 @@
   document.addEventListener(`DOMContentLoaded`, () => {
     Router.init(document.getElementById(`view-root`));
     initGlobalSearch();
+    initThemeToggle();
+    if (`serviceWorker` in navigator) {
+      navigator.serviceWorker.register(`./sw.js`).catch(() => { /* オフライン対応は任意機能のため失敗しても無視 */ });
+    }
   });
 })();

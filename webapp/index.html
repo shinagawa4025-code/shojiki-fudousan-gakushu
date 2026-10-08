@@ -12,19 +12,31 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="不動産学習">
   <link rel="stylesheet" href="css/style.css">
+  <script>
+    (function () {
+      try {
+        var pref = JSON.parse(localStorage.getItem(`shojikiLearn.v1.themePreference`));
+        if (pref === `light` || pref === `dark`) document.documentElement.setAttribute(`data-theme`, pref);
+      } catch (e) { /* 初回起動時はキー未設定のため無視 */ }
+    })();
+  </script>
 </head>
 <body>
   <header class="app-header">
     <h1>不動産学習サイト</h1>
     <div class="global-search-wrap">
       <input type="search" id="global-search-input" class="global-search-input" placeholder="全体を検索…" aria-label="サイト全体検索" autocomplete="off">
+      <button type="button" id="theme-toggle-btn" class="theme-toggle-btn" aria-label="ダークモード切替" title="ダークモード切替"></button>
     </div>
     <nav class="tab-bar">
       <button type="button" data-view="topics" onclick="Router.navigate('#topics')">学習トピック</button>
       <button type="button" data-view="glossary" onclick="Router.navigate('#glossary')">用語集</button>
+      <button type="button" data-view="review" onclick="Router.navigate('#review')">今日の復習</button>
       <button type="button" data-view="quiz" onclick="Router.navigate('#quiz')">クイズ</button>
+      <button type="button" data-view="calculators" onclick="Router.navigate('#calculators')">計算機</button>
       <button type="button" data-view="sources" onclick="Router.navigate('#sources')">情報源</button>
       <button type="button" data-view="summary" onclick="Router.navigate('#summary')">動画一覧</button>
+      <button type="button" data-view="settings" onclick="Router.navigate('#settings')">設定</button>
     </nav>
   </header>
 
@@ -48,11 +60,18 @@
   <script src="js/dataIndex.js"></script>
   <script src="js/search.js"></script>
   <script src="js/router.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/tts.js"></script>
+  <script src="js/srs.js"></script>
+  <script src="js/cardUi.js"></script>
   <script src="js/views/topics.js"></script>
   <script src="js/views/glossary.js"></script>
+  <script src="js/views/review.js"></script>
   <script src="js/views/summary.js"></script>
   <script src="js/views/quiz.js"></script>
+  <script src="js/views/calculators.js"></script>
   <script src="js/views/sources.js"></script>
+  <script src="js/views/settings.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
