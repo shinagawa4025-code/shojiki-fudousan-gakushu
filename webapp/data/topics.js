@@ -1,4 +1,4 @@
-// 学習トピック: A〜G(不動産学習の主軸となる7トピック)
+// 学習トピック: 不動産学習の主軸となるトピック群(実践ガイド+A〜J、宅建士試験の4分野もカバー)
 window.APP_DATA = window.APP_DATA || {};
 window.APP_DATA.topics = [
   { id: `topicI`, name: `初めての一人暮らし実践ガイド`, level: `超入門`,
@@ -8,11 +8,11 @@ window.APP_DATA.topics = [
   { id: `topicA`, name: `賃貸`, level: `初級`,
     description: `賃貸契約の入口から退去までの一連の流れと、敷金・原状回復・保証会社・滞納対応などの基本ルール`,
     episodes: [`1-2`, `15-16`, `19-20`, `45-46`, `75-76`, `85-86`, `95-96`, `109-110`, `111-112`],
-    basicIds: [`basicA01`, `basicA02`, `basicA03`, `basicA04`, `basicA05`, `basicA06`, `basicA07`, `basicA08`] },
+    basicIds: [`basicA01`, `basicA02`, `basicA03`, `basicA04`, `basicA05`, `basicA06`, `basicA07`, `basicA08`, `basicA21`] },
   { id: `topicB`, name: `売買・契約`, level: `初・中級`,
-    description: `重要事項説明書・契約不適合責任・インスペクションなど、購入時に必ず確認すべき知識`,
+    description: `重要事項説明書・契約不適合責任・インスペクション、民法総論(意思表示・制限行為能力・相続)など、購入時と契約の基礎を網羅`,
     episodes: [`9-10`, `11-12`, `25-26`, `51-52`, `87-88`, `91-92`, `93-94`],
-    basicIds: [`basicB01`, `basicB02`, `basicB03`, `basicB04`, `basicB05`, `basicB06`, `basicB07`, `basicB08`] },
+    basicIds: [`basicB01`, `basicB02`, `basicB03`, `basicB04`, `basicB05`, `basicB06`, `basicB07`, `basicB08`, `basicB09`, `basicB10`, `basicB11`, `basicB12`, `basicB13`, `basicB14`, `basicB15`, `basicB16`, `basicB17`] },
   { id: `topicC`, name: `住宅ローン・資金計画`, level: `中級`,
     description: `融資特約・任意売却・リバースモーゲージなど、資金面でつまずいた時の選択肢`,
     episodes: [`17-18`, `29-30`, `43-44`, `59-60`, `63-64`, `105-106`],
@@ -24,7 +24,7 @@ window.APP_DATA.topics = [
   { id: `topicE`, name: `土地の権利関係・特殊物件`, level: `中上級`,
     description: `借地権・地役権・眺望権・底地投資など「権利関係」が複雑な物件`,
     episodes: [`23-24`, `37-38`, `41-42`, `71-72`, `73-74`, `79-80`, `99-100`],
-    basicIds: [`basicE01`, `basicE02`, `basicE03`, `basicE04`, `basicE05`, `basicE06`, `basicE07`, `basicE08`] },
+    basicIds: [`basicE01`, `basicE02`, `basicE03`, `basicE04`, `basicE05`, `basicE06`, `basicE07`, `basicE08`, `basicE09`] },
   { id: `topicF`, name: `業界構造・プロの手口`, level: `中上級`,
     description: `囲い込み・両手仲介・中抜き・三為業者など仲介の裏側の商流`,
     episodes: [`3-4`, `5-6`, `7-8`, `21-22`, `31-32`, `33-34`, `35-36`, `49-50`, `57-58`, `77-78`],
@@ -37,4 +37,8 @@ window.APP_DATA.topics = [
     description: `資産税(相続・贈与・譲渡所得)・法人税務(不動産保有法人)・不動産所得や消費税など、税理士実務で頻出する不動産税務の論点`,
     episodes: [],
     basicIds: [`basicH01`, `basicH02`, `basicH03`, `basicH04`, `basicH05`, `basicH06`, `basicH07`, `basicH08`, `basicH09`, `basicH10`, `basicH11`, `basicH12`, `basicH13`, `basicH14`] },
+  { id: `topicJ`, name: `法令上の制限`, level: `中上級`,
+    description: `用途地域・容積率・建蔽率・農地法・国土利用計画法・開発許可など、宅建士試験の「法令上の制限」分野に対応する都市計画・建築規制の基礎`,
+    episodes: [],
+    basicIds: [`basicJ01`, `basicJ02`, `basicJ03`, `basicJ04`, `basicJ05`, `basicJ06`, `basicJ07`, `basicJ08`, `basicJ09`, `basicJ10`, `basicJ11`, `basicJ12`] },
 ];
