@@ -65,6 +65,7 @@ window.CardUi = (function () {
         e.stopPropagation();
         known[term.id] = !known[term.id];
         Storage.set(`flashcards`, known);
+        if (window.Streak) window.Streak.recordToday();
         if (opts.onToggleKnown) {
           opts.onToggleKnown(term);
         } else {

@@ -70,8 +70,9 @@ window.Srs = (function () {
     card.lastGrade = g;
     cards[termId] = card;
     Storage.set(`srsCards`, cards);
+    if (window.Streak) window.Streak.recordToday();
     return card;
   }
 
-  return { migrateIfNeeded, getCard, isDue, getDueTermIds, grade, todayStr };
+  return { migrateIfNeeded, getCard, isDue, getDueTermIds, grade, todayStr, addDays };
 })();
