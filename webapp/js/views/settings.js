@@ -65,29 +65,32 @@ window.Views.settings = (function () {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      UI.toast(`バックアップをダウンロードしました`, `success`);
     });
 
     const importInput = wrap.querySelector(`[data-role="import-file"]`);
     const importStatus = wrap.querySelector(`[data-role="import-status"]`);
-    importInput.addEventListener(`change`, (e) => {
+    importInput.addEventListener(`change`, async (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
         try {
           const parsed = JSON.parse(reader.result);
           const keys = Object.keys(parsed);
           if (!keys.length) throw new Error(`empty`);
-          const ok = window.confirm(`${keys.length}件のデータ(${keys.join(`, `)})で現在のデータを上書きします。よろしいですか?`);
+          const ok = await UI.confirm(`${keys.length}件のデータ(${keys.join(`, `)})で現在のデータを上書きします。よろしいですか?`);
           if (!ok) { importInput.value = ``; return; }
           keys.forEach((k) => Storage.set(k, parsed[k]));
           importStatus.hidden = false;
           importStatus.textContent = `インポートが完了しました。ページを再読み込みすると反映されます。`;
           importStatus.className = `settings-import-status settings-import-ok`;
+          UI.toast(`インポートが完了しました`, `success`);
         } catch (err) {
           importStatus.hidden = false;
           importStatus.textContent = `インポートに失敗しました。正しいバックアップファイルか確認してください。`;
           importStatus.className = `settings-import-status settings-import-ng`;
+          UI.toast(`インポートに失敗しました`, `error`);
         }
         importInput.value = ``;
       };

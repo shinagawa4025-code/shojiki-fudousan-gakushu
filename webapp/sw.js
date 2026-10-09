@@ -1,5 +1,5 @@
 // Service Worker: オフライン閲覧対応(同一オリジンのみプリキャッシュ+ネットワークフォールバック)
-const CACHE_NAME = `shojiki-gakushu-v3`;
+const CACHE_NAME = `shojiki-gakushu-v4`;
 
 const PRECACHE_URLS = [
   `./`,
@@ -15,12 +15,15 @@ const PRECACHE_URLS = [
   `./data/quiz.js`,
   `./data/sources.js`,
   `./js/storage.js`,
+  `./js/ui.js`,
   `./js/dataIndex.js`,
   `./js/search.js`,
   `./js/router.js`,
   `./js/theme.js`,
   `./js/tts.js`,
   `./js/srs.js`,
+  `./js/streak.js`,
+  `./js/recommend.js`,
   `./js/cardUi.js`,
   `./js/app.js`,
   `./js/views/topics.js`,
@@ -39,7 +42,9 @@ const PRECACHE_URLS = [
 self.addEventListener(`install`, (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then((cache) => Promise.all(
+        PRECACHE_URLS.map((url) => fetch(url, { cache: `reload` }).then((res) => cache.put(url, res)))
+      ))
       .then(() => self.skipWaiting())
   );
 });

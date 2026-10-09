@@ -12,6 +12,8 @@ window.Views.glossary = (function () {
       else scrollTermId = param;
     }
     let state = { search: ``, level: `全て`, topic: topicParam || `全て`, memorizeMode: false };
+    const PAGE_SIZE = 60;
+    let visibleCount = PAGE_SIZE;
 
     const wrap = document.createElement(`div`);
     wrap.className = `view glossary-view`;
@@ -47,6 +49,7 @@ window.Views.glossary = (function () {
       chip.addEventListener(`click`, () => {
         state.level = lvl;
         chipRow.querySelectorAll(`.chip`).forEach((c) => c.classList.toggle(`active`, c.textContent === lvl));
+        visibleCount = PAGE_SIZE;
         renderGrid();
       });
       chipRow.appendChild(chip);
@@ -61,18 +64,26 @@ window.Views.glossary = (function () {
       chip.addEventListener(`click`, () => {
         state.topic = opt.id;
         topicChipRow.querySelectorAll(`.chip`).forEach((c) => c.classList.toggle(`active`, c.textContent === opt.name));
+        visibleCount = PAGE_SIZE;
         renderGrid();
       });
       topicChipRow.appendChild(chip);
     });
 
+    let searchDebounceTimer = null;
     searchInput.addEventListener(`input`, (e) => {
-      state.search = e.target.value.trim();
-      renderGrid();
+      const value = e.target.value;
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        state.search = value.trim();
+        visibleCount = PAGE_SIZE;
+        renderGrid();
+      }, 180);
     });
 
     memorizeCheckbox.addEventListener(`change`, (e) => {
       state.memorizeMode = e.target.checked;
+      visibleCount = PAGE_SIZE;
       renderGrid();
     });
 
@@ -93,10 +104,33 @@ window.Views.glossary = (function () {
       const knownCount = allTerms.filter((t) => known[t.id]).length;
       progressText.textContent = `記憶済み: ${knownCount} / ${total} 語(表示中: ${terms.length}件)`;
 
-      grid.innerHTML = ``;
-      terms.forEach((term) => grid.appendChild(buildCard(term)));
+      const noFilters = !state.search && state.level === `全て` && state.topic === `全て` && !state.memorizeMode;
+      const needsFullRenderForScroll = scrollTermId && noFilters;
+      const shown = needsFullRenderForScroll ? terms.length : Math.min(visibleCount, terms.length);
 
-      if (scrollTermId && !state.search && state.level === `全て` && state.topic === `全て` && !state.memorizeMode) {
+      const existingLoadMoreBtn = grid.nextElementSibling;
+      if (existingLoadMoreBtn && existingLoadMoreBtn.classList.contains(`load-more-btn`)) {
+        existingLoadMoreBtn.remove();
+      }
+
+      grid.innerHTML = ``;
+      const fragment = document.createDocumentFragment();
+      terms.slice(0, shown).forEach((term) => fragment.appendChild(buildCard(term)));
+      grid.appendChild(fragment);
+
+      if (shown < terms.length) {
+        const loadMoreBtn = document.createElement(`button`);
+        loadMoreBtn.type = `button`;
+        loadMoreBtn.className = `btn load-more-btn`;
+        loadMoreBtn.textContent = `もっと見る(残り${terms.length - shown}件)`;
+        loadMoreBtn.addEventListener(`click`, () => {
+          visibleCount += PAGE_SIZE;
+          renderGrid();
+        });
+        grid.insertAdjacentElement(`afterend`, loadMoreBtn);
+      }
+
+      if (needsFullRenderForScroll) {
         const target = grid.querySelector(`[data-term-id="${scrollTermId}"]`);
         if (target) {
           target.classList.add(`flipped`);

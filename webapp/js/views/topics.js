@@ -32,10 +32,34 @@ window.Views.topics = (function () {
     wrap.innerHTML = `
       <h2>学習トピック</h2>
       <p class="view-desc">不動産学習の基本をトピック別に学べます。「正直不動産」のエピソードは各トピックの具体例として埋め込まれています。まずはここから始めるのがおすすめです。</p>
+      <div class="card recommend-card" data-role="recommend"></div>
       <div class="dashboard-card" data-role="dashboard"></div>
       <div class="topic-grid" data-role="topic-grid"></div>
     `;
     root.appendChild(wrap);
+
+    // 次にやることのおすすめ + 学習ストリーク
+    const recommendEl = wrap.querySelector(`[data-role="recommend"]`);
+    const rec = Recommend.getNext();
+    const streakCount = Streak.getCurrentStreak();
+    const heatmapDays = Streak.getLast14Days();
+    recommendEl.innerHTML = `
+      <div class="recommend-head">
+        <span class="streak-chip">🔥 ${streakCount}日連続</span>
+        <div class="streak-heatmap" data-role="heatmap"></div>
+      </div>
+      <h3 class="recommend-title">${rec.title}</h3>
+      <p class="view-desc">${rec.detail}</p>
+      <button type="button" class="btn" data-role="recommend-cta">${rec.ctaLabel}</button>
+    `;
+    const heatmapEl = recommendEl.querySelector(`[data-role="heatmap"]`);
+    heatmapDays.forEach((day) => {
+      const dayEl = document.createElement(`div`);
+      dayEl.className = `streak-day` + (day.active ? ` active` : ``);
+      dayEl.title = day.date;
+      heatmapEl.appendChild(dayEl);
+    });
+    recommendEl.querySelector(`[data-role="recommend-cta"]`).addEventListener(`click`, () => Router.navigate(rec.nav));
 
     // 全体進捗サマリー(全トピック横断、重複を除いた実数で集計)
     const allBasicIds = [...new Set(window.APP_DATA.topics.flatMap((t) => t.basicIds))];
@@ -142,6 +166,7 @@ window.Views.topics = (function () {
         if (!basicsProgress[conceptId]) basicsProgress[conceptId] = {};
         basicsProgress[conceptId].learned = e.target.checked;
         Storage.set(`basicsProgress`, basicsProgress);
+        Streak.recordToday();
       });
       basicsList.appendChild(li);
     });
@@ -182,11 +207,13 @@ window.Views.topics = (function () {
         if (!roadmap[epId]) roadmap[epId] = { watched: false, understood: false };
         roadmap[epId].watched = e.target.checked;
         Storage.set(`roadmap`, roadmap);
+        Streak.recordToday();
       });
       li.querySelector(`[data-role="understood"]`).addEventListener(`change`, (e) => {
         if (!roadmap[epId]) roadmap[epId] = { watched: false, understood: false };
         roadmap[epId].understood = e.target.checked;
         Storage.set(`roadmap`, roadmap);
+        Streak.recordToday();
       });
       episodeList.appendChild(li);
     });

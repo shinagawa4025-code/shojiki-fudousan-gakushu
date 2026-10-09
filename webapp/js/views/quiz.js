@@ -7,9 +7,14 @@ window.Views.quiz = (function () {
   function render(root, param) {
     let startMode = `fixed`;
     let topicParam = param;
+    let initialWeak = false;
     if (param && param.startsWith(`auto/`)) {
       startMode = `auto`;
       topicParam = param.slice(`auto/`.length);
+      if (topicParam === `weak`) {
+        initialWeak = true;
+        topicParam = null;
+      }
     }
     const initialTopic = topicParam && AppIndex.topicsById[topicParam] ? topicParam : `全て`;
 
@@ -33,7 +38,7 @@ window.Views.quiz = (function () {
       });
     });
 
-    if (startMode === `auto`) renderAuto(body, initialTopic); else renderFixed(body, initialTopic);
+    if (startMode === `auto`) renderAuto(body, initialTopic, initialWeak); else renderFixed(body, initialTopic);
   }
 
   function buildTopicChips(container, selected, onChange) {
@@ -156,6 +161,7 @@ window.Views.quiz = (function () {
       btn.addEventListener(`click`, () => {
         history[q.id] = btn.dataset.result;
         Storage.set(`quizHistory`, history);
+        if (window.Streak) window.Streak.recordToday();
         card.querySelectorAll(`[data-result]`).forEach((b) => b.classList.toggle(`active`, b === btn));
         if (onResultChange) onResultChange();
       });
@@ -274,10 +280,10 @@ window.Views.quiz = (function () {
 
   // ===== 自動生成クイズ =====
 
-  function renderAuto(body, initialTopic) {
+  function renderAuto(body, initialTopic, initialWeak) {
     let level = `全て`;
     const topicState = { value: initialTopic || `全て` };
-    let weakFirst = false;
+    let weakFirst = !!initialWeak;
     let score = 0;
     let answered = 0;
     const stats = Storage.get(`autoQuizStats`, {});
@@ -286,7 +292,7 @@ window.Views.quiz = (function () {
       <div class="toolbar">
         <div class="chip-row" data-role="level-chips"></div>
         <div class="chip-row" data-role="topic-chips"></div>
-        <label class="memorize-toggle"><input type="checkbox" data-role="weak-first"> 苦手な用語を優先して出題</label>
+        <label class="memorize-toggle"><input type="checkbox" data-role="weak-first" ${weakFirst ? `checked` : ``}> 苦手な用語を優先して出題</label>
         <button type="button" class="btn" data-role="retry">再挑戦</button>
       </div>
       <p class="progress-text" data-role="score"></p>
@@ -356,6 +362,7 @@ window.Views.quiz = (function () {
       if (!stats[termId]) stats[termId] = { wrong: 0, correct: 0 };
       stats[termId][correct ? `correct` : `wrong`]++;
       Storage.set(`autoQuizStats`, stats);
+      if (window.Streak) window.Streak.recordToday();
     }
 
     function buildAutoCard(q) {

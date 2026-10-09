@@ -259,6 +259,15 @@ h3 { font-weight: 700; color: var(--color-primary-dark); margin-top: 28px; }
   gap: 14px;
 }
 
+.load-more-btn {
+  display: block;
+  margin: 16px auto 0;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+}
+.load-more-btn:hover { background: var(--color-surface-muted); }
+
 .flip-card {
   perspective: 1000px;
   height: 260px;
@@ -444,6 +453,28 @@ footer.app-footer {
 }
 .dashboard-num { font-size: 1.4rem; font-weight: 700; color: var(--color-primary); font-variant-numeric: tabular-nums; }
 .dashboard-label { font-size: 0.78rem; color: var(--color-text-muted); }
+
+.recommend-card { }
+.recommend-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.recommend-title { margin: 4px 0 2px; }
+.streak-chip {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-primary-dark);
+}
+.streak-heatmap { display: flex; gap: 4px; }
+.streak-day {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+}
+.streak-day.active { background: var(--color-primary); border-color: var(--color-primary); }
 
 .topic-grid {
   display: grid;
@@ -681,3 +712,53 @@ footer.app-footer {
 @media (min-width: 1024px) {
   .calc-field-grid { max-width: 480px; }
 }
+
+/* 確認モーダル */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 26, 34, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+}
+.modal-box {
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card-hover);
+  padding: 20px;
+  max-width: 400px;
+  width: 100%;
+}
+.modal-message { margin: 0 0 16px; font-size: 0.95rem; line-height: 1.6; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.btn-secondary {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+.btn-secondary:hover { background: var(--color-border); }
+
+/* トースト通知 */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--color-primary-dark);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card-hover);
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 200;
+  max-width: calc(100% - 32px);
+  text-align: center;
+}
+.toast-show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast-success { background: var(--color-beg); }
+.toast-error { background: var(--color-adv); }
