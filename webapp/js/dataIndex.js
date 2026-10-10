@@ -107,7 +107,7 @@ window.AppIndex = (function () {
   }
 
   const examTypeCount = data.exams && Array.isArray(data.exams.types) ? data.exams.types.length : 0;
-  console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length} (期待値117), topics=${data.topics.length} (期待値11), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length} (期待値86), sources=${data.sources.length} (期待値13), 試験種別=${examTypeCount} (期待値3), 警告=${issues.length}件`);
+  console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length} (期待値139), topics=${data.topics.length} (期待値11), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length} (期待値106), sources=${data.sources.length} (期待値13), 試験種別=${examTypeCount} (期待値3), 警告=${issues.length}件`);
   issues.forEach((msg) => console.warn(`[データ整合性チェック] ${msg}`));
 
   return { episodesById, topicsById, termsById, allTerms, sourcesById, episodeTermIndex, topicTermIndex, topicQuizIndex, topicLawIndex, termByName, issues };

@@ -2,7 +2,7 @@
 window.APP_DATA = window.APP_DATA || {};
 window.APP_DATA.laws = {
   laws: [
-    { id: `law1`, name: `宅地建物取引業法(宅建業法)`, topicIds: [`topicF`, `topicB`],
+    { id: `law1`, name: `宅地建物取引業法(宅建業法)`, topicIds: [`topicF`, `topicB`, `topicK`],
       description: `仲介手数料の上限(46条)、重要事項説明の義務、インスペクション実施有無の説明義務など、不動産取引の基本ルールを定める`,
       episodes: [`3-4`, `25-26`, `51-52`, `57-58`], notExhaustive: true },
     { id: `law2`, name: `借地借家法`, topicIds: [`topicE`, `topicA`, `topicG`],

@@ -492,6 +492,11 @@ footer.app-footer {
   transition: background var(--dur-1), color var(--dur-1);
 }
 .subnav-item:hover, .segmented-item:hover { color: var(--color-text); }
+/* 狭い画面では4項目が収まるよう余白を詰める(基本ルールより後に置く) */
+@media (max-width: 420px) {
+  .subnav-item { flex: 1 1 auto; padding: 0 var(--sp-2); gap: 2px; font-size: var(--fs-xs); }
+  .subnav-item svg { width: 14px; height: 14px; }
+}
 .segmented-count { font-size: var(--fs-2xs); font-weight: 500; font-variant-numeric: tabular-nums; color: var(--color-text-muted); margin-left: 2px; }
 .glossary-status { margin-top: var(--sp-1); flex: 1 1 100%; max-width: 520px; }
 /* 5項目を画面幅に収めるため、件数はラベルの下に小さく */

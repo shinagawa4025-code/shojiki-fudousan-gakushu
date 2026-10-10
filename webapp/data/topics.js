@@ -43,6 +43,6 @@ window.APP_DATA.topics = [
     basicIds: [`basicJ01`, `basicJ02`, `basicJ03`, `basicJ04`, `basicJ05`, `basicJ06`, `basicJ07`, `basicJ08`, `basicJ09`, `basicJ10`, `basicJ11`, `basicJ12`] },
   { id: `topicK`, icon: `scale`, name: `宅建業法`, level: `中級`,
     description: `免許・宅建士・営業保証金と保証協会・媒介契約・重要事項説明(35条)・37条書面・報酬・8種制限・監督処分など、宅建士試験で最も配点の大きい宅建業法を体系的に学ぶ`,
-    episodes: [],
-    basicIds: [] },
+    episodes: [`3-4`, `25-26`, `51-52`, `57-58`, `77-78`],
+    basicIds: [`basicK01`, `basicK02`, `basicK03`, `basicK04`, `basicK05`, `basicK06`, `basicK07`, `basicK08`, `basicK09`, `basicK10`, `basicK11`, `basicK12`, `basicK13`, `basicK14`, `basicK15`, `basicK16`, `basicK17`, `basicK18`, `basicK19`, `basicK20`, `basicK21`, `basicK22`, `basicB01`, `basicB02`, `basicB07`, `basicF01`, `basicF02`, `basicF03`, `basicF04`, `basicF07`, `basicG01`] },
 ];
