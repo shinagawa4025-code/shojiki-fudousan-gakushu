@@ -119,7 +119,7 @@ window.APP_DATA.quiz = [
   { id: `quiz-D-02`, level: `初級`, topicIds: [`topicD`], question: `管理規約と使用細則の違いは?`,
     answer: `管理規約はマンション運営の基本ルール、使用細則はペット飼育の可否など日常生活に関わる具体的な運用ルール(区分所有法30条)`, relatedTermId: `basicD05`, episodes: [] },
   { id: `quiz-D-03`, level: `中級`, topicIds: [`topicD`], question: `マンションの集会で、規約の変更など重要な議案を決議するには何割以上の賛成が必要か?`,
-    answer: `区分所有者及び議決権の各4分の3以上の特別決議が必要(区分所有法31条)。通常の議案は過半数で決議できる`, relatedTermId: `basicD06`, episodes: [] },
+    answer: `区分所有者及び議決権の各過半数が出席し、出席した区分所有者及びその議決権の各4分の3以上による特別決議が必要(区分所有法31条1項、2026年4月施行の改正後)。通常の議案は出席者及びその議決権の各過半数(39条1項)`, relatedTermId: `basicD06`, episodes: [] },
   { id: `quiz-D-04`, level: `上級`, topicIds: [`topicD`], question: `マンションの建替え決議を成立させるために必要な賛成割合は?`,
     answer: `区分所有者及び議決権の各5分の4以上の賛成が必要(区分所有法62条)。賛成しなかった区分所有者には売渡請求権が行使されうる`, relatedTermId: `basicD07`, episodes: [] },
   { id: `quiz-D-05`, level: `中級`, topicIds: [`topicD`], question: `新耐震基準と旧耐震基準の境目はいつか?`,

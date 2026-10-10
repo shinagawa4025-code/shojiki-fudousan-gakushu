@@ -4,7 +4,7 @@ window.APP_DATA.terms = [
   // 初級編
   { id: `term01`, name: `敷金・礼金`, aliases: [`敷金`, `礼金`], level: `初級`, source: `episode`, topicIds: [`topicA`], sources: [`src12`], lawRef: `民法622条の2(敷金)`,
     simpleExplanation: `敷金は退去時の原状回復費用などに充てる預け金、礼金はオーナーへの謝礼金で戻らないのが一般的`,
-    deepDive: `敷金は法律上「賃貸借契約終了時に借主に返還すべき金銭」と定義され、正当な理由のない天引きは違法になりうる`,
+    deepDive: `民法上の敷金は、名目を問わず借主の賃料債務などを担保するために貸主に交付する金銭で、契約が終了して物件が返還されたときに、未払賃料などを差し引いた残額を返還しなければならない(民法622条の2)。通常損耗や経年劣化の修繕費を差し引くことは原則できない`,
     relatedEpisodes: [`1-2`, `75-76`] },
   { id: `term02`, name: `仲介手数料`, aliases: [], level: `初級`, source: `episode`, topicIds: [`topicF`, `topicK`], sources: [`src01`], lawRef: `宅地建物取引業法46条`,
     simpleExplanation: `不動産屋に成約の対価として支払う手数料。賃貸は家賃0.5〜1ヶ月分が上限`,
