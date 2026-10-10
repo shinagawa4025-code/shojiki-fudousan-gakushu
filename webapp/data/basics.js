@@ -462,7 +462,7 @@ window.APP_DATA.basics = [
     relatedEpisodes: [] },
   { id: `basicJ04`, name: `市街化区域と市街化調整区域`, aliases: [], level: `中級`, source: `general`, topicIds: [`topicJ`], sources: [`src01`], lawRef: `都市計画法7条`,
     simpleExplanation: `都市計画区域を「積極的に市街化を進める市街化区域」と「市街化を抑制する市街化調整区域」に分ける「線引き」制度`,
-    deepDive: `市街化調整区域は原則として用途地域が定められず、新築・増築には開発許可や建築の特例が必要になるため、取引前に区域区分の確認が欠かせない`,
+    deepDive: `市街化調整区域は原則として用途地域が定められず、開発行為には原則として開発許可が、開発区域外での建築物の新築・改築・用途変更には都道府県知事等の許可(都市計画法43条)が必要になるため、取引前に区域区分の確認が欠かせない`,
     relatedEpisodes: [] },
   { id: `basicJ05`, name: `開発許可制度`, aliases: [], level: `上級`, source: `general`, topicIds: [`topicJ`], sources: [`src01`], lawRef: `都市計画法29条`,
     simpleExplanation: `一定規模以上の宅地造成や区画形質の変更(開発行為)を行う際に、都道府県知事等の許可を要する制度`,

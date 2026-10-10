@@ -108,8 +108,8 @@ window.APP_DATA.quiz = [
     answer: `総支払利息は元金均等返済のほうが少なく済む一方、返済開始当初の毎月の負担は元金均等返済のほうが重くなる`, relatedTermId: `basicC02`, episodes: [] },
   { id: `quiz-C-03`, level: `初級`, topicIds: [`topicC`], question: `住宅ローン審査で使われる「返済負担率」とは何か?`,
     answer: `年収に占める年間返済額の割合。一般に25〜35%程度が上限の目安とされる`, relatedTermId: `basicC03`, episodes: [] },
-  { id: `quiz-C-04`, level: `初級`, topicIds: [`topicC`], question: `団体信用生命保険(団信)は、借主が死亡・高度障害になった場合にどのような効果をもたらす保険か?`,
-    answer: `残りの住宅ローンが保険金によって完済される。民間金融機関では加入が融資の条件になっていることが多い`, relatedTermId: `basicC04`, episodes: [] },
+  { id: `quiz-C-04`, level: `初級`, topicIds: [`topicC`], question: `団体信用生命保険(団信)は、借主が死亡したり所定の重い障害の状態になった場合にどのような効果をもたらす保険か?`,
+    answer: `残りの住宅ローンが保険金によって完済される(フラット35は団信に加入しなくても利用できる)`, relatedTermId: `basicC04`, episodes: [] },
   { id: `quiz-C-05`, level: `中級`, topicIds: [`topicC`], question: `住宅ローン控除の根拠となる法律は何か?`,
     answer: `租税特別措置法41条(住宅借入金等特別控除)。住宅ローンを組んで住宅を取得した場合に、一定期間所得税・住民税が軽減される`, relatedTermId: `basicC05`, episodes: [] },
 
@@ -121,9 +121,9 @@ window.APP_DATA.quiz = [
   { id: `quiz-D-03`, level: `中級`, topicIds: [`topicD`], question: `マンションの集会で、規約の変更など重要な議案を決議するには何割以上の賛成が必要か?`,
     answer: `区分所有者及び議決権の各過半数が出席し、出席した区分所有者及びその議決権の各4分の3以上による特別決議が必要(区分所有法31条1項、2026年4月施行の改正後)。通常の議案は出席者及びその議決権の各過半数(39条1項)`, relatedTermId: `basicD06`, episodes: [] },
   { id: `quiz-D-04`, level: `上級`, topicIds: [`topicD`], question: `マンションの建替え決議を成立させるために必要な賛成割合は?`,
-    answer: `区分所有者及び議決権の各5分の4以上の賛成が必要(区分所有法62条)。賛成しなかった区分所有者には売渡請求権が行使されうる`, relatedTermId: `basicD07`, episodes: [] },
+    answer: `原則として区分所有者及び議決権の各5分の4以上の賛成が必要で、耐震性不足など一定の事由がある建物は各4分の3以上に緩和される(区分所有法62条1項・2項、2026年4月施行の改正後)。賛成しなかった区分所有者には売渡請求権が行使されうる`, relatedTermId: `basicD07`, episodes: [] },
   { id: `quiz-D-05`, level: `中級`, topicIds: [`topicD`], question: `新耐震基準と旧耐震基準の境目はいつか?`,
-    answer: `1981年6月1日施行の建築基準法改正。これ以降の基準が新耐震基準、それ以前が旧耐震基準`, relatedTermId: `basicD08`, episodes: [] },
+    answer: `1981年6月1日施行の建築基準法施行令の改正。この日以後に建築確認を受けた建物が新耐震基準、それ以前が旧耐震基準`, relatedTermId: `basicD08`, episodes: [] },
 
   // ===== 土地の権利関係・特殊物件(topicE)追加分 =====
   { id: `quiz-E-01`, level: `中級`, topicIds: [`topicE`], question: `抵当権と根抵当権の違いは?`,
