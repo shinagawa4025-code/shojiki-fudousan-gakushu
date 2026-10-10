@@ -48,7 +48,7 @@ window.Views.glossary = (function () {
     LEVELS.forEach((lvl) => {
       const chip = document.createElement(`button`);
       chip.type = `button`;
-      chip.className = `chip` + (lvl === state.level ? ` active` : ``);
+      chip.className = `chip chip-small` + (lvl === state.level ? ` active` : ``);
       chip.textContent = lvl;
       chip.addEventListener(`click`, () => {
         state.level = lvl;

@@ -45,21 +45,22 @@ window.Views.settings = (function () {
       <div class="card settings-card">
         <h3 class="settings-card-title">${UI.icon(`upload`)}インポート(復元・移行)</h3>
         <p class="view-desc">エクスポートしたJSONファイルを選択すると、現在のデータを上書きして復元します。</p>
-        <input type="file" accept="application/json" data-role="import-file" class="settings-file-input">
+        <input type="file" accept="application/json" data-role="import-file" id="settings-import-file" class="settings-file-input sr-only">
+        <label for="settings-import-file" class="btn btn-secondary settings-file-label">${UI.icon(`upload`)}バックアップ(JSON)を選択</label>
         <p class="settings-import-status" data-role="import-status" hidden></p>
       </div>
 
       <div class="card settings-card">
-        <h3 class="settings-card-title">テーマ</h3>
+        <h3 class="settings-card-title">${UI.icon(`moon`)}テーマ</h3>
         <p class="view-desc">配色を手動で切り替えられます(既定は端末の設定に追従します)。</p>
         <div class="chip-row" data-role="theme-chips"></div>
       </div>
 
       <div class="card settings-card">
-        <h3 class="settings-card-title">読み上げ</h3>
+        <h3 class="settings-card-title">${UI.icon(`volume`)}読み上げ</h3>
         <p class="view-desc">用語カードの読み上げ速度を調整できます。</p>
         <label class="settings-range-label">
-          速度: <span data-role="rate-value">1.0</span>倍
+          <span>速度: <span data-role="rate-value">1.0</span>倍</span>
           <input type="range" min="0.6" max="1.4" step="0.1" data-role="rate-input" class="settings-range">
         </label>
       </div>
@@ -83,7 +84,7 @@ window.Views.settings = (function () {
             <button type="button" class="btn btn-icon known-toggle${t.primary ? ` is-known` : ``}" data-primary="${t.id}" aria-pressed="${!!t.primary}" aria-label="${t.primary ? `ホームに表示中` : `ホームに表示する`}">${UI.icon(t.primary ? `star-fill` : `star`)}</button>
             <div class="target-row-main">
               <div class="target-row-name">${UI.escapeHtml(t.name)}<span class="source-tag">${UI.escapeHtml(type ? type.shortName : `その他`)}</span></div>
-              <div class="target-row-date">${DateUtil.toJapanese(t.date, true)}・${d > 0 ? `あと${d}日` : d === 0 ? `今日` : `終了`}</div>
+              <div class="target-row-date">${DateUtil.toJapanese(t.date, true)}・<span class="nowrap">${d > 0 ? `あと${d}日` : d === 0 ? `今日` : `終了`}</span></div>
             </div>
             <button type="button" class="btn btn-icon" data-remove="${t.id}" aria-label="「${UI.escapeHtml(t.name)}」を削除">${UI.icon(`trash`)}</button>
           </div>`;
@@ -170,7 +171,7 @@ window.Views.settings = (function () {
 
     // テーマ切替
     const themeChipRow = wrap.querySelector(`[data-role="theme-chips"]`);
-    const themeOptions = [{ id: `system`, label: `端末設定に従う` }, { id: `light`, label: `ライト` }, { id: `dark`, label: `ダーク` }];
+    const themeOptions = [{ id: `system`, label: `端末に合わせる` }, { id: `light`, label: `ライト` }, { id: `dark`, label: `ダーク` }];
     const currentTheme = ThemeManager.getPreference();
     themeOptions.forEach((opt) => {
       const chip = document.createElement(`button`);

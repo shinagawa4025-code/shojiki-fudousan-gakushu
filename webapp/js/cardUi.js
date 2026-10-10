@@ -61,9 +61,6 @@ window.CardUi = (function () {
     const card = document.createElement(`div`);
     card.className = `flip-card` + (opts.showGrading ? ` flip-card-tall` : ``);
     card.dataset.termId = term.id;
-    card.tabIndex = 0;
-    card.setAttribute(`role`, `button`);
-    card.setAttribute(`aria-label`, `${term.name}(Enterで表と裏を切り替え)`);
     const isKnown = !!known[term.id];
     const sourceLabel = term.source === `general` ? `基礎知識` : `作品より`;
     const ttsSupported = window.TTS && window.TTS.supported;
@@ -82,12 +79,13 @@ window.CardUi = (function () {
             <div class="flip-face-actions">${bookmarkBtnHtml(term.id)}${knownBtnHtml(isKnown)}</div>
           </div>
           <div class="term-name">${term.name}</div>
-          <div class="flip-hint">${ic(`refresh`, 14)}タップで意味を見る</div>
+          <button type="button" class="flip-hint flip-toggle" data-role="flip" aria-expanded="false" aria-label="「${term.name}」の意味を見る">${ic(`refresh`, 14)}タップで意味を見る</button>
         </div>
         <div class="flip-card-back card">
           <div class="flip-face-head">
             <div class="flip-face-tags"><span class="badge badge-soft">${term.name}</span></div>
             <div class="flip-face-actions">
+              <button type="button" class="btn btn-icon flip-toggle" data-role="flip" aria-expanded="true" aria-label="表に戻す">${ic(`refresh`)}</button>
               ${ttsSupported ? `<button type="button" class="btn btn-icon tts-btn" aria-label="読み上げ" data-role="tts-btn">${ic(`volume`)}</button>` : ``}
               ${knownBtnHtml(isKnown)}
             </div>
@@ -111,14 +109,34 @@ window.CardUi = (function () {
     `;
 
     const interactive = `[data-role="known-toggle"], [data-role="tts-btn"], [data-role="bookmark"], [data-role="figure"], [data-grade], [data-nav], a, button`;
-    card.addEventListener(`click`, (e) => {
-      if (e.target.closest(interactive)) return;
+    // 見えていない面は inert にして、Tabで裏側のボタンに移動しないようにする
+    // (外部から .flipped を付け外ししても同期されるよう、class属性の変化を監視)
+    const front = card.querySelector(`.flip-card-front`);
+    const back = card.querySelector(`.flip-card-back`);
+    function syncFaces() {
+      const flipped = card.classList.contains(`flipped`);
+      front.inert = flipped;
+      back.inert = !flipped;
+      card.querySelectorAll(`[data-role="flip"]`).forEach((b) => b.setAttribute(`aria-expanded`, String(flipped)));
+    }
+    function toggleFlip(viaKeyboard) {
       card.classList.toggle(`flipped`);
+      syncFaces();
+      if (viaKeyboard) {
+        const face = card.classList.contains(`flipped`) ? back : front;
+        const btn = face.querySelector(`[data-role="flip"]`);
+        if (btn) btn.focus({ preventScroll: true });
+      }
+    }
+    syncFaces();
+    if (window.MutationObserver) new MutationObserver(syncFaces).observe(card, { attributes: true, attributeFilter: [`class`] });
+    card.addEventListener(`click`, (e) => {
+      const flipBtn = e.target.closest(`[data-role="flip"]`);
+      if (flipBtn) { e.stopPropagation(); toggleFlip(e.detail === 0); return; }
+      if (e.target.closest(interactive)) return;
+      toggleFlip(false);
     });
-    card.addEventListener(`keydown`, (e) => {
-      if (e.target !== card) return;
-      if (e.key === `Enter` || e.key === ` `) { e.preventDefault(); card.classList.toggle(`flipped`); }
-    });
+    card.flip = toggleFlip;
 
     card.querySelectorAll(`[data-role="known-toggle"]`).forEach((btn) => {
       btn.addEventListener(`click`, (e) => {

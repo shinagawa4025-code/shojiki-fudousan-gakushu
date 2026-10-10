@@ -58,8 +58,8 @@ window.QuizEngine = (function () {
 
   function buildChoiceText(term, type) {
     if (type === `name-from-def`) return term.name;
-    if (type === `law-ref`) return truncate(term.lawRef, 50);
-    return truncate(term.simpleExplanation, 60);
+    if (type === `law-ref`) return truncate(term.lawRef, 80);
+    return truncate(term.simpleExplanation, 100);
   }
 
   // stats({termId:{wrong,correct}})がある場合、不正解が多い用語ほど先に来るよう並べ替える

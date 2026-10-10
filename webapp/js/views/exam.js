@@ -590,8 +590,8 @@ window.Views.exam = (function () {
     container.innerHTML = `
       <div class="stat-grid exam-best">
         <div class="stat-tile"><span class="stat-value">${hist.length}<small>回</small></span><span class="stat-label">受験回数${hist.length >= HISTORY_MAX ? `(直近${HISTORY_MAX}回)` : ``}</span></div>
-        <div class="stat-tile"><span class="stat-value">${best.full ? `${best.full.score}<small>/${best.full.total}</small>` : `—`}</span><span class="stat-label">${ic(`trophy`, 14)} フルの最高</span></div>
-        <div class="stat-tile"><span class="stat-value">${best.short ? `${best.short.score}<small>/${best.short.total}</small>` : `—`}</span><span class="stat-label">${ic(`trophy`, 14)} ショートの最高</span></div>
+        <div class="stat-tile"><span class="stat-value">${best.full ? `${best.full.score}<small>/${best.full.total}</small>` : `—`}</span><span class="stat-label"><span class="nowrap">フル最高</span></span></div>
+        <div class="stat-tile"><span class="stat-value">${best.short ? `${best.short.score}<small>/${best.short.total}</small>` : `—`}</span><span class="stat-label"><span class="nowrap">ショート最高</span></span></div>
       </div>
       <div class="todo-list exam-history-list">
         ${hist.map((e) => {
