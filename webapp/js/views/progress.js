@@ -141,7 +141,7 @@ window.Views.progress = (function () {
         <div class="progress-bar ana-bar" aria-hidden="true"><div class="progress-bar-fill ana-fill-${tone}" style="width:${width}%"></div></div>
         <div class="ana-cat-meta">
           ${r.attempts ? `<span>正答率 <strong>${r.accuracy}%</strong><span class="text-muted">(${r.attempts}問)</span></span>` : `<span class="text-muted">まだ解いた問題がありません</span>`}
-          ${r.total ? `<span class="text-muted">学習 ${r.studied}/${r.total}</span>` : ``}
+          ${r.total ? `<span class="text-muted" title="学習済み・記憶済みにした項目に加え、復習カードやクイズ・○×で出題された項目も数えています">取り組んだ ${r.studied}/${r.total}</span>` : ``}
           ${trendHtml(r.trend)}
           ${flag}
         </div>
@@ -183,6 +183,7 @@ window.Views.progress = (function () {
             <a class="ana-weak-item" href="${esc(w.nav)}">
               <span class="ana-weak-icon">${ic(w.icon || `target`, 18)}</span>
               <span class="ana-weak-main">
+                ${w.context ? `<span class="ana-weak-context">${esc(w.context)}</span>` : ``}
                 <span class="ana-weak-title">${esc(w.title)}</span>
                 <span class="ana-weak-sub"><span class="ana-weak-kind">${WEAK_KIND[w.kind] || ``}</span>${weakSubHtml(w)}</span>
               </span>
@@ -205,7 +206,7 @@ window.Views.progress = (function () {
           <li><strong>習熟度(100点満点)</strong> = 正答率(直近重視)× 70点 + 学習カバー率 × 30点。</li>
           <li>回答が${Analysis.MIN_CONFIDENT}問未満の分野は「データ不足」として、正答率の点を「回答数 ÷ ${Analysis.MIN_CONFIDENT}」の割合に割り引きます。</li>
           <li>正答率は確認問題(4択・記述)・自動生成クイズ・○×・模擬試験の合計です。習熟度の計算では、直近の模擬試験(2倍)・その前の回(1.5倍)・○×の最後の回答を重めに、記述の自己採点を半分の重さで数えます。</li>
-          <li>学習カバー率は、分野の用語・基礎知識のうち、記憶済み・学習済みにしたものや、復習カード・クイズで一度でも出題されたものの割合です(分野に用語がまだないときは正答率だけで計算)。</li>
+          <li>学習カバー率(「取り組んだ」の割合)は、分野の用語・基礎知識のうち、記憶済み・学習済みにしたものや、復習カード・クイズ・○×で一度でも出題されたものの割合です(分野に用語がまだないときは正答率だけで計算)。下の「試験分野別の進捗」の「学習済み」は、記憶済み・学習済みにしたものだけを数えます。</li>
           <li>並び順は「例年の出題数 × 習熟度の低さ」で、伸ばすと点につながりやすい分野ほど上に来ます。</li>
           <li>「模試+8」などの表示は、その分野を含む直近2回の模擬試験での正答率の変化(ポイント)です。</li>
         </ul>
@@ -242,9 +243,12 @@ window.Views.progress = (function () {
         <div class="segmented prog-segmented" role="group" aria-label="分析する試験" data-role="types">
           ${state.options.map((t) => `<button type="button" class="segmented-item" data-type="${t.id}" aria-pressed="${t.id === state.typeId}">${esc(t.shortName || t.name)}</button>`).join(``)}
         </div>` : ``}
-      <div data-role="ana-body" aria-live="polite"></div>`;
+      <p class="sr-only" role="status" data-role="ana-status"></p>
+      <div data-role="ana-body"></div>`;
     const body = card.querySelector(`[data-role="ana-body"]`);
     const overall = card.querySelector(`[data-role="overall"]`);
+    // 試験を切り替えたときだけ、短い一文で読み上げる(分析全体をライブリージョンにすると長文が丸ごと読まれる)
+    const status = card.querySelector(`[data-role="ana-status"]`);
 
     function paint() {
       const snap = safeAnalyze(state.typeId);
@@ -295,6 +299,9 @@ window.Views.progress = (function () {
       btn.addEventListener(`click`, () => {
         card.querySelectorAll(`[data-type]`).forEach((b) => b.setAttribute(`aria-pressed`, String(b === btn)));
         state.set(btn.dataset.type);
+        const snap = state.snap;
+        const s = snap && snap.summary;
+        status.textContent = `${btn.textContent.trim()}の弱点分析を表示しています${s && snap.hasData && s.mastery != null ? `。総合${s.mastery}点` : ``}`;
       });
     });
     state.listeners.unshift(paint);
@@ -349,7 +356,7 @@ window.Views.progress = (function () {
             <div>
               <div class="cat-bar-head">
                 <span class="cat-bar-name">${esc(r.name)}${r.questions ? `<span class="topic-group-meta">(例年${r.questions}問)</span>` : ``}</span>
-                <span class="cat-bar-meta">${r.done}/${r.total}・<strong>${r.pct}%</strong></span>
+                <span class="cat-bar-meta">学習済み ${r.done}/${r.total}・<strong>${r.pct}%</strong></span>
               </div>
               <div class="progress-bar progress-bar-lg"><div class="progress-bar-fill" style="width:${r.pct}%"></div></div>
               <div class="prog-cat-acc">${acc || `<span class="text-muted">${ic(`pencil-check`, 14)}まだ解いた問題がありません</span>`}</div>
@@ -461,16 +468,22 @@ window.Views.progress = (function () {
     return String(n).padStart(2, `0`);
   }
 
+  // 日時(ミリ秒)として使える値だけを使う。Infinity や Date で表せない値(1e20 など。壊れたバックアップ由来)は無視する
+  // 使える日時が1つもない記録は「日時なし」として扱い、保存順で並べる(弱点分析の並べ方と同じ)
+  function entryTs(e) {
+    return [e.finishedAt, e.at, e.endedAt, e.startedAt].find((v) => typeof v === `number` && Number.isFinite(v) && v > 0 && v <= 8.64e15) || null;
+  }
+
   function entryDate(e) {
     if (typeof e.date === `string` && DateUtil.isValid(e.date)) return e.date;
-    const ts = [e.finishedAt, e.at, e.endedAt, e.startedAt].find((v) => typeof v === `number` && v > 0);
+    const ts = entryTs(e);
     if (!ts) return null;
     const d = new Date(ts);
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
 
   function entryTime(e, i, len) {
-    const ts = [e.finishedAt, e.at, e.endedAt, e.startedAt].find((v) => typeof v === `number` && v > 0);
+    const ts = entryTs(e);
     if (ts) return ts;
     const d = entryDate(e);
     if (d) return DateUtil.parse(d).getTime();
@@ -480,7 +493,7 @@ window.Views.progress = (function () {
   function examPoints() {
     const list = Stats.examHistory()
       .map((e, i, all) => ({ e, i, len: all.length }))
-      .filter(({ e }) => e && typeof e.score === `number` && typeof e.total === `number` && e.total > 0);
+      .filter(({ e }) => e && Number.isFinite(e.score) && Number.isFinite(e.total) && e.total > 0);
     return list
       .map(({ e, i, len }) => ({ e, t: entryTime(e, i, len), date: entryDate(e), pct: Math.max(0, Math.min(100, Math.round((e.score / e.total) * 100))) }))
       .sort((a, b) => a.t - b.t)
@@ -511,6 +524,7 @@ window.Views.progress = (function () {
       const show = i === points.length - 1 || (i % step === 0 && !(step === 2 && i === points.length - 2));
       if (!show || !p.date) return ``;
       const d = DateUtil.parse(p.date);
+      if (!d) return ``;
       return `<text class="chart-axis" x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="middle">${d.getMonth() + 1}/${d.getDate()}</text>`;
     }).join(``);
     const dots = points.map((p, i) => `

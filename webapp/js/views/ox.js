@@ -1,5 +1,7 @@
 // ○×一問一答: 正誤判定型の4択問題(ask: correct / incorrect)の選択肢を1文ずつ「正しい/誤り」で判定する
 // ルート: #ox(条件を選ぶトップ) / #ox/cat/<分野ID>(宅建士の分野ID または shohi) / #ox/topic/<topicId> / #ox/weak(間違えた文)
+//         末尾に /<問題数>(10・20・50)を付けると、その問題数で出題する(例: #ox/cat/gyoho/20)
+//         #ox/weak/<文ID>(例: quiz-K-01%232)は、間違えた文のうちその文を最初に出題する
 //         #ox/run(出題中・結果。セッションはメモリ上のみ。再読み込みするとトップに戻る)
 // ディープリンク(cat/topic/weak)は条件を選んだ状態ですぐ出題を始め、URLを #ox/run に置き換える
 // 記録: Storage `oxStats` = { [文ID 'quiz-K-01#2']: { c: 正解回数, w: 不正解回数, last: 'YYYY-MM-DD', lastOk: 直近の正誤 } }
@@ -58,11 +60,11 @@ window.Views.ox = (function () {
 
   // ===== 記録 =====
 
-  // 壊れた項目(インポートした古いデータ等)は null
+  // 壊れた項目(インポートした古いデータ等)は null。回数の上限は弱点分析(Analysis)と揃える
   function cleanEntry(v) {
     if (!Storage.isPlainObject(v)) return null;
-    const c = Number.isFinite(v.c) && v.c > 0 ? Math.floor(v.c) : 0;
-    const w = Number.isFinite(v.w) && v.w > 0 ? Math.floor(v.w) : 0;
+    const c = Number.isFinite(v.c) && v.c > 0 ? Math.min(Math.floor(v.c), 100000) : 0;
+    const w = Number.isFinite(v.w) && v.w > 0 ? Math.min(Math.floor(v.w), 100000) : 0;
     if (!c && !w) return null;
     return {
       c,
@@ -142,15 +144,28 @@ window.Views.ox = (function () {
   }
 
   // avoidIds: 直前のセッションで出た文(「同じ条件で続ける」で後回しにする)
-  function pickQuestions(pool, filter, count, stats, avoidIds) {
+  // first: 最初に出題する文(弱点分析で選んだ文。#ox/weak/<文ID>)
+  function pickQuestions(pool, filter, count, stats, avoidIds, first) {
     let ordered = filter === `wrong` ? weakOrder(pool, stats) : QuizEngine.shuffle(pool);
     if (avoidIds && avoidIds.size) {
       ordered = ordered.filter((s) => !avoidIds.has(s.id)).concat(ordered.filter((s) => avoidIds.has(s.id)));
     }
-    return spreadByQuiz(ordered.slice(0, count));
+    if (first) ordered = [first].concat(ordered.filter((s) => s.id !== first.id));
+    const picked = spreadByQuiz(ordered.slice(0, count));
+    if (first && picked[0] !== first) {
+      picked.splice(picked.indexOf(first), 1);
+      picked.unshift(first);
+    }
+    return picked;
   }
 
   // ===== ルート =====
+
+  // 問題数の指定(10・20・50 以外は無視して、選んである問題数で出題する)
+  function countParam(s) {
+    const n = Number(s);
+    return COUNTS.includes(n) ? n : null;
+  }
 
   function parseParam(param) {
     if (!param) return { kind: `landing` };
@@ -158,9 +173,12 @@ window.Views.ox = (function () {
     const head = parts[0];
     const id = parts[1] || ``;
     if (head === `run`) return { kind: `run` };
-    if (head === `weak`) return { kind: `start`, scope: { type: `all`, id: null }, filter: `wrong` };
-    if (head === `cat` && scopeCategories().some((c) => c.id === id)) return { kind: `start`, scope: { type: `cat`, id }, filter: `all` };
-    if (head === `topic` && AppIndex.topicsById[id]) return { kind: `start`, scope: { type: `topic`, id }, filter: `all` };
+    if (head === `weak`) {
+      const count = countParam(id);
+      return { kind: `start`, scope: { type: `all`, id: null }, filter: `wrong`, count, first: !count && id ? id : null };
+    }
+    if (head === `cat` && scopeCategories().some((c) => c.id === id)) return { kind: `start`, scope: { type: `cat`, id }, filter: `all`, count: countParam(parts[2]) };
+    if (head === `topic` && AppIndex.topicsById[id]) return { kind: `start`, scope: { type: `topic`, id }, filter: `all`, count: countParam(parts[2]) };
     return { kind: `landing`, invalid: true };
   }
 
@@ -193,6 +211,8 @@ window.Views.ox = (function () {
       count: opts.count,
       label: opts.label || conditionLabel(opts.scope, opts.filter),
       retry: !!opts.retry,
+      // トップの「開始」から始めたか(1つ前の履歴がトップ。1問も答えずに終了したら履歴を戻る)
+      fromLanding: !!opts.fromLanding,
       finished: false,
       quit: false,
       prior: loadStats(), // 開始時点の記録(「前回」表示用)
@@ -200,11 +220,14 @@ window.Views.ox = (function () {
   }
 
   // 現在の条件(prefs)でセッションを作る。条件に合う文が無ければ false
-  function startFromPrefs(avoidIds) {
+  // firstId: 最初に出題する文のID(条件に合わなくても、存在する文なら先頭に入れる)
+  function startFromPrefs(avoidIds, firstId) {
     const stats = loadStats();
-    const pool = buildPool(loadStatements(), prefs.scope, prefs.filter, stats);
-    if (!pool.length) return false;
-    session = createSession(pickQuestions(pool, prefs.filter, prefs.count, stats, avoidIds), { scope: prefs.scope, filter: prefs.filter, count: prefs.count });
+    const statements = loadStatements();
+    const pool = buildPool(statements, prefs.scope, prefs.filter, stats);
+    const first = firstId ? statements.find((s) => s.id === firstId) || null : null;
+    if (!pool.length && !first) return false;
+    session = createSession(pickQuestions(pool, prefs.filter, prefs.count, stats, avoidIds, first), { scope: prefs.scope, filter: prefs.filter, count: prefs.count });
     return true;
   }
 
@@ -260,14 +283,15 @@ window.Views.ox = (function () {
     return (window.APP_DATA.quiz || []).find((q) => q.id === id) || null;
   }
 
-  // 元の4択問題の問いかけから「〜に関する記述(民法の規定によれば)」の形で前提を取り出す
-  // 「正しいもの/誤っているもの」は文の正誤の手がかりになるため表示しない。形が合わなければ空文字
+  // 元の4択問題の問いかけから「〜に関する記述(民法の規定によれば)」の形で前提を取り出す(QuizEngine と共通)
   function contextOf(question) {
-    const m = String(question || ``).match(/^([\s\S]+?)次の記述のうち、?([\s\S]*?)(?:正しい|誤っている|誤りである|適切な|不適切な)もの(?:はどれか|を選べ)?。?\s*$/);
-    if (!m) return ``;
-    const head = m[1].trim();
-    const qual = m[2].replace(/[、,]\s*$/, ``).trim();
-    return `${head}記述${qual ? `(${qual})` : ``}`;
+    return QuizEngine.stemContext(question);
+  }
+
+  function contextFor(s) {
+    if (typeof s.context === `string`) return s.context;
+    const quiz = quizById(s.quizId);
+    return contextOf(quiz && quiz.question);
   }
 
   // 用語へのリンク: トピックの基礎知識チェックリストにあればトピック内へ、なければ用語集へ
@@ -359,7 +383,8 @@ window.Views.ox = (function () {
     if (route.kind === `start`) {
       prefs.scope = route.scope;
       prefs.filter = route.filter;
-      if (startFromPrefs()) {
+      if (route.count) prefs.count = route.count;
+      if (startFromPrefs(null, route.first)) {
         // 戻る操作でリンク元に戻れるよう、履歴を増やさずに出題中のURLへ置き換える
         history.replaceState(null, ``, `#ox/run`);
         renderRun(wrap, ctx);
@@ -398,7 +423,9 @@ window.Views.ox = (function () {
       w += e.w;
     });
     const acc = c + w ? Math.round((c / (c + w)) * 100) : null;
-    const resumable = session && !session.finished && answeredCount(session) < session.items.length;
+    // 最後の文に答えたあと結果を見ずに離れた場合も、ここから結果を開けるようにする
+    const resumable = !!session && !session.finished;
+    const allAnswered = resumable && answeredCount(session) >= session.items.length;
 
     wrap.innerHTML = `
       <h2>○×一問一答</h2>
@@ -407,10 +434,14 @@ window.Views.ox = (function () {
         <div class="card ox-resume">
           <span class="ox-resume-icon">${ic(`o-x`, 22)}</span>
           <div class="ox-resume-main">
-            <p class="ox-resume-title">続きから</p>
-            <p class="ox-resume-meta">${esc(session.label)}・<span class="num">${session.index + 1} / ${session.items.length}</span>問目</p>
+            <p class="ox-resume-title">${allAnswered ? `解き終わったセッション` : `続きから`}</p>
+            <p class="ox-resume-meta">${esc(session.label)}・${allAnswered
+              ? `<span class="num">${session.items.length}</span>問すべて回答済み`
+              : `<span class="num">${session.index + 1} / ${session.items.length}</span>問目`}</p>
           </div>
-          <a class="btn" href="#ox/run">${ic(`play`)}再開</a>
+          ${allAnswered
+            ? `<button type="button" class="btn" data-role="show-result">${ic(`flag`)}結果を見る</button>`
+            : `<a class="btn" href="#ox/run">${ic(`play`)}再開</a>`}
         </div>` : ``}
       ${opts.notice ? `<p class="ox-notice" role="status">${ic(`info`)}<span>${esc(opts.notice)}</span></p>` : ``}
       ${total ? `
@@ -432,6 +463,15 @@ window.Views.ox = (function () {
         </section>
         ${keysHintHtml()}` : ``}
     `;
+
+    const resultBtn = wrap.querySelector(`[data-role="show-result"]`);
+    if (resultBtn) {
+      resultBtn.addEventListener(`click`, () => {
+        if (!session) return;
+        session.finished = true;
+        Router.navigate(`#ox/run`);
+      });
+    }
 
     if (!total) {
       wrap.appendChild(UI.emptyState({
@@ -515,8 +555,12 @@ window.Views.ox = (function () {
       paint();
     });
     startBtn.addEventListener(`click`, () => {
-      if (startFromPrefs()) Router.navigate(`#ox/run`);
-      else paint();
+      if (startFromPrefs()) {
+        session.fromLanding = true;
+        Router.navigate(`#ox/run`);
+      } else {
+        paint();
+      }
     });
 
     paint();
@@ -530,7 +574,7 @@ window.Views.ox = (function () {
     const s = sess.items[sess.index];
     const prior = sess.prior[s.id];
     const quiz = quizById(s.quizId);
-    const context = contextOf(quiz && quiz.question);
+    const context = contextFor(s);
     const done = answeredCount(sess);
     const isLast = sess.index >= n - 1;
 
@@ -628,8 +672,10 @@ window.Views.ox = (function () {
 
     function quit() {
       if (!answeredCount(sess)) {
+        // 1問も答えずに終了: 履歴を増やさずにトップへ(増やすと「戻る」で出題画面→トップに飛ばされ、何も起きないように見える)
         session = null;
-        Router.navigate(`#ox`);
+        if (sess.fromLanding) history.back();
+        else location.replace(`#ox`);
         return;
       }
       sess.finished = true;
@@ -708,6 +754,7 @@ window.Views.ox = (function () {
                   ${s.cat ? `<span class="badge badge-soft">${esc(categoryName(s.cat))}</span>` : ``}
                   <span class="ox-wrong-answer">正解は${truthHtml(s.truth)}</span>
                 </div>
+                ${contextFor(s) ? `<p class="ox-wrong-context">${esc(contextFor(s))}</p>` : ``}
                 <p class="ox-wrong-text">${esc(s.text)}</p>
                 ${s.note ? `<p class="ox-wrong-note">${esc(s.note)}</p>` : ``}
                 <a class="link-btn" href="#quiz/q/${encodeURIComponent(s.quizId)}">${ic(`list`, 14)}元の4択問題</a>
@@ -719,7 +766,7 @@ window.Views.ox = (function () {
     const retryBtn = wrap.querySelector(`[data-role="retry-wrong"]`);
     if (retryBtn) {
       retryBtn.addEventListener(`click`, () => {
-        session = createSession(QuizEngine.shuffle(sum.wrong), { scope: sess.scope, filter: sess.filter, count: sess.count, label: `間違えた文をもう一度(${scopeLabel(sess.scope)})`, retry: true });
+        session = createSession(QuizEngine.shuffle(sum.wrong), { scope: sess.scope, filter: sess.filter, count: sess.count, label: `間違えた文をもう一度(${scopeLabel(sess.scope)})`, retry: true, fromLanding: sess.fromLanding });
         Router.navigate(`#ox/run`);
       });
     }
@@ -727,7 +774,11 @@ window.Views.ox = (function () {
       prefs.scope = Object.assign({}, sess.scope);
       prefs.filter = sess.filter;
       prefs.count = sess.count;
-      if (startFromPrefs(new Set(sess.items.map((s) => s.id)))) Router.navigate(`#ox/run`);
+      if (startFromPrefs(new Set(sess.items.map((s) => s.id)))) {
+        // 同じ履歴エントリ(#ox/run)のまま続けるので、1つ前の履歴は元のセッションと同じ
+        session.fromLanding = sess.fromLanding;
+        Router.navigate(`#ox/run`);
+      }
     });
   }
 
@@ -735,7 +786,7 @@ window.Views.ox = (function () {
     render,
     // テスト用
     _internal: {
-      STATS_KEY, prefs, parseParam, scopeCategories, withCategory, loadStatements, cleanEntry, loadStats, recordAnswer,
+      STATS_KEY, COUNTS, prefs, parseParam, scopeCategories, withCategory, loadStatements, cleanEntry, loadStats, recordAnswer,
       inScope, matchesFilter, buildPool, weakOrder, spreadByQuiz, pickQuestions, createSession, startFromPrefs,
       answerCurrent, summarize, contextOf, termLink, conditionLabel,
       getSession: () => session,

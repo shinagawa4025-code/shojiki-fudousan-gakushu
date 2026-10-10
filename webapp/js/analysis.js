@@ -55,6 +55,11 @@ window.Analysis = (function () {
     return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 100000) : 0;
   }
 
+  // 日時(ミリ秒)として使える数。Date で表せない範囲(1e20 など)は使わない
+  function validTs(v) {
+    return typeof v === `number` && Number.isFinite(v) && v > 0 && v <= 8.64e15;
+  }
+
   function pct(c, t) {
     return t > 0 ? Math.round((c / t) * 100) : null;
   }
@@ -87,9 +92,21 @@ window.Analysis = (function () {
     try { return QuizEngine.statementsFrom(item) || []; } catch (e) { return []; }
   }
 
+  function hasStatementSource() {
+    return !!(window.QuizEngine && typeof QuizEngine.allStatements === `function`);
+  }
+
   function allStatements() {
-    if (!window.QuizEngine || typeof QuizEngine.allStatements !== `function`) return [];
+    if (!hasStatementSource()) return [];
     try { return QuizEngine.allStatements() || []; } catch (e) { return []; }
+  }
+
+  // 用語へのリンク: トピックの基礎知識チェックリストにあればトピック内へ(用語集は全カードを描くため重い)、なければ用語集へ
+  function termNav(t) {
+    const has = (tp) => !!tp && Array.isArray(tp.basicIds) && tp.basicIds.includes(t.id);
+    const mine = (Array.isArray(t.topicIds) ? t.topicIds : []).map(topicById).find(has);
+    const topic = mine || (window.APP_DATA.topics || []).find(has);
+    return topic ? `#topics/${topic.id}/${t.id}` : `#glossary/${t.id}`;
   }
 
   function dateOfTs(t) {
@@ -127,17 +144,13 @@ window.Analysis = (function () {
       refId: typeof w.refId === `string` ? w.refId : null,
       termId: typeof w.termId === `string` ? w.termId : null,
     })) : [];
-    const ts = [e.finishedAt, e.startedAt].find((v) => typeof v === `number` && Number.isFinite(v) && v > 0) || 0;
+    const ts = [e.finishedAt, e.startedAt].find(validTs) || 0;
     const total = count(e.total);
     const score = Math.min(count(e.score), total);
     return { examTypeId: typeof e.examTypeId === `string` ? e.examTypeId : null, byCategory, wrong, t: ts, i, score, total };
   }
 
-  function load() {
-    const qhRaw = readObj(`quizHistory`);
-    const quizHistory = dict();
-    Object.keys(qhRaw).forEach((id) => { if (qhRaw[id] === `ok` || qhRaw[id] === `ng`) quizHistory[id] = qhRaw[id]; });
-
+  function loadAuto() {
     const autoRaw = readObj(`autoQuizStats`);
     const auto = dict();
     Object.keys(autoRaw).forEach((id) => {
@@ -147,14 +160,39 @@ window.Analysis = (function () {
       const wrong = count(s.wrong);
       if (correct + wrong > 0) auto[id] = { correct, wrong };
     });
+    return auto;
+  }
 
+  // 自動生成クイズで苦手な用語: 不正解が1回以上あり、正解の回数以下になっていない(クイズ画面の「苦手な用語」と同じ基準)
+  function weakTermIdsFrom(auto) {
+    return Object.keys(auto).filter((id) => {
+      const s = auto[id];
+      return !!termById(id) && s.wrong > 0 && s.wrong >= s.correct;
+    });
+  }
+
+  function load() {
+    const qhRaw = readObj(`quizHistory`);
+    const quizHistory = dict();
+    Object.keys(qhRaw).forEach((id) => { if (qhRaw[id] === `ok` || qhRaw[id] === `ng`) quizHistory[id] = qhRaw[id]; });
+
+    const auto = loadAuto();
+
+    // ○×の記録は、いま出題できる文のものだけを数える(問題の削除・ask の変更・範囲外の番号の記録は○×画面と同じく無視)
+    const statements = allStatements();
+    const statementById = dict();
+    statements.forEach((s) => { statementById[s.id] = s; });
+    const checkStatement = hasStatementSource();
+    // 回数は○×画面(Views.ox の cleanEntry)と同じく、数値として保存されたものだけを使う
+    const oxCount = (v) => (typeof v === `number` ? count(v) : 0);
     const oxRaw = readObj(`oxStats`);
     const ox = dict();
     Object.keys(oxRaw).forEach((sid) => {
       const s = oxRaw[sid];
       if (!isObj(s)) return;
-      const c = count(s.c);
-      const w = count(s.w);
+      if (checkStatement && !statementById[sid]) return;
+      const c = oxCount(s.c);
+      const w = oxCount(s.w);
       if (c + w === 0) return;
       const hash = sid.indexOf(`#`);
       ox[sid] = {
@@ -176,7 +214,7 @@ window.Analysis = (function () {
 
     const known = readObj(`flashcards`);
     const bp = readObj(`basicsProgress`);
-    return { quizHistory, auto, ox, exams, srs, known, bp };
+    return { quizHistory, auto, ox, exams, srs, known, bp, statements, statementById };
   }
 
   // ---- 集計の器 ----
@@ -429,14 +467,17 @@ window.Analysis = (function () {
       if (s.w < 2 || (s.lastOk === true && s.c >= s.w)) return;
       const q = quizById[s.quizId];
       if (!q) return;
-      const st = statementsOf(q).find((x) => x.id === sid || x.index === s.index) || null;
+      const st = d.statementById[sid] || statementsOf(q).find((x) => x.id === sid) || null;
       const score = Math.max(0.5, s.w - 0.5 * s.c + (s.lastOk === false ? 1 : 0));
       if (q.relatedTermId) coveredTerms[q.relatedTermId] = true;
       items.push({
         kind: `statement`, id: sid,
         title: st ? String(st.text) : String(q.question || ``),
+        // 問題文の前提(「宅建業者Aが…場合に関する記述」など)がないと意味が通らない文があるため一緒に出す
+        context: st && st.context ? String(st.context) : ``,
         reasons: [`○×で${s.w}回不正解`, st ? `正解は${st.truth ? `○` : `×`}` : ``].filter(Boolean),
-        nav: `#ox/weak`, icon: `o-x`, score, termId: q.relatedTermId || null, category: catInfo(q),
+        // 間違えた文の○×(この文を最初に出題)
+        nav: `#ox/weak/${encodeURIComponent(sid)}`, icon: `o-x`, score, termId: q.relatedTermId || null, category: catInfo(q),
       });
     });
 
@@ -462,7 +503,7 @@ window.Analysis = (function () {
         ex ? `模擬試験で${ex}回不正解` : ``,
         again ? `復習で「もう一度」` : ``,
       ].filter(Boolean);
-      items.push({ kind: `term`, id, title: t.name, reasons, nav: `#glossary/${id}`, icon: `layers`, score, termId: id, category: catInfo(t) });
+      items.push({ kind: `term`, id, title: t.name, reasons, nav: termNav(t), icon: `layers`, score, termId: id, category: catInfo(t) });
     });
 
     // 選んだ試験の分野に入るものを先に、その中は苦手度順(同点なら出題数の多い分野を先に)
@@ -508,7 +549,11 @@ window.Analysis = (function () {
     const readTopic = pickTopic(r, ctx, `read`);
     const quizTopic = pickTopic(r, ctx, `quiz`);
     const practice = () => {
-      if (oxCount >= 5) return { kind: `ox`, title: `${r.name}の○×を${Math.min(20, oxCount)}問`, nav: oxNav, icon: `o-x` };
+      if (oxCount >= 5) {
+        // ○×画面で選べる問題数(10・20・50)をリンクで指定し、タイトルの問題数と実際の出題数を揃える
+        const per = oxCount >= 20 ? 20 : 10;
+        return { kind: `ox`, title: `${r.name}の○×を${Math.min(per, oxCount)}問`, nav: `${oxNav}/${per}`, icon: `o-x` };
+      }
       if (quizTopic) return { kind: `quiz`, title: `${r.name}の用語クイズ`, nav: `#quiz/auto/${quizTopic.id}`, icon: `sparkles` };
       return null;
     };
@@ -521,7 +566,8 @@ window.Analysis = (function () {
     });
     let a = null;
     if (r.attempts < MIN_CONFIDENT && (r.coverage == null || r.coverage < 0.3) && readTopic) {
-      a = readAction(`学習済み ${r.studied}/${r.total}項目`);
+      // studied は「一度でも学習・出題したもの」(カバー率の分子)。進捗画面の「学習済み」(記憶済み・学習済みのチェック)とは別の数
+      a = readAction(`取り組んだ項目 ${r.studied}/${r.total}`);
     } else if (r.attempts < MIN_CONFIDENT) {
       a = practice();
       if (a) a.detail = join([r.attempts ? `まだ${r.attempts}問しか解いていません` : `まだ問題を解いていません`, `まず実力を確認`, q]);
@@ -533,7 +579,7 @@ window.Analysis = (function () {
       }
       if (a) a.detail = join([`正答率${r.accuracy}%`, q]);
     } else if (r.coverage != null && r.coverage < 0.6 && readTopic) {
-      a = readAction(`正答率${r.accuracy}%・未学習が${r.total - r.studied}項目`);
+      a = readAction(`正答率${r.accuracy}%・まだ取り組んでいない項目が${r.total - r.studied}`);
     } else {
       a = practice();
       if (a) {
@@ -559,8 +605,9 @@ window.Analysis = (function () {
       const a = categoryAction(r, snap.ctx);
       if (a) cands.push(a);
     });
+    // 出すかどうかは直近の回答が×の文の数で決め、件数はリンク先(#ox/weak = 間違えたことがある文)の数を示す
     if (snap.ctx.oxLastWrong >= 3) {
-      cands.push({ kind: `ox-weak`, title: `○×で間違えた文を解き直す`, detail: `直近の回答が×だった文が${snap.ctx.oxLastWrong}問あります`, nav: `#ox/weak`, icon: `o-x`, priority: 0.5 });
+      cands.push({ kind: `ox-weak`, title: `○×で間違えた文を解き直す`, detail: `間違えたことがある文が${snap.ctx.oxEverWrong}問あります。間違えた回数の多い順に出題します`, nav: `#ox/weak`, icon: `o-x`, priority: 0.5 });
     }
     // 分野別の「苦手な用語クイズ」が出ているときは、全体の苦手クイズは重ねて出さない
     const hasCatWeakQuiz = cands.some((c) => c.kind === `quiz` && c.icon === `target`);
@@ -623,7 +670,7 @@ window.Analysis = (function () {
     let statementTotal = 0;
     const hasCats = !!(type && Array.isArray(type.categories));
     const memo = dict();
-    allStatements().forEach((s) => {
+    d.statements.forEach((s) => {
       statementTotal += 1;
       (Array.isArray(s.topicIds) ? s.topicIds : []).forEach((tid) => { statementsByTopic[tid] = (statementsByTopic[tid] || 0) + 1; });
       if (!hasCats) return;
@@ -645,16 +692,15 @@ window.Analysis = (function () {
     });
     let oxAttempts = 0;
     let oxLastWrong = 0;
+    let oxEverWrong = 0; // ○×画面の「間違えたことがある」(#ox/weak の出題範囲)と同じ数え方
     Object.keys(d.ox).forEach((sid) => {
       const s = d.ox[sid];
       if (!quizById[s.quizId]) return;
       oxAttempts += s.c + s.w;
       if (s.lastOk === false) oxLastWrong += 1;
+      if (s.w > 0) oxEverWrong += 1;
     });
-    const autoWeak = Object.keys(d.auto).filter((id) => {
-      const s = d.auto[id];
-      return termById(id) && s.wrong > 0 && s.wrong >= s.correct;
-    }).length;
+    const autoWeak = weakTermIdsFrom(d.auto).length;
 
     // サイト全体の回答数(分野に属さない問題も含む)
     let totalAttempts = oxAttempts;
@@ -672,7 +718,7 @@ window.Analysis = (function () {
       typeExams,
       totalAttempts,
       hasData: totalAttempts > 0,
-      ctx: { examTypeId: typeId, topicMap, statementsByCat, statementsByTopic, statementTotal, weakTermsByCat, weakTermsByTopic, oxAttempts, oxLastWrong, autoWeak },
+      ctx: { examTypeId: typeId, topicMap, statementsByCat, statementsByTopic, statementTotal, weakTermsByCat, weakTermsByTopic, oxAttempts, oxLastWrong, oxEverWrong, autoWeak },
     };
     snap.actions = buildActions(snap);
     snap.summary = summarize(snap);
@@ -736,9 +782,18 @@ window.Analysis = (function () {
     return analyze(examTypeId).summary;
   }
 
+  // ホームの「今日やること」(Recommend)などから使う: 自動生成クイズで苦手な用語(弱点分析・クイズ画面と同じ基準)
+  function weakTermIds() {
+    return weakTermIdsFrom(loadAuto());
+  }
+
+  function weakTermCount() {
+    return weakTermIds().length;
+  }
+
   return {
-    analyze, byCategory, byTopic, weakPoints, nextActions, summary,
+    analyze, byCategory, byTopic, weakPoints, nextActions, summary, weakTermIds, weakTermCount,
     SOURCE_DEFS, CONFIDENCE_LABELS, MIN_CONFIDENT,
-    _internal: { load, normalizeExam, masteryScore, confidenceOf, trendOf, pickTopic, categoryAction, buildActions, resolveType, count, isMc, constants: { MIN_CONFIDENT, MID_CONFIDENT, ACC_WEIGHT, COVER_WEIGHT, EXAM_WEIGHTS, OX_RECENT_BONUS, TREND_STEP, WEAK_EXAM_WINDOW, GOOD_ACC } },
+    _internal: { load, normalizeExam, masteryScore, confidenceOf, trendOf, pickTopic, categoryAction, buildActions, resolveType, count, validTs, termNav, isMc, constants: { MIN_CONFIDENT, MID_CONFIDENT, ACC_WEIGHT, COVER_WEIGHT, EXAM_WEIGHTS, OX_RECENT_BONUS, TREND_STEP, WEAK_EXAM_WINDOW, GOOD_ACC } },
   };
 })();

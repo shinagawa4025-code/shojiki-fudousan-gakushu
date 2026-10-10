@@ -210,6 +210,8 @@
 .ox-view .ox-wrong-item { margin: 0; padding: var(--sp-3) var(--sp-4); border-left: 4px solid var(--color-danger); }
 .ox-wrong-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .ox-wrong-answer { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-sm); }
+.ox-wrong-context { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
+.ox-wrong-context + .ox-wrong-text { margin-top: var(--sp-1); }
 .ox-wrong-text { margin: var(--sp-2) 0 0; font-size: var(--fs-base); line-height: var(--lh-body); }
 .ox-wrong-note { margin: var(--sp-2) 0 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--color-surface-muted); font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text); }
 .ox-wrong-item .link-btn { margin-top: var(--sp-1); min-height: 40px; font-size: var(--fs-sm); }
