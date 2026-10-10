@@ -1,10 +1,14 @@
-// 学習の進捗: 全体の数値・試験分野別・記憶の定着度・学習カレンダー・模擬試験の推移・トピック別・苦手
+// 学習の進捗: 全体の数値・弱点分析(分野別の習熟度・次にやること・苦手なポイント)・試験分野別・
+// 記憶の定着度・学習カレンダー・模擬試験の推移・トピック別
+// ルート: #progress / #progress/weak(弱点分析までスクロール)
 window.Views = window.Views || {};
 window.Views.progress = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 20 });
   const esc = (s) => UI.escapeHtml(s);
   const WEEKS = 12;
   const GUIDE_PCT = 70;
+  const ACTION_LIMIT = 4;
+  const WEAK_LIMIT = 8;
 
   // 画面内で選んだ試験(再描画しても保持)
   let selectedType = null;
@@ -72,23 +76,249 @@ window.Views.progress = (function () {
     return card;
   }
 
-  function categoryCard() {
-    const card = document.createElement(`section`);
-    card.className = `card span-all`;
+  // ---- 弱点分析 ----
+  // 試験の切替は弱点分析にまとめ、試験分野別の進捗カードも同じ選択に従う
+  function createTypeState() {
     const options = examTypeOptions();
-    let typeId = defaultType(options);
+    const state = { options, typeId: defaultType(options), snap: null, listeners: [] };
+    state.set = (id) => {
+      state.typeId = id;
+      selectedType = id;
+      state.listeners.forEach((fn) => fn());
+    };
+    return state;
+  }
+
+  function safeAnalyze(typeId) {
+    if (!window.Analysis || typeof Analysis.analyze !== `function`) return null;
+    try {
+      return Analysis.analyze(typeId);
+    } catch (e) {
+      console.warn(`[progress] 弱点分析に失敗しました`, e);
+      return null;
+    }
+  }
+
+  function masteryTone(r) {
+    if (r.confidence === `none`) return `none`;
+    // データ不足のうちは色で良し悪しを判定しない
+    if (r.confidence === `low`) return `tentative`;
+    if (r.mastery < 40) return `low`;
+    if (r.mastery < 70) return `mid`;
+    return `high`;
+  }
+
+  function trendHtml(t) {
+    if (!t) return ``;
+    const sign = t.delta > 0 ? `+${t.delta}` : t.delta < 0 ? `−${Math.abs(t.delta)}` : `±0`;
+    const words = t.direction === `up` ? `上昇` : t.direction === `down` ? `低下` : `横ばい`;
+    return `<span class="ana-trend is-${t.direction}" title="直近2回の模擬試験: ${t.prev}% → ${t.last}%">${ic(`arrow-right`, 14)}<span class="sr-only">模擬試験の正答率が前回から${words}、</span>模試${sign}</span>`;
+  }
+
+  function catRowHtml(r) {
+    if (!r.available) {
+      return `
+        <li class="ana-cat is-empty">
+          <div class="ana-cat-top">
+            <span class="ana-rank num"><span class="sr-only">優先</span>${r.rank}<span class="sr-only">位</span></span>
+            <span class="ana-cat-name">${esc(r.name)}${r.questions ? `<span class="topic-group-meta">例年${r.questions}問</span>` : ``}</span>
+            <span class="ana-score num">—</span>
+          </div>
+          <div class="ana-cat-meta"><span class="text-muted">この分野の用語・問題はまだありません</span></div>
+        </li>`;
+    }
+    const tone = masteryTone(r);
+    const width = Math.max(r.mastery, tone === `none` ? 0 : 2);
+    const flag = r.confidence === `none` ? `<span class="ana-flag">未回答</span>`
+      : r.confidence === `low` ? `<span class="ana-flag">データ不足</span>` : ``;
+    return `
+      <li class="ana-cat">
+        <div class="ana-cat-top">
+          <span class="ana-rank num"><span class="sr-only">優先</span>${r.rank}<span class="sr-only">位</span></span>
+          <span class="ana-cat-name">${esc(r.name)}${r.questions ? `<span class="topic-group-meta">例年${r.questions}問</span>` : ``}</span>
+          <span class="ana-score num"><span class="sr-only">習熟度</span><strong>${r.mastery}</strong><small>/100</small></span>
+        </div>
+        <div class="progress-bar ana-bar" aria-hidden="true"><div class="progress-bar-fill ana-fill-${tone}" style="width:${width}%"></div></div>
+        <div class="ana-cat-meta">
+          ${r.attempts ? `<span>正答率 <strong>${r.accuracy}%</strong><span class="text-muted">(${r.attempts}問)</span></span>` : `<span class="text-muted">まだ解いた問題がありません</span>`}
+          ${r.total ? `<span class="text-muted">学習 ${r.studied}/${r.total}</span>` : ``}
+          ${trendHtml(r.trend)}
+          ${flag}
+        </div>
+      </li>`;
+  }
+
+  function actionsHtml(actions) {
+    if (!actions.length) return `<p class="prog-note" style="margin:0;">今のところ特におすすめはありません。この調子で続けましょう。</p>`;
+    return `
+      <div class="todo-list ana-actions">
+        ${actions.map((a) => `
+          <a class="todo-item" href="${esc(a.nav)}">
+            <span class="todo-icon${a.kind === `review` ? ` is-warn` : ``}">${ic(a.icon || `lightbulb`)}</span>
+            <span class="todo-main"><span class="todo-title">${esc(a.title)}</span><span class="todo-sub">${esc(a.detail)}</span></span>
+            ${ic(`chevron-right`, 18)}
+          </a>`).join(``)}
+      </div>`;
+  }
+
+  const WEAK_KIND = { term: `用語`, quiz: `問題`, statement: `○×` };
+
+  // 「宅建業法・○×で2回不正解・正解は×」を区切りごとに折り返す(語の途中で改行しない)
+  function weakSubHtml(w) {
+    const parts = [w.category ? w.category.name : ``].concat(Array.isArray(w.reasons) ? w.reasons : []).filter(Boolean);
+    if (!parts.length) return esc(w.sub || ``);
+    return parts.map((p) => `<span class="ana-seg">${esc(p)}</span>`).join(`・`);
+  }
+
+  function weakHtml(items) {
+    if (!items.length) {
+      return `<p class="prog-note" style="margin:0;">今のところ苦手なポイントはありません。クイズや○×で間違えた問題・用語がここに集まります。</p>`;
+    }
+    const hasTerm = items.some((w) => w.kind === `term`);
+    const hasStmt = items.some((w) => w.kind === `statement`);
+    return `
+      <ul class="ana-weak">
+        ${items.map((w) => `
+          <li>
+            <a class="ana-weak-item" href="${esc(w.nav)}">
+              <span class="ana-weak-icon">${ic(w.icon || `target`, 18)}</span>
+              <span class="ana-weak-main">
+                <span class="ana-weak-title">${esc(w.title)}</span>
+                <span class="ana-weak-sub"><span class="ana-weak-kind">${WEAK_KIND[w.kind] || ``}</span>${weakSubHtml(w)}</span>
+              </span>
+              ${ic(`chevron-right`, 18)}
+            </a>
+          </li>`).join(``)}
+      </ul>
+      ${hasTerm || hasStmt ? `
+        <div class="card-actions ana-weak-actions">
+          ${hasTerm ? `<a class="btn btn-secondary" href="#quiz/auto/weak">${ic(`pencil-check`)}苦手な用語を優先してクイズ</a>` : ``}
+          ${hasStmt ? `<a class="btn btn-secondary" href="#ox/weak">${ic(`o-x`)}○×の苦手を解き直す</a>` : ``}
+        </div>` : ``}`;
+  }
+
+  function howHtml() {
+    return `
+      <details class="ana-how">
+        <summary>${ic(`info`, 16)}<span>習熟度と並び順の決め方</span>${ic(`chevron-down`, 16)}</summary>
+        <ul>
+          <li><strong>習熟度(100点満点)</strong> = 正答率(直近重視)× 70点 + 学習カバー率 × 30点。</li>
+          <li>回答が${Analysis.MIN_CONFIDENT}問未満の分野は「データ不足」として、正答率の点を「回答数 ÷ ${Analysis.MIN_CONFIDENT}」の割合に割り引きます。</li>
+          <li>正答率は確認問題(4択・記述)・自動生成クイズ・○×・模擬試験の合計です。習熟度の計算では、直近の模擬試験(2倍)・その前の回(1.5倍)・○×の最後の回答を重めに、記述の自己採点を半分の重さで数えます。</li>
+          <li>学習カバー率は、分野の用語・基礎知識のうち、記憶済み・学習済みにしたものや、復習カード・クイズで一度でも出題されたものの割合です(分野に用語がまだないときは正答率だけで計算)。</li>
+          <li>並び順は「例年の出題数 × 習熟度の低さ」で、伸ばすと点につながりやすい分野ほど上に来ます。</li>
+          <li>「模試+8」などの表示は、その分野を含む直近2回の模擬試験での正答率の変化(ポイント)です。</li>
+        </ul>
+      </details>`;
+  }
+
+  function emptyHtml(type) {
+    const mock = !!(type && type.mockExam);
+    return `
+      <div class="empty-state empty-state-compact ana-empty">
+        <div class="empty-state-icon">${UI.icon(`target`, { size: 28 })}</div>
+        <p class="empty-state-title">まだ分析できる回答がありません</p>
+        <p class="empty-state-body">○×一問一答・クイズ${mock ? `・模擬試験` : ``}で問題を解くと、分野ごとの得意・苦手と、次にやることがここに表示されます。</p>
+        <div class="ana-empty-actions">
+          <a class="btn" href="#ox">${ic(`o-x`)}○×一問一答</a>
+          <a class="btn btn-secondary" href="#quiz">${ic(`pencil-check`)}クイズ</a>
+          ${mock ? `<a class="btn btn-secondary" href="#exam">${ic(`timer`)}模擬試験</a>` : ``}
+        </div>
+      </div>`;
+  }
+
+  function analysisCard(state) {
+    const card = document.createElement(`section`);
+    card.className = `card span-all ana-card`;
+    card.id = `progress-weak`;
+    card.setAttribute(`aria-labelledby`, `ana-title`);
+    card.innerHTML = `
+      <div class="recommend-head ana-head">
+        <h3 class="card-title ana-title" id="ana-title">${ic(`target`)}弱点分析</h3>
+        <span class="ana-overall" data-role="overall"></span>
+      </div>
+      <p class="prog-note">解いた問題の正答率と学習の進み具合から、分野ごとの習熟度を出し、次にやることを提案します。</p>
+      ${state.options.length > 1 ? `
+        <div class="segmented prog-segmented" role="group" aria-label="分析する試験" data-role="types">
+          ${state.options.map((t) => `<button type="button" class="segmented-item" data-type="${t.id}" aria-pressed="${t.id === state.typeId}">${esc(t.shortName || t.name)}</button>`).join(``)}
+        </div>` : ``}
+      <div data-role="ana-body" aria-live="polite"></div>`;
+    const body = card.querySelector(`[data-role="ana-body"]`);
+    const overall = card.querySelector(`[data-role="overall"]`);
+
+    function paint() {
+      const snap = safeAnalyze(state.typeId);
+      state.snap = snap;
+      if (!snap) {
+        overall.innerHTML = ``;
+        body.innerHTML = `<p class="prog-note" style="margin:0;">弱点分析を表示できませんでした。</p>`;
+        return;
+      }
+      const type = snap.type;
+      const name = type ? (type.shortName || type.name) : ``;
+      const s = snap.summary;
+      overall.innerHTML = snap.hasData && s.mastery != null
+        ? `総合 <strong class="num">${s.mastery}</strong><small>/100</small>`
+        : ``;
+      const actions = snap.actions.slice(0, ACTION_LIMIT);
+      const weak = snap.weakPoints.slice(0, WEAK_LIMIT);
+      const rows = snap.categories.slice().sort((a, b) => a.rank - b.rank);
+
+      if (!snap.hasData) {
+        body.innerHTML = `
+          ${emptyHtml(type)}
+          <h4 class="ana-sub">${ic(`flag`, 18)}まずはここから</h4>
+          ${actionsHtml(actions)}`;
+        return;
+      }
+
+      const catBlock = rows.length ? `
+        <h4 class="ana-sub">${ic(`chart`, 18)}分野別の習熟度<span class="ana-sub-note">伸ばしたい順</span></h4>
+        <ol class="ana-cats">${rows.map(catRowHtml).join(``)}</ol>
+        ${s.focus ? `<p class="ana-focus">${ic(`lightbulb`, 16)}<span>いま伸ばすと効果が大きいのは<strong>${esc(s.focus.name)}</strong>です${s.focus.questions ? `(例年${s.focus.questions}問)` : ``}。</span></p>` : ``}`
+        : `<p class="prog-note">${esc(name)}には分野の区分がないため、分野別の習熟度は表示していません。宅建士・税理士を選ぶと分野ごとに分析できます。</p>`;
+
+      body.innerHTML = `
+        <div class="ana-layout">
+          <div class="ana-col">${catBlock}</div>
+          <div class="ana-col">
+            <h4 class="ana-sub">${ic(`flag`, 18)}次にやること</h4>
+            ${actionsHtml(actions)}
+            <h4 class="ana-sub">${ic(`alert`, 18)}苦手なポイント</h4>
+            ${weakHtml(weak)}
+          </div>
+        </div>
+        ${howHtml()}`;
+    }
+
+    card.querySelectorAll(`[data-type]`).forEach((btn) => {
+      btn.addEventListener(`click`, () => {
+        card.querySelectorAll(`[data-type]`).forEach((b) => b.setAttribute(`aria-pressed`, String(b === btn)));
+        state.set(btn.dataset.type);
+      });
+    });
+    state.listeners.unshift(paint);
+    paint();
+    return card;
+  }
+
+  // 正答率の内訳(4択 3/5・自動 10/14 …)
+  function sourceBreakdown(row) {
+    return row.sources.filter((s) => s.total > 0).map((s) => `${s.label} ${s.correct}/${s.total}`).join(`・`);
+  }
+
+  function categoryCard(state) {
+    const card = document.createElement(`section`);
+    card.className = `card`;
     card.innerHTML = `
       <div class="recommend-head">
         <h3 class="card-title" style="margin:0;">試験分野別の進捗</h3>
       </div>
-      ${options.length > 1 ? `
-        <div class="segmented prog-segmented" role="group" aria-label="試験の種類" data-role="types">
-          ${options.map((t) => `<button type="button" class="segmented-item" data-type="${t.id}" aria-pressed="${t.id === typeId}">${esc(t.shortName || t.name)}</button>`).join(``)}
-        </div>` : ``}
       <div data-role="cat-body"></div>`;
     const body = card.querySelector(`[data-role="cat-body"]`);
 
     function paint() {
+      const typeId = state.typeId;
       const type = Stats.examType(typeId);
       if (!type) { body.innerHTML = ``; return; }
       if (!Array.isArray(type.categories)) {
@@ -104,31 +334,31 @@ window.Views.progress = (function () {
         return;
       }
       const rows = Stats.byCategory(typeId, { compact: false });
+      // 正答率は弱点分析と同じ集計(○×を含む)を使い、数字を揃える
+      const ana = state.snap && state.snap.examTypeId === typeId ? state.snap.categories : [];
+      const anaById = {};
+      ana.forEach((a) => { anaById[a.id] = a; });
       body.innerHTML = `
-        <p class="calc-note prog-note">${esc(type.shortName || type.name)}の出題分野ごとに、学習済み・記憶済みにした項目の割合です。正答率はクイズ・模擬試験の結果から計算しています。</p>
+        <p class="calc-note prog-note">${esc(type.shortName || type.name)}の出題分野ごとに、学習済み・記憶済みにした項目の割合です。正答率は確認問題・自動生成クイズ・○×・模擬試験の結果の合計です。</p>
         <div class="cat-bars">
-          ${rows.map((r) => `
+          ${rows.map((r) => {
+            const a = Object.prototype.hasOwnProperty.call(anaById, r.id) ? anaById[r.id] : null;
+            const acc = a ? (a.attempts ? `${ic(`pencil-check`, 14)}正答率 <strong>${a.accuracy}%</strong><span class="text-muted">(${a.correct}/${a.attempts}問${sourceBreakdown(a) ? `:${esc(sourceBreakdown(a))}` : ``})</span>` : null)
+              : (r.accuracy != null ? `${ic(`pencil-check`, 14)}正答率 <strong>${r.accuracy}%</strong><span class="text-muted">(${r.quizCorrect}/${r.quizAttempted}問)</span>` : null);
+            return `
             <div>
               <div class="cat-bar-head">
                 <span class="cat-bar-name">${esc(r.name)}${r.questions ? `<span class="topic-group-meta">(例年${r.questions}問)</span>` : ``}</span>
                 <span class="cat-bar-meta">${r.done}/${r.total}・<strong>${r.pct}%</strong></span>
               </div>
               <div class="progress-bar progress-bar-lg"><div class="progress-bar-fill" style="width:${r.pct}%"></div></div>
-              <div class="prog-cat-acc">${r.accuracy != null
-                ? `${ic(`pencil-check`, 14)}正答率 <strong>${r.accuracy}%</strong><span class="text-muted">(${r.quizCorrect}/${r.quizAttempted}問)</span>`
-                : `<span class="text-muted">${ic(`pencil-check`, 14)}まだ解いた問題がありません</span>`}</div>
-            </div>`).join(``)}
+              <div class="prog-cat-acc">${acc || `<span class="text-muted">${ic(`pencil-check`, 14)}まだ解いた問題がありません</span>`}</div>
+            </div>`;
+          }).join(``)}
         </div>`;
     }
 
-    card.querySelectorAll(`[data-type]`).forEach((btn) => {
-      btn.addEventListener(`click`, () => {
-        typeId = btn.dataset.type;
-        selectedType = typeId;
-        card.querySelectorAll(`[data-type]`).forEach((b) => b.setAttribute(`aria-pressed`, String(b === btn)));
-        paint();
-      });
-    });
+    state.listeners.push(paint);
     paint();
     return card;
   }
@@ -345,25 +575,7 @@ window.Views.progress = (function () {
     return card;
   }
 
-  // ---- 苦手な用語 ----
-  function weakCard() {
-    const card = document.createElement(`section`);
-    card.className = `card`;
-    const weak = Stats.weakTerms(8);
-    card.innerHTML = `
-      <h3 class="card-title">苦手な用語</h3>
-      ${weak.length ? `
-        <p class="calc-note prog-note">クイズで間違えた回数が多い用語です。用語集で意味を確認してから、苦手優先のクイズで解き直しましょう。</p>
-        <div class="chip-row">
-          ${weak.map((w) => `<a class="chip chip-small" href="#glossary/${w.term.id}">${esc(w.term.name)}</a>`).join(``)}
-        </div>
-        <div class="card-actions">
-          <a class="btn" href="#quiz/auto/weak">${ic(`pencil-check`)}苦手を優先してクイズ</a>
-        </div>` : `
-        <p class="calc-note prog-note" style="margin:0;">今のところ苦手な用語はありません。クイズで間違えた用語がここに集まります。</p>
-        <div class="card-actions"><a class="btn btn-secondary" href="#quiz">${ic(`pencil-check`)}クイズに挑戦</a></div>`}`;
-    return card;
-  }
+  // (以前の「苦手な用語」カードは、弱点分析の「苦手なポイント」に統合した)
 
   function dataNote() {
     const p = document.createElement(`p`);
@@ -372,17 +584,22 @@ window.Views.progress = (function () {
     return p;
   }
 
-  function render(root) {
+  function render(root, param) {
     const wrap = document.createElement(`div`);
     wrap.className = `view progress-view`;
     wrap.innerHTML = `
       <h2>学習の進捗</h2>
-      <p class="view-desc">これまでの学習の積み重ねを、分野・記憶の定着度・日ごとの記録で確認できます。</p>
+      <p class="view-desc">これまでの学習の積み重ねと、分野ごとの得意・苦手を確認できます。</p>
       <div class="prog-grid" data-role="grid"></div>`;
     root.appendChild(wrap);
     const grid = wrap.querySelector(`[data-role="grid"]`);
-    [summaryCard(), categoryCard(), srsCard(), heatmapCard(), examCard(), weakCard(), topicCard(), dataNote()]
+    const state = createTypeState();
+    const analysis = analysisCard(state);
+    [summaryCard(), analysis, categoryCard(state), examCard(), srsCard(), heatmapCard(), topicCard(), dataNote()]
       .forEach((el) => grid.appendChild(el));
+    if (param === `weak`) {
+      requestAnimationFrame(() => analysis.scrollIntoView({ block: `start`, behavior: `auto` }));
+    }
   }
 
   return { render };
