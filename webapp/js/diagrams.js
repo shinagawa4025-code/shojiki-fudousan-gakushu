@@ -509,6 +509,8 @@ window.Diagrams = (function () {
     basicJ02: [`coverage-far`],
     basicJ03: [`coverage-far`],
     basicJ10: [`height-setback`],
+    basicJ24: [`zoning-districts`],
+    basicJ26: [`height-setback`],
     basicJ06: [`farmland-act`],
     basicJ07: [`farmland-act`],
     basicJ08: [`farmland-act`],
