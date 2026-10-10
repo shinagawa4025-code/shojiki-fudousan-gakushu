@@ -34,7 +34,7 @@ window.APP_DATA.topics = [
     episodes: [`13-14`, `27-28`, `39-40`, `53-54`, `61-62`, `81-82`, `83-84`, `89-90`, `97-98`, `101-102`, `103-104`, `107-108`],
     basicIds: [`basicG01`, `basicG02`, `basicG03`, `basicG04`, `basicG05`, `basicG06`, `basicG07`, `basicG08`] },
   { id: `topicH`, icon: `receipt`, name: `不動産税務`, level: `中上級`,
-    description: `資産税(相続・贈与・譲渡所得)・法人税務(不動産保有法人)・不動産所得や消費税など、税理士実務で頻出する不動産税務の論点`,
+    description: `資産税(相続・贈与・譲渡所得)・法人税務(不動産保有法人)・不動産所得など税理士実務で頻出する不動産税務の論点に加え、宅建士試験の「税・価格評定」(不動産取得税・固定資産税・登録免許税・印紙税・住宅税制・地価公示・不動産鑑定評価)も扱う`,
     episodes: [],
     basicIds: [`basicH01`, `basicH02`, `basicH03`, `basicH04`, `basicH05`, `basicH06`, `basicH07`, `basicH08`, `basicH09`, `basicH10`, `basicH11`, `basicH12`, `basicH13`, `basicH14`] },
   { id: `topicJ`, icon: `ruler`, name: `法令上の制限`, level: `中上級`,
