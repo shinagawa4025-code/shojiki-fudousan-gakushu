@@ -70,7 +70,7 @@ window.UI = (function () {
   function toast(message, type, opts) {
     opts = opts || {};
     const el = document.createElement(`div`);
-    el.className = `toast toast-${type || `default`}`;
+    el.className = `toast toast-${type || `default`}${opts.position === `top` ? ` toast-top` : ``}`;
     el.setAttribute(`role`, `status`);
     const icon = type === `success` ? ic(`check-circle`, { size: 18 }) : type === `error` ? ic(`alert`, { size: 18 }) : ``;
     el.innerHTML = `${icon}<span>${escapeHtml(message)}</span>`;
@@ -81,6 +81,15 @@ window.UI = (function () {
       btn.textContent = opts.action.label;
       btn.addEventListener(`click`, () => { opts.action.onClick(); dismiss(); });
       el.appendChild(btn);
+    }
+    if (opts.dismissible) {
+      const x = document.createElement(`button`);
+      x.type = `button`;
+      x.className = `btn btn-icon toast-close`;
+      x.setAttribute(`aria-label`, `閉じる`);
+      x.innerHTML = ic(`x`, { size: 18 });
+      x.addEventListener(`click`, () => dismiss());
+      el.appendChild(x);
     }
     document.body.appendChild(el);
     requestAnimationFrame(() => el.classList.add(`toast-show`));

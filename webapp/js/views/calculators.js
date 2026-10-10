@@ -566,7 +566,7 @@ window.Views.calculators = (function () {
   }
 
   function promptHtml(text) {
-    return `<div class="card calc-result-card calc-empty">${UI.icon(`pencil`, { size: 20 })}<p>${text}</p></div>`;
+    return `<div class="card calc-result-card calc-empty">${UI.icon(`pencil-check`, { size: 20 })}<p>${text}</p></div>`;
   }
 
   const DISCLAIMER = `この計算結果は概算です。実際の金額は固定資産税評価額・自治体の条例(税率等)・特例の要件の判定・端数処理により異なります。申告・登記・契約にあたっては税理士・司法書士・宅建業者などの専門家や、都道府県税事務所・市区町村・法務局に確認してください。`;

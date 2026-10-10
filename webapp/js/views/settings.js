@@ -3,6 +3,9 @@ window.Views = window.Views || {};
 window.Views.settings = (function () {
   const PREFIX = `shojikiLearn.v1.`;
 
+  // このアプリが使う保存キー(これ以外のキーは読み込まない。別のJSONを選んでも学習データが消えないように)
+  const KNOWN_KEYS = new Set([`activityLog`, `autoQuizStats`, `basicsProgress`, `bookmarks`, `calcInputs`, `examHistory`, `examRetryResult`, `examSession`, `examTargets`, `flashcards`, `lastTopic`, `onboardingDone`, `oxStats`, `quizHistory`, `reviewNewLimit`, `reviewNewToday`, `roadmap`, `seenWhatsNew`, `srsCards`, `srsMigrated`, `themePreference`, `ttsRate`]);
+
   function collectAllData() {
     const data = {};
     for (let i = 0; i < localStorage.length; i++) {
@@ -125,7 +128,8 @@ window.Views.settings = (function () {
     });
 
     wrap.querySelector(`[data-role="export"]`).addEventListener(`click`, () => {
-      const data = collectAllData();
+      // __app: このアプリのバックアップであることの目印(読み込み時は無視する)
+      const data = Object.assign({ __app: { name: `shojiki-fudousan-gakushu`, exportedAt: new Date().toISOString() } }, collectAllData());
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: `application/json` });
       const url = URL.createObjectURL(blob);
       const a = document.createElement(`a`);
@@ -149,22 +153,34 @@ window.Views.settings = (function () {
         try {
           const parsed = JSON.parse(reader.result);
           if (!parsed || typeof parsed !== `object` || Array.isArray(parsed)) throw new Error(`invalid`);
-          const keys = Object.keys(parsed);
-          if (!keys.length) throw new Error(`empty`);
-          const ok = await UI.confirm(`${keys.length}件のデータ(${keys.map(UI.escapeHtml).join(`, `)})で現在のデータを上書きします。よろしいですか?`, { confirmLabel: `上書きする`, danger: true });
+          const keys = Object.keys(parsed).filter((k) => KNOWN_KEYS.has(k));
+          // このアプリのバックアップでなければ何も変更しない
+          if (!keys.length) throw new Error(`notbackup`);
+          const skipped = Object.keys(parsed).length - keys.length - (parsed.__app ? 1 : 0);
+          const ok = await UI.confirm(`バックアップの${keys.length}項目で、現在の学習データを置き換えます。現在のデータは消えます。よろしいですか?${skipped > 0 ? `(このアプリのものではない${skipped}項目は読み込みません)` : ``}`, { confirmLabel: `置き換える`, danger: true });
           if (!ok) { importInput.value = ``; return; }
-          // 「上書きして復元」: バックアップに無いキーも消してから書き込む(テーマ設定は残す)
+          // 失敗したら元に戻せるよう、現在のデータを控えてから置き換える(テーマ設定は残す)
+          const before = collectAllData();
           Object.keys(localStorage)
             .filter((k) => k.startsWith(PREFIX) && k !== `${PREFIX}themePreference` && !keys.includes(k.slice(PREFIX.length)))
             .forEach((k) => localStorage.removeItem(k));
-          keys.forEach((k) => Storage.set(k, parsed[k]));
+          const failed = keys.filter((k) => !Storage.set(k, parsed[k]));
+          if (failed.length) {
+            Object.keys(localStorage).filter((k) => k.startsWith(PREFIX)).forEach((k) => localStorage.removeItem(k));
+            Object.keys(before).forEach((k) => Storage.set(k, before[k]));
+            throw new Error(`write`);
+          }
           importStatus.hidden = false;
           importStatus.textContent = `インポートが完了しました。再読み込みすると反映されます。`;
           importStatus.className = `settings-import-status settings-import-ok`;
           UI.toast(`インポートが完了しました`, `success`, { action: { label: `再読み込み`, onClick: () => location.reload() }, duration: 8000 });
         } catch (err) {
           importStatus.hidden = false;
-          importStatus.textContent = `インポートに失敗しました。正しいバックアップファイルか確認してください。`;
+          importStatus.textContent = err && err.message === `notbackup`
+            ? `このアプリのバックアップファイルではないため、読み込みませんでした(データは変更していません)。`
+            : err && err.message === `write`
+              ? `保存に失敗したため、元のデータに戻しました。端末の空き容量を確認してください。`
+              : `インポートに失敗しました。正しいバックアップファイルか確認してください。`;
           importStatus.className = `settings-import-status settings-import-ng`;
           UI.toast(`インポートに失敗しました`, `error`);
         }

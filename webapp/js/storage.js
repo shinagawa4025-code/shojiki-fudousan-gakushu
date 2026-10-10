@@ -21,11 +21,17 @@ window.Storage = (function () {
     }
   }
 
+  // 保存に失敗したら(容量不足など)1度だけ知らせる。黙って学習記録が消えないように
+  let warned = false;
   function set(key, value) {
     try {
       localStorage.setItem(PREFIX + key, JSON.stringify(value));
       return true;
     } catch (e) {
+      if (!warned && window.UI && UI.toast) {
+        warned = true;
+        setTimeout(() => UI.toast(`学習データを保存できませんでした。端末の空き容量を確認し、設定からバックアップを取ってください`, `error`, { duration: 8000 }), 0);
+      }
       return false;
     }
   }

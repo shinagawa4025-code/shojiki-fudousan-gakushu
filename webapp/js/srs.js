@@ -99,12 +99,13 @@ window.Srs = (function () {
     return `${Math.round(days / 36.5) / 10}年後`;
   }
 
-  function grade(termId, g) {
+  // opts.silent: 呼び出し側で学習記録(ストリーク)を付けている場合は二重に数えない
+  function grade(termId, g, opts) {
     const cards = getAllCards();
     const card = nextCard(cards[termId], g);
     cards[termId] = card;
     Storage.set(`srsCards`, cards);
-    if (window.Streak) window.Streak.recordToday();
+    if (window.Streak && !(opts && opts.silent)) window.Streak.recordToday();
     window.dispatchEvent(new CustomEvent(`srs:change`, { detail: { termId, grade: g } }));
     return card;
   }

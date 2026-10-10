@@ -15,7 +15,7 @@ window.Views.review = (function () {
 
   function newLimit() {
     const n = Number(Storage.get(`reviewNewLimit`, DEFAULT_NEW_LIMIT));
-    return Number.isFinite(n) && n >= 0 ? n : DEFAULT_NEW_LIMIT;
+    return Number.isFinite(n) && n >= 0 ? Math.min(100, Math.floor(n)) : DEFAULT_NEW_LIMIT;
   }
 
   // 今日すでに学んだ新規カードの数 { date, ids[] }
@@ -168,8 +168,15 @@ window.Views.review = (function () {
       const prevKnown = !!known[term.id];
       const item = queue[0];
       Srs.grade(term.id, g);
+      // 別のタブでの変更を消さないよう、保存前に最新の値を読み直してから反映する
+      const latestKnown = Storage.get(`flashcards`, {});
+      Object.keys(known).forEach((k) => { if (!(k in latestKnown)) delete known[k]; });
+      Object.assign(known, latestKnown);
       if (g >= 3) known[term.id] = true;
       Storage.set(`flashcards`, known);
+      // 日付が変わったら今日の新規カウントをやり直す(日をまたいで学習した場合)
+      const today = Srs.todayStr();
+      if (todayNew.date !== today) { todayNew.date = today; todayNew.ids = []; }
       if (isNew && !todayNew.ids.includes(term.id)) {
         todayNew.ids.push(term.id);
         Storage.set(`reviewNewToday`, todayNew);

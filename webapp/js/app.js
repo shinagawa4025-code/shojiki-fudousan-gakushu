@@ -99,13 +99,27 @@
       positionResults();
     }
 
-    input.addEventListener(`input`, () => {
+    // 日本語入力の変換中は検索せず、入力が落ち着いてから検索する(打鍵ごとの検索で重くならないように)
+    let searchTimer = null;
+    function runSearch() {
+      searchTimer = null;
       const q = input.value.trim();
       if (!q) { closeResults(); return; }
       renderResults(window.GlobalSearch.search(q, 8));
+    }
+    input.addEventListener(`input`, (e) => {
+      if (e.isComposing) return;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(runSearch, 120);
+    });
+    input.addEventListener(`compositionend`, () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(runSearch, 120);
     });
 
     input.addEventListener(`keydown`, (e) => {
+      // 検索待ちの間に Enter が押されたら、先に検索を済ませる
+      if (e.key === `Enter` && !e.isComposing && searchTimer) { clearTimeout(searchTimer); searchTimer = null; runSearch(); }
       if (e.key === `Escape`) {
         e.preventDefault();
         if (!resultsEl.hidden) closeResults();
@@ -157,12 +171,18 @@
     navigator.serviceWorker.addEventListener(`controllerchange`, () => {
       // 初回インストール時は通知しない。更新(新しいSWに切り替わった)時だけ再読み込みを促す
       if (!hadController || refreshing) return;
+      // 解答中(○×・模擬試験)は下部のボタンに重ならないよう、画面上部に出す。×で閉じられる
       UI.toast(`新しいバージョンがあります`, `default`, {
         duration: 0,
+        position: [`#ox/run`, `#exam/run`].some((h) => location.hash.startsWith(h)) ? `top` : ``,
+        dismissible: true,
         action: { label: `再読み込み`, onClick: () => { refreshing = true; location.reload(); } },
       });
     });
-    navigator.serviceWorker.register(`./sw.js`).catch(() => { /* オフライン対応は任意機能のため失敗しても無視 */ });
+    navigator.serviceWorker.register(`./sw.js`).then((reg) => {
+      // ホーム画面から開いたアプリが背景から戻ったときにも更新を確認する
+      document.addEventListener(`visibilitychange`, () => { if (document.visibilityState === `visible` && reg.update) reg.update().catch(() => {}); });
+    }).catch(() => { /* オフライン対応は任意機能のため失敗しても無視 */ });
   }
 
   document.addEventListener(`DOMContentLoaded`, () => {

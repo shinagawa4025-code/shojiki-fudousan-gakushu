@@ -45,6 +45,11 @@ window.Views.topics = (function () {
       if (!g) g = groups[groups.length - 1];
       g.topics.push(topic);
     });
+    // 分野の中は試験設定(data/exams.js)の topicIds の順(主要なトピックを先頭に)
+    groups.forEach((g) => {
+      const c = cats.find((x) => x.id === g.id);
+      if (c) g.topics.sort((a, b) => (c.topicIds || []).indexOf(a.id) - (c.topicIds || []).indexOf(b.id));
+    });
     return groups.filter((g) => g.topics.length);
   }
 
@@ -205,7 +210,9 @@ window.Views.topics = (function () {
       `;
       const checkbox = li.querySelector(`[data-role="learned-checkbox"]`);
       checkbox.addEventListener(`change`, (e) => {
-        if (!basicsProgress[conceptId]) basicsProgress[conceptId] = {};
+        // 別のタブでの記録を消さないよう、最新の値を読み直してから書き込む
+        Object.assign(basicsProgress, Storage.get(`basicsProgress`, {}));
+        if (!Storage.isPlainObject(basicsProgress[conceptId])) basicsProgress[conceptId] = {};
         basicsProgress[conceptId].learned = e.target.checked;
         Storage.set(`basicsProgress`, basicsProgress);
         Streak.recordToday();
@@ -214,12 +221,33 @@ window.Views.topics = (function () {
       basicsList.appendChild(li);
     });
 
+    // 件数の多いトピックで一度に全部を描画すると重いため、一定数ずつ表示して「もっと見る」で末尾に追加する
+    function renderPaged(container, items, build, page, unit) {
+      let shown = 0;
+      let btn = null;
+      function more() {
+        const next = Math.min(items.length, shown + page);
+        const fragment = document.createDocumentFragment();
+        items.slice(shown, next).forEach((it) => { const el = build(it); if (el) fragment.appendChild(el); });
+        container.appendChild(fragment);
+        shown = next;
+        if (shown >= items.length) { if (btn) btn.remove(); return; }
+        if (!btn) {
+          btn = document.createElement(`button`);
+          btn.type = `button`;
+          btn.className = `btn load-more-btn`;
+          btn.addEventListener(`click`, more);
+          container.insertAdjacentElement(`afterend`, btn);
+        }
+        btn.textContent = `もっと見る(残り${items.length - shown}${unit})`;
+      }
+      more();
+    }
+
     // 用語フリップカード(作品由来+基礎知識)
     const termGrid = wrap.querySelector(`[data-role="term-grid"]`);
-    termIds.forEach((termId) => {
-      const term = AppIndex.termsById[termId];
-      if (term) termGrid.appendChild(CardUi.buildFlipCard(term, { known }));
-    });
+    const termsToShow = termIds.map((termId) => AppIndex.termsById[termId]).filter(Boolean);
+    renderPaged(termGrid, termsToShow, (term) => CardUi.buildFlipCard(term, { known }), 12, `語`);
     if (!termIds.length) termGrid.appendChild(UI.emptyState({ icon: `layers`, title: `用語は準備中です` }));
 
     // 正直不動産の具体例
@@ -242,7 +270,8 @@ window.Views.topics = (function () {
       `;
       [`watched`, `understood`].forEach((key) => {
         li.querySelector(`[data-role="${key}"]`).addEventListener(`change`, (e) => {
-          if (!roadmap[epId]) roadmap[epId] = { watched: false, understood: false };
+          Object.assign(roadmap, Storage.get(`roadmap`, {}));
+          if (!Storage.isPlainObject(roadmap[epId])) roadmap[epId] = { watched: false, understood: false };
           roadmap[epId][key] = e.target.checked;
           Storage.set(`roadmap`, roadmap);
           Streak.recordToday();
@@ -269,10 +298,10 @@ window.Views.topics = (function () {
     // このトピックのクイズ(確認問題のカードを再利用)
     const quizList = wrap.querySelector(`[data-role="quiz-list"]`);
     const history = obj(`quizHistory`);
-    quizIds.forEach((quizId) => {
-      const q = window.APP_DATA.quiz.find((item) => item.id === quizId);
-      if (q) quizList.appendChild(Views.quiz.buildFixedCard(q, { history }));
-    });
+    const quizById = {};
+    window.APP_DATA.quiz.forEach((item) => { quizById[item.id] = item; });
+    const quizzesToShow = quizIds.map((id) => quizById[id]).filter(Boolean);
+    renderPaged(quizList, quizzesToShow, (q) => Views.quiz.buildFixedCard(q, { history }), 10, `問`);
     if (!quizIds.length) quizList.appendChild(UI.emptyState({ icon: `pencil-check`, title: `確認問題は準備中です`, body: `自動生成クイズで用語の理解を確認できます。` }));
 
     // #topics/<topicId>/<basicId> で開いた場合は該当の基礎知識を開いて強調

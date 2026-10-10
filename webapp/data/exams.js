@@ -31,7 +31,7 @@ window.APP_DATA.exams = {
       mockExam: false,
       categories: [
         { id: `shisan`, name: `不動産税務`, questions: null, topicIds: [`topicH`], termIds: [`basicB04`, `basicB05`, `basicB06`, `basicB08`, `basicC05`] },
-        { id: `shohi`, name: `不動産と消費税`, questions: null, topicIds: [`topicO`], termIds: [] },
+        { id: `shohi`, name: `不動産と消費税`, questions: null, topicIds: [`topicO`], termIds: [`basicH13`] },
       ],
     },
     {
