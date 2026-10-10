@@ -31,6 +31,12 @@ window.Views.settings = (function () {
       </div>
 
       <div class="card settings-card">
+        <h3 class="settings-card-title">${UI.icon(`repeat`)}今日の復習</h3>
+        <p class="view-desc">「今日の復習」で1日に出す新しい用語の数です。期限が来た復習はこの数に関係なくすべて出題されます。</p>
+        <div class="chip-row" data-role="new-limit-chips" role="group" aria-label="1日の新しい用語の数"></div>
+      </div>
+
+      <div class="card settings-card">
         <h3 class="settings-card-title">${UI.icon(`download`)}エクスポート(バックアップ)</h3>
         <p class="view-desc">現在の学習データを1つのJSONファイルとしてダウンロードします。</p>
         <button type="button" class="btn" data-role="export">${UI.icon(`download`)}学習データをエクスポート</button>
@@ -95,6 +101,27 @@ window.Views.settings = (function () {
     }
     renderTargets();
     wrap.querySelector(`[data-role="add-target"]`).addEventListener(`click`, () => Views.home.openTargetForm(renderTargets));
+
+    // 1日の新規用語数
+    const limitRow = wrap.querySelector(`[data-role="new-limit-chips"]`);
+    const defaultLimit = (Views.review && Views.review.DEFAULT_NEW_LIMIT) || 10;
+    const currentLimit = Number(Storage.get(`reviewNewLimit`, defaultLimit));
+    [0, 5, 10, 20, 30].forEach((n) => {
+      const chip = document.createElement(`button`);
+      chip.type = `button`;
+      chip.className = `chip` + (n === currentLimit ? ` active` : ``);
+      chip.setAttribute(`aria-pressed`, String(n === currentLimit));
+      chip.textContent = n === 0 ? `出さない` : `${n}語${n === defaultLimit ? `(標準)` : ``}`;
+      chip.addEventListener(`click`, () => {
+        Storage.set(`reviewNewLimit`, n);
+        limitRow.querySelectorAll(`.chip`).forEach((c) => {
+          c.classList.toggle(`active`, c === chip);
+          c.setAttribute(`aria-pressed`, String(c === chip));
+        });
+        if (window.Nav) Nav.refreshBadge();
+      });
+      limitRow.appendChild(chip);
+    });
 
     wrap.querySelector(`[data-role="export"]`).addEventListener(`click`, () => {
       const data = collectAllData();

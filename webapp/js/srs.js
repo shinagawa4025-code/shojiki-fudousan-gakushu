@@ -51,10 +51,9 @@ window.Srs = (function () {
     return Object.keys(cards).filter((id) => cards[id] && cards[id].dueDate <= today);
   }
 
-  function grade(termId, g) {
-    const cards = getAllCards();
-    const card = cards[termId] || DEFAULT_CARD();
-
+  // 評価gを付けた後のカードを返す(元のカードは変更しない純粋関数)
+  function nextCard(prev, g) {
+    const card = Object.assign(DEFAULT_CARD(), prev || {});
     if (g === 1) { // もう一度
       card.reps = 0;
       card.interval = 0;
@@ -78,6 +77,27 @@ window.Srs = (function () {
       card.dueDate = addDays(todayStr(), card.interval);
     }
     card.lastGrade = g;
+    return card;
+  }
+
+  // 各評価を付けた場合の次回までの日数 { 1: 0, 2: n, 3: n, 4: n }
+  function preview(termId) {
+    const prev = getCard(termId);
+    const out = {};
+    [1, 2, 3, 4].forEach((g) => { out[g] = nextCard(prev, g).interval; });
+    return out;
+  }
+
+  function intervalLabel(days) {
+    if (days <= 0) return `今日`;
+    if (days < 30) return `${days}日後`;
+    if (days < 365) return `${Math.round(days / 30)}か月後`;
+    return `${Math.round(days / 36.5) / 10}年後`;
+  }
+
+  function grade(termId, g) {
+    const cards = getAllCards();
+    const card = nextCard(cards[termId], g);
     cards[termId] = card;
     Storage.set(`srsCards`, cards);
     if (window.Streak) window.Streak.recordToday();
@@ -85,5 +105,14 @@ window.Srs = (function () {
     return card;
   }
 
-  return { migrateIfNeeded, getCard, getAllCards, isDue, getDueTermIds, getReviewDueIds, grade, todayStr, addDays };
+  // 元に戻す用: カードを指定状態に戻す(null なら削除)
+  function restore(termId, prevCard) {
+    const cards = getAllCards();
+    if (prevCard) cards[termId] = prevCard;
+    else delete cards[termId];
+    Storage.set(`srsCards`, cards);
+    window.dispatchEvent(new CustomEvent(`srs:change`, { detail: { termId, restored: true } }));
+  }
+
+  return { migrateIfNeeded, getCard, getAllCards, isDue, getDueTermIds, getReviewDueIds, grade, nextCard, preview, intervalLabel, restore, todayStr, addDays };
 })();
