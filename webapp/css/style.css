@@ -1388,3 +1388,5 @@ a.topic-card { text-decoration: none; color: inherit; }
 .ox-mark { flex-shrink: 0; font-weight: 700; width: 1.2em; text-align: center; }
 .ox-o { color: var(--color-success); }
 .ox-x { color: var(--color-danger); }
+/* 用語集: 絞り込み条件から外れたカード(次の操作で一覧から外れる) */
+.flip-card.filter-stale { opacity: .55; transition: opacity var(--dur-2); }

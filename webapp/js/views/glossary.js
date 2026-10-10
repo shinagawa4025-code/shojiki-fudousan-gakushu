@@ -144,41 +144,61 @@ window.Views.glossary = (function () {
       return haystack.includes(q);
     }
 
+    let currentTerms = [];
+    let shownCount = 0;
+
+    // 件数と記憶済み数だけ更新する(カードは作り直さない)
+    function refreshMeta() {
+      computeStatuses();
+      updateStatusCounts(AppIndex.allTerms.filter(matchesBase));
+      const knownCount = AppIndex.allTerms.filter((t) => known[t.id]).length;
+      progressText.textContent = `記憶済み: ${knownCount} / ${AppIndex.allTerms.length} 語(表示中: ${currentTerms.length}件)`;
+    }
+
+    // 絞り込みの条件から外れたカードは、その場では消さずに薄く表示する(消すと一覧がずれて位置が飛ぶため)
+    function markStale(card, term) {
+      card.classList.toggle(`filter-stale`, !matchesStatus(term));
+    }
+
+    function renderLoadMore() {
+      const existing = grid.nextElementSibling;
+      if (existing && existing.classList.contains(`load-more-btn`)) existing.remove();
+      if (shownCount >= currentTerms.length) return;
+      const loadMoreBtn = document.createElement(`button`);
+      loadMoreBtn.type = `button`;
+      loadMoreBtn.className = `btn load-more-btn`;
+      loadMoreBtn.textContent = `もっと見る(残り${currentTerms.length - shownCount}件)`;
+      loadMoreBtn.addEventListener(`click`, () => {
+        // 作り直さずに続きを末尾へ追加する(スクロール位置を保つ)
+        const next = currentTerms.slice(shownCount, shownCount + PAGE_SIZE);
+        const fragment = document.createDocumentFragment();
+        next.forEach((term) => fragment.appendChild(buildCard(term)));
+        grid.appendChild(fragment);
+        shownCount += next.length;
+        visibleCount = shownCount;
+        renderLoadMore();
+      });
+      grid.insertAdjacentElement(`afterend`, loadMoreBtn);
+    }
+
     function renderGrid() {
       const allTerms = AppIndex.allTerms;
       computeStatuses();
       const baseTerms = allTerms.filter(matchesBase);
       updateStatusCounts(baseTerms);
-      const terms = baseTerms.filter(matchesStatus);
-      const total = allTerms.length;
+      currentTerms = baseTerms.filter(matchesStatus);
       const knownCount = allTerms.filter((t) => known[t.id]).length;
-      progressText.textContent = `記憶済み: ${knownCount} / ${total} 語(表示中: ${terms.length}件)`;
+      progressText.textContent = `記憶済み: ${knownCount} / ${allTerms.length} 語(表示中: ${currentTerms.length}件)`;
 
       const noFilters = !state.search && state.level === `全て` && state.topic === `全て` && state.status === `all`;
       const needsFullRenderForScroll = scrollTermId && noFilters;
-      const shown = needsFullRenderForScroll ? terms.length : Math.min(visibleCount, terms.length);
-
-      const existingLoadMoreBtn = grid.nextElementSibling;
-      if (existingLoadMoreBtn && existingLoadMoreBtn.classList.contains(`load-more-btn`)) {
-        existingLoadMoreBtn.remove();
-      }
+      shownCount = needsFullRenderForScroll ? currentTerms.length : Math.min(visibleCount, currentTerms.length);
 
       grid.innerHTML = ``;
       const fragment = document.createDocumentFragment();
-      terms.slice(0, shown).forEach((term) => fragment.appendChild(buildCard(term)));
+      currentTerms.slice(0, shownCount).forEach((term) => fragment.appendChild(buildCard(term)));
       grid.appendChild(fragment);
-
-      if (shown < terms.length) {
-        const loadMoreBtn = document.createElement(`button`);
-        loadMoreBtn.type = `button`;
-        loadMoreBtn.className = `btn load-more-btn`;
-        loadMoreBtn.textContent = `もっと見る(残り${terms.length - shown}件)`;
-        loadMoreBtn.addEventListener(`click`, () => {
-          visibleCount += PAGE_SIZE;
-          renderGrid();
-        });
-        grid.insertAdjacentElement(`afterend`, loadMoreBtn);
-      }
+      renderLoadMore();
 
       if (needsFullRenderForScroll) {
         const target = grid.querySelector(`[data-term-id="${window.CSS && CSS.escape ? CSS.escape(scrollTermId) : scrollTermId}"]`);
@@ -198,12 +218,13 @@ window.Views.glossary = (function () {
         return `<button type="button" class="chip chip-small" data-nav="#summary/${epId}">${label}</button>`;
       }).join(``);
 
-      return CardUi.buildFlipCard(term, {
+      const card = CardUi.buildFlipCard(term, {
         known,
         episodeChips,
-        onToggleKnown: () => renderGrid(),
-        onToggleBookmark: () => { if (state.status === `bookmark`) renderGrid(); else updateStatusCounts(AppIndex.allTerms.filter(matchesBase)); },
+        onToggleKnown: () => { refreshMeta(); markStale(card, term); },
+        onToggleBookmark: () => { refreshMeta(); markStale(card, term); },
       });
+      return card;
     }
 
     renderGrid();
