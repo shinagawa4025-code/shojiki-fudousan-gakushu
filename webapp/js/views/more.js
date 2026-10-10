@@ -37,15 +37,18 @@ window.Views.more = (function () {
 
     const themeGroup = wrap.querySelector(`[data-role="theme"]`);
     const options = [{ id: `system`, label: `端末に合わせる` }, { id: `light`, label: `ライト` }, { id: `dark`, label: `ダーク` }];
+    // ボタンは1度だけ作り、押下状態だけ塗り替える(作り直すとフォーカスが外れるため)。ヘッダーの切替ボタンにも追従する
+    themeGroup.innerHTML = options.map((o) => `<button type="button" class="segmented-item" data-theme-pref="${o.id}">${o.label}</button>`).join(``);
     function paint() {
       const cur = ThemeManager.getPreference();
-      themeGroup.innerHTML = options.map((o) => `<button type="button" class="segmented-item" data-theme-pref="${o.id}" aria-pressed="${o.id === cur}">${o.label}</button>`).join(``);
-      themeGroup.querySelectorAll(`[data-theme-pref]`).forEach((b) => b.addEventListener(`click`, () => {
-        ThemeManager.setPreference(b.dataset.themePref);
-        paint();
-      }));
+      themeGroup.querySelectorAll(`[data-theme-pref]`).forEach((b) => b.setAttribute(`aria-pressed`, String(b.dataset.themePref === cur)));
     }
+    themeGroup.querySelectorAll(`[data-theme-pref]`).forEach((b) => b.addEventListener(`click`, () => {
+      ThemeManager.setPreference(b.dataset.themePref);
+      paint();
+    }));
     paint();
+    const off = ThemeManager.onChange(() => { if (!wrap.isConnected) { if (off) off(); return; } paint(); });
   }
 
   return { render };

@@ -14,11 +14,20 @@ window.Bookmarks = (function () {
   function toggle(key) {
     const all = getAll();
     let on;
-    if (all[key]) { delete all[key]; on = false; }
+    let prevAt = null;
+    if (all[key]) { prevAt = all[key]; delete all[key]; on = false; }
     else { all[key] = Date.now(); on = true; }
     Storage.set(`bookmarks`, all);
-    window.dispatchEvent(new CustomEvent(`bookmarks:change`, { detail: { key, on } }));
+    window.dispatchEvent(new CustomEvent(`bookmarks:change`, { detail: { key, on, prevAt } }));
     return on;
+  }
+
+  // 元に戻す: 外す前の保存時刻で戻す(一覧の並び順を保つ)
+  function restore(key, at) {
+    const all = getAll();
+    all[key] = Number(at) || Date.now();
+    Storage.set(`bookmarks`, all);
+    window.dispatchEvent(new CustomEvent(`bookmarks:change`, { detail: { key, on: true, restored: true } }));
   }
 
   // 新しい順 [{key, kind, id, at}]
@@ -36,5 +45,5 @@ window.Bookmarks = (function () {
     return Object.keys(getAll()).length;
   }
 
-  return { has, toggle, list, count };
+  return { has, toggle, restore, list, count };
 })();

@@ -104,19 +104,62 @@ window.Views.bookmarks = (function () {
       }
     }
 
-    // この画面でしおりを外したら一覧から消す。元に戻せるようトーストを出す
+    // しおりを外したカードだけを一覧から外す(他のカードの裏返し・回答状態を保つため、全体は作り直さない)
+    const removed = {};
+    function cardFor(key) {
+      const i = key.indexOf(`:`);
+      const kind = key.slice(0, i);
+      const id = window.CSS && CSS.escape ? CSS.escape(key.slice(i + 1)) : key.slice(i + 1);
+      return body.querySelector(kind === `term` ? `.flip-card[data-term-id="${id}"]` : `[data-quiz-id="${id}"]`);
+    }
+    function refreshCounts() {
+      const data = collect();
+      paintFilter(data);
+      const counts = { 用語: data.terms.length, 問題: data.quizzes.length };
+      body.querySelectorAll(`.bm-section`).forEach((sec) => {
+        const h = sec.querySelector(`h3`);
+        const badge = sec.querySelector(`.badge`);
+        const label = h ? h.textContent.replace(/[0-9]+$/, ``).trim() : ``;
+        if (badge && counts[label] != null) badge.textContent = counts[label];
+      });
+      return data;
+    }
+    function paintBookmarkBtn(el, on) {
+      const btn = el && el.querySelector(`[data-role="bookmark"]`);
+      if (!btn) return;
+      btn.classList.toggle(`is-bookmarked`, on);
+      btn.setAttribute(`aria-pressed`, String(on));
+      btn.setAttribute(`aria-label`, on ? `ブックマークを外す` : `ブックマークする`);
+      btn.innerHTML = UI.icon(on ? `bookmark-fill` : `bookmark`, { size: 20 });
+    }
     function onChange(e) {
       if (!document.body.contains(wrap)) { detach(); return; }
       const detail = (e && e.detail) || {};
-      // 開いている用語カードの位置を保つため、スクロール位置を戻す
-      const y = window.scrollY;
-      paint();
-      window.scrollTo(0, y);
-      if (detail.on === false && detail.key) {
+      if (!detail.key) { paint(); return; }
+      if (detail.on === false) {
+        const el = cardFor(detail.key);
+        if (el) {
+          removed[detail.key] = { el, parent: el.parentNode, next: el.nextSibling };
+          el.remove();
+        }
+        const data = refreshCounts();
+        // 種類ごとの一覧が空になったら空表示に切り替える(失うものがないので作り直してよい)
+        const kind = detail.key.slice(0, detail.key.indexOf(`:`));
+        if (!(data.terms.length + data.quizzes.length) || (kind === `term` && !data.terms.length) || (kind === `quiz` && !data.quizzes.length)) paint();
         UI.toast(`ブックマークを外しました`, `default`, {
-          action: { label: `元に戻す`, onClick: () => { if (!Bookmarks.has(detail.key)) Bookmarks.toggle(detail.key); } },
+          action: { label: `元に戻す`, onClick: () => { if (!Bookmarks.has(detail.key)) Bookmarks.restore(detail.key, detail.prevAt); } },
           duration: 4000,
         });
+      } else if (detail.restored) {
+        const r = removed[detail.key];
+        delete removed[detail.key];
+        if (r && r.parent && r.parent.isConnected) {
+          r.parent.insertBefore(r.el, r.next && r.next.parentNode === r.parent ? r.next : null);
+          paintBookmarkBtn(r.el, true);
+          refreshCounts();
+        } else {
+          paint();
+        }
       }
     }
     function onHash() {

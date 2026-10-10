@@ -6,6 +6,27 @@ window.Router = (function () {
   let firstRender = true;
   let currentView = null;
 
+  // 戻る/進むで元のスクロール位置に戻すため、各履歴エントリの state に位置を保存する
+  // (ブラウザ任せだと画面を作り直す前に復元されて位置がずれるため manual にする)
+  if (`scrollRestoration` in history) history.scrollRestoration = `manual`;
+  function saveScroll() {
+    try {
+      const st = history.state && typeof history.state === `object` ? history.state : {};
+      if (st.y === window.scrollY) return;
+      history.replaceState(Object.assign({}, st, { y: window.scrollY }), ``);
+    } catch (e) { /* Safari の replaceState 回数制限などは無視 */ }
+  }
+  let scrollTimer = null;
+  window.addEventListener(`scroll`, () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(saveScroll, 300);
+  }, { passive: true });
+  // 画面内リンクで移動する直前にも保存する
+  document.addEventListener(`click`, (e) => {
+    const a = e.target.closest && e.target.closest(`a[href^="#"]`);
+    if (a) saveScroll();
+  }, true);
+
   function register(name, view) {
     views[name] = view;
   }
@@ -30,6 +51,10 @@ window.Router = (function () {
     if (subnav) viewRoot.appendChild(subnav);
 
     views[name].render(viewRoot, param);
+
+    // 戻る/進む・再読み込みのときは保存しておいた位置へ(画面側のスクロールより後に適用)
+    const savedY = history.state && typeof history.state === `object` ? Number(history.state.y) : 0;
+    if (savedY > 0) setTimeout(() => window.scrollTo(0, savedY), 50);
 
     const viewEl = Array.from(viewRoot.children).find((el) => el.classList.contains(`view`));
     if (viewEl && !UI.prefersReducedMotion()) viewEl.classList.add(`view-enter`);
@@ -57,6 +82,7 @@ window.Router = (function () {
   }
 
   function navigate(hash) {
+    saveScroll();
     if (location.hash === hash) render();
     else location.hash = hash;
   }

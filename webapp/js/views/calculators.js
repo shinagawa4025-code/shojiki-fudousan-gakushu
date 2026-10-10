@@ -1128,7 +1128,9 @@ window.Views.calculators = (function () {
       if (!CALC_BY_ID[id]) return;
       currentId = id;
       lastInGroup[CALC_BY_ID[id].group] = id;
-      history.replaceState(null, ``, `#calculators/${id}`);
+      // 「詳しく」から開いたときは履歴を積み、戻るでまとめ画面へ戻れるようにする(チップでの切替は履歴を増やさない)
+      if (opts && opts.scroll) history.pushState(null, ``, `#calculators/${id}`);
+      else history.replaceState(null, ``, `#calculators/${id}`);
       renderNav();
       mount();
       if (opts && opts.scroll) UI.scrollIntoView(panel, `start`);
@@ -1223,7 +1225,11 @@ window.Views.calculators = (function () {
       lastVm = vm;
       lastState = parsed;
       const today = todayStr();
-      panel.querySelector(`[data-role="results"]`).innerHTML = def.render(vm, parsed, today);
+      // 入力のたびに結果を作り直すので、開いていた「要件」などの折りたたみの状態を引き継ぐ
+      const resultsEl = panel.querySelector(`[data-role="results"]`);
+      const openSummaries = new Set(Array.from(resultsEl.querySelectorAll(`details[open] > summary`)).map((el) => el.textContent.trim()));
+      resultsEl.innerHTML = def.render(vm, parsed, today);
+      if (openSummaries.size) resultsEl.querySelectorAll(`details > summary`).forEach((el) => { if (openSummaries.has(el.textContent.trim())) el.parentElement.open = true; });
       if (!initial) {
         panel.querySelector(`[data-role="live"]`).textContent = def.summary(vm);
         saveInputs(def.id, raw);

@@ -43,7 +43,18 @@ window.Views.summary = (function () {
       window.APP_DATA.episodes.filter((ep) => matches(ep, q)).forEach((ep) => list.appendChild(buildEpisodeCard(ep)));
     }
 
-    searchInput.addEventListener(`input`, renderList);
+    // 入力中に一覧が短くなっても検索欄の位置が動かないよう、検索中は一覧に画面1枚分の高さを確保し、位置を補正する
+    let searchTimer = null;
+    searchInput.addEventListener(`input`, () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        const before = searchInput.getBoundingClientRect().top;
+        list.style.minHeight = searchInput.value.trim() ? `${window.innerHeight}px` : ``;
+        renderList();
+        const after = searchInput.getBoundingClientRect().top;
+        if (Math.abs(after - before) > 1) window.scrollBy(0, after - before);
+      }, 150);
+    });
     renderList();
 
     if (param) {

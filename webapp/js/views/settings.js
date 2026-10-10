@@ -183,15 +183,22 @@ window.Views.settings = (function () {
       chip.className = `chip` + (opt.id === currentTheme ? ` active` : ``);
       chip.setAttribute(`aria-pressed`, String(opt.id === currentTheme));
       chip.textContent = opt.label;
+      chip.dataset.themePref = opt.id;
       chip.addEventListener(`click`, () => {
         ThemeManager.setPreference(opt.id);
-        themeChipRow.querySelectorAll(`.chip`).forEach((c) => {
-          c.classList.toggle(`active`, c === chip);
-          c.setAttribute(`aria-pressed`, String(c === chip));
-        });
+        paintThemeChips();
       });
       themeChipRow.appendChild(chip);
     });
+    // ヘッダーの切替ボタンで変えたときも押下状態を合わせる
+    function paintThemeChips() {
+      const cur = ThemeManager.getPreference();
+      themeChipRow.querySelectorAll(`.chip`).forEach((c) => {
+        c.classList.toggle(`active`, c.dataset.themePref === cur);
+        c.setAttribute(`aria-pressed`, String(c.dataset.themePref === cur));
+      });
+    }
+    const offTheme = ThemeManager.onChange(() => { if (!wrap.isConnected) { if (offTheme) offTheme(); return; } paintThemeChips(); });
 
     // 読み上げ速度
     const rateInput = wrap.querySelector(`[data-role="rate-input"]`);
