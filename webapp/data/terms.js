@@ -72,7 +72,7 @@ window.APP_DATA.terms = [
     simpleExplanation: `引き渡し後に見つかった欠陥について売主が負う責任(2020年民法改正で後者の呼称に)`,
     deepDive: `責任期間や範囲は特約で調整可能なため、契約書の文言を精査する必要がある`,
     relatedEpisodes: [`11-12`, `87-88`] },
-  { id: `term18`, name: `インスペクション(建物状況調査)`, aliases: [`インスペクション`, `建物状況調査`], level: `中級`, source: `episode`, topicIds: [`topicB`, `topicA`], sources: [`src01`], lawRef: `宅地建物取引業法34条の2第1項4号・35条1項6号の2(建物状況調査の実施有無説明義務)`,
+  { id: `term18`, name: `インスペクション(建物状況調査)`, aliases: [`インスペクション`, `建物状況調査`], level: `中級`, source: `episode`, topicIds: [`topicB`], sources: [`src01`], lawRef: `宅地建物取引業法34条の2第1項4号・35条1項6号の2(建物状況調査の実施有無説明義務、売買・交換の媒介が対象で賃貸借は対象外)`,
     simpleExplanation: `専門家が建物の劣化や欠陥の有無を調査すること`,
     deepDive: `既存住宅売買では実施の有無を説明することが宅地建物取引業法で義務化されている`,
     relatedEpisodes: [`25-26`, `85-86`] },
