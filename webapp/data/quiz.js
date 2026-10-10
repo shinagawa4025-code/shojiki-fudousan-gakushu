@@ -5,7 +5,7 @@ window.APP_DATA.quiz = [
   { id: `quiz-beg-01`, level: `初級`, topicIds: [`topicA`], question: `敷金と礼金の違いは?退去時に戻ってくるのはどちら?`,
     answer: `敷金は原則返還対象(通常損耗・経年劣化分を除く)、礼金はオーナーへの謝礼金で戻らない`, episodes: [`1-2`] },
   { id: `quiz-beg-02`, level: `初級`, topicIds: [`topicF`], question: `賃貸の仲介手数料は法律で「家賃1ヶ月分」と決まっている。〇か×?`,
-    answer: `×。宅建業法46条・施行規則では貸主・借主合わせて家賃1ヶ月分(税別)が上限で、「1ヶ月分」は商慣習`, episodes: [`57-58`] },
+    answer: `×。宅建業法46条に基づく国土交通大臣の告示では貸主・借主合わせて家賃1ヶ月分(税別)が上限で、「1ヶ月分」は商慣習`, episodes: [`57-58`] },
   { id: `quiz-beg-03`, level: `初級`, topicIds: [`topicB`], question: `重要事項説明を行う義務があるのは誰か?`,
     answer: `宅地建物取引士(宅建士)`, episodes: [`51-52`] },
   { id: `quiz-beg-04`, level: `初級`, topicIds: [`topicG`], question: `「告知義務」とは何を指すか?`,
