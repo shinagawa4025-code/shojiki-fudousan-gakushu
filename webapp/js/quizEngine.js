@@ -173,8 +173,8 @@ window.QuizEngine = (function () {
   function fromFixedMc(item, opts) {
     opts = opts || {};
     if (!isMcItem(item)) return null;
-    const notes = cleanNotes(item.choiceNotes);
     const truths = statementTruths(item);
+    const notes = cleanNotes(item.choiceNotes, !!truths);
     const choices = item.choices.map((text, i) => ({ text, correct: i === item.correctIndex, note: notes ? notes[i] : ``, truth: truths ? truths[i] : null }));
     return {
       key: `quiz:${item.id}`,
@@ -191,10 +191,14 @@ window.QuizEngine = (function () {
     };
   }
 
-  // choiceNotes を表示用に整える。先頭の「○:」「×:」は画面側で○×を表示するので取り除く
-  function cleanNotes(notes) {
+  // choiceNotes を表示用に整える。先頭の「○:」「× 」「正しい。」などの判定語は画面側で○×を表示するので取り除く
+  // stripVerdict: 画面に○×が出る正誤判定型(ask)のときだけ判定語を取り除く(それ以外は判定語が唯一の手がかりなので残す)
+  function cleanNotes(notes, stripVerdict) {
     if (!Array.isArray(notes) || notes.length !== 4) return null;
-    return notes.map((n) => String(n || ``).replace(/^\s*[○〇×✕]\s*[:：]\s*/, ``));
+    if (!stripVerdict) return notes.map((n) => String(n || ``));
+    return notes.map((n) => String(n || ``)
+      .replace(/^\s*[○〇×✕]\s*[:：。、]?\s*/, ``)
+      .replace(/^\s*(正しい|誤り)\s*[。:：、]\s*/, ``));
   }
 
   // 正誤判定型(ask: 'correct' = 正しいものを選ぶ / 'incorrect' = 誤っているものを選ぶ)の各選択肢の正誤
@@ -208,7 +212,7 @@ window.QuizEngine = (function () {
   function statementsFrom(item) {
     const truths = statementTruths(item);
     if (!truths) return [];
-    const notes = cleanNotes(item.choiceNotes);
+    const notes = cleanNotes(item.choiceNotes, true);
     return item.choices.map((text, i) => ({
       id: `${item.id}#${i}`,
       quizId: item.id,
