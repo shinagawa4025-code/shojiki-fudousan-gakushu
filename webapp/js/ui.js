@@ -32,7 +32,7 @@ window.UI = (function () {
     document.addEventListener(`keydown`, onKeydown);
     return function release() {
       document.removeEventListener(`keydown`, onKeydown);
-      if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+      if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus({ preventScroll: true });
     };
   }
 
@@ -131,8 +131,9 @@ window.UI = (function () {
     backdrop.addEventListener(`click`, (e) => { if (e.target === backdrop) close(); });
     backdrop.querySelector(`[data-role="sheet-close"]`).addEventListener(`click`, close);
     window.addEventListener(`hashchange`, close);
-    const firstFocusable = body.querySelector(FOCUSABLE) || backdrop.querySelector(`[data-role="sheet-close"]`);
-    if (firstFocusable) firstFocusable.focus();
+    // 最初のフォーカスは閉じるボタンへ(本文末尾のリンクにフォーカスするとシートが下までスクロールしてしまうため)
+    const firstFocusable = backdrop.querySelector(`[data-role="sheet-close"]`) || body.querySelector(FOCUSABLE);
+    if (firstFocusable) firstFocusable.focus({ preventScroll: true });
     return { el: backdrop, body, close };
   }
 

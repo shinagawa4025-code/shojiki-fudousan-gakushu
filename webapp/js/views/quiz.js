@@ -154,9 +154,17 @@ window.Views.quiz = (function () {
       summary.textContent = `回答済み ${answered} / ${all.length}問・わかった ${ok}問`;
     }
 
-    function handleResult() {
+    // 回答したカードは作り直さない(解説が消えたり別の問題に入れ替わったりしないように)。条件から外れたら薄く表示するだけ
+    function handleResult(result, card) {
       updateSummary();
-      if (statusFilter === `ng` || statusFilter === `unanswered`) setTimeout(renderList, 900);
+      if (card) card.classList.toggle(`filter-stale`, statusFilter === `unanswered` || (statusFilter === `ng` && result !== `ng`));
+    }
+
+    // 「苦手な問題だけ表示」: 絞り込み後、一覧の先頭が見える位置へ戻す
+    function gotoNg() {
+      setStatus(`ng`);
+      const top = statusGroup.getBoundingClientRect().top + window.scrollY - 70;
+      if (window.scrollY > top) window.scrollTo(0, Math.max(0, top));
     }
 
     function renderList() {
@@ -179,7 +187,7 @@ window.Views.quiz = (function () {
         list.appendChild(UI.emptyState(map[statusFilter] || { icon: `search`, title: `該当する問題がありません`, body: `レベルやトピックの絞り込みを変えてみてください。` }));
         return;
       }
-      questions.forEach((q) => list.appendChild(buildFixedCard(q, { history, onResult: handleResult, onGotoNg: () => setStatus(`ng`) })));
+      questions.forEach((q) => list.appendChild(buildFixedCard(q, { history, onResult: handleResult, onGotoNg: gotoNg })));
     }
 
     renderList();
@@ -270,7 +278,7 @@ window.Views.quiz = (function () {
           const result = choice.correct ? `ok` : `ng`;
           recordFixedResult(q, result, history);
           showResult(result);
-          if (opts.onResult) opts.onResult(result);
+          if (opts.onResult) opts.onResult(result, card);
         });
         choiceList.appendChild(btn);
       });
@@ -301,7 +309,7 @@ window.Views.quiz = (function () {
           recordFixedResult(q, result, history);
           bodyEl.querySelectorAll(`[data-result]`).forEach((b) => b.classList.toggle(`active`, b === btn));
           showResult(result);
-          if (opts.onResult) opts.onResult(result);
+          if (opts.onResult) opts.onResult(result, card);
         });
       });
     }
@@ -455,7 +463,7 @@ window.Views.quiz = (function () {
           }
           after.innerHTML = glossaryLinkHtml(q.term.id);
           recordStat(q.term.id, choice.correct);
-          renderWeakPanel();
+          // 苦手な用語パネル(一覧の上)は次の出題時に更新する。回答のたびに伸びると一覧がずれるため
           answered++;
           updateScore();
           checkCompletion();

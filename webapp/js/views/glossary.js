@@ -176,7 +176,9 @@ window.Views.glossary = (function () {
         grid.appendChild(fragment);
         shownCount += next.length;
         visibleCount = shownCount;
-        renderLoadMore();
+        // ボタンは作り直さず文言だけ更新する(キーボード操作のフォーカスを保つ)
+        if (shownCount >= currentTerms.length) loadMoreBtn.remove();
+        else loadMoreBtn.textContent = `もっと見る(残り${currentTerms.length - shownCount}件)`;
       });
       grid.insertAdjacentElement(`afterend`, loadMoreBtn);
     }

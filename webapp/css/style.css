@@ -847,6 +847,8 @@ footer.app-footer {
   width: 100%;
   max-width: 680px;
   max-height: 88vh;
+  max-height: 88dvh;
+  overscroll-behavior: contain;
   overflow: auto;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   box-shadow: var(--shadow-4);
@@ -1390,3 +1392,15 @@ a.topic-card { text-decoration: none; color: inherit; }
 .ox-x { color: var(--color-danger); }
 /* 用語集: 絞り込み条件から外れたカード(次の操作で一覧から外れる) */
 .flip-card.filter-stale { opacity: .55; transition: opacity var(--dur-2); }
+/* iPhone: 16px未満の入力欄はフォーカス時に自動ズームされるため、スマホでは16pxにする */
+@media (max-width: 1023px) {
+  .global-search-input { font-size: 16px; }
+}
+/* 先頭へスクロールしたときに固定ヘッダーの下に隠れないように */
+[data-role="auto-list"], .calc-panel, .quiz-list { scroll-margin-top: calc(var(--app-bar-h) + var(--safe-top) + var(--sp-3)); }
+/* タッチ端末では :hover が押した後も残るため、選択肢のホバー色はマウス操作のときだけ */
+@media (hover: none) {
+  .choice-btn:hover { background: var(--color-surface); border-color: var(--color-border-strong); }
+  .choice-btn.correct:hover { background: var(--color-success-bg); border-color: var(--color-success); }
+  .choice-btn.incorrect:hover { background: var(--color-danger-bg); border-color: var(--color-danger); }
+}

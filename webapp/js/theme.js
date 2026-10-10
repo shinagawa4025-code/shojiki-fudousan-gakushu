@@ -24,7 +24,7 @@ window.ThemeManager = (function () {
     document.documentElement.setAttribute(`data-theme`, theme);
     const meta = document.querySelector(`meta[name="theme-color"]`);
     if (meta) meta.setAttribute(`content`, THEME_COLORS[theme]);
-    listeners.forEach((fn) => fn(theme));
+    listeners.slice().forEach((fn) => fn(theme));
   }
 
   function setPreference(pref) {
@@ -36,8 +36,10 @@ window.ThemeManager = (function () {
     setPreference(getResolved() === `dark` ? `light` : `dark`);
   }
 
+  // 戻り値の関数を呼ぶと登録を解除する
   function onChange(fn) {
     listeners.push(fn);
+    return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); };
   }
 
   // 「端末設定に従う」の間は、端末側の切替にも追従する

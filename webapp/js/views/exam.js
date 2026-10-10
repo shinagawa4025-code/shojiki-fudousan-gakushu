@@ -790,10 +790,13 @@ window.Views.exam = (function () {
     function choose(ci) {
       const i = s.current;
       s.answers[i] = s.answers[i] === ci ? null : ci;
+      // 作り直す前に、フォーカスが問題カード内にあったかを覚えておく(作り直すと元のボタンは消える)
+      const ae = document.activeElement;
+      const hadFocus = !!(ae && ae.closest && ae.closest(`.exam-q-card`));
       persist();
       paintAll();
       const btn = qcard.querySelector(`[data-choice="${ci}"]`);
-      if (btn && document.activeElement !== btn && document.activeElement && document.activeElement.closest && document.activeElement.closest(`.exam-q-card`)) btn.focus();
+      if (btn && hadFocus) btn.focus({ preventScroll: true });
     }
 
     function toggleFlag() {
