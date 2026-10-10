@@ -119,12 +119,23 @@ window.Views.home = (function () {
     const card = document.createElement(`section`);
     card.className = `card`;
     const due = Stats.dueReviewCount();
-    const rec = Recommend.getNext({ skipReview: true });
+    // 弱点分析のおすすめは下の「弱点分析」カードに出すので、ここでは重ねて出さない
+    const rec = Recommend.getNext({ skipReview: true, skipAnalysis: true });
     const items = [];
     if (due > 0) {
       items.push({ nav: `#review`, icon: `repeat`, tone: `is-warn`, title: `今日の復習 ${due}件`, sub: `復習のタイミングが来た用語があります` });
     } else {
-      items.push({ nav: `#review`, icon: `check-circle`, tone: `is-ok`, title: `今日の復習は完了`, sub: Stats.newCount() ? `新しい用語を学ぶこともできます` : `すべての用語に着手済みです` });
+      // 復習がなくても、今日の新しい用語(1日の上限まで)が残っていればそれを案内する
+      const limitRaw = Number(Storage.get(`reviewNewLimit`, (Views.review && Views.review.DEFAULT_NEW_LIMIT) || 10));
+      const limit = Number.isFinite(limitRaw) && limitRaw >= 0 ? Math.min(100, Math.floor(limitRaw)) : 10;
+      const nt = Storage.get(`reviewNewToday`, {});
+      const usedToday = nt && nt.date === DateUtil.today() && Array.isArray(nt.ids) ? nt.ids.length : 0;
+      const newAvail = Math.min(Math.max(0, limit - usedToday), Stats.newCount());
+      if (newAvail > 0) {
+        items.push({ nav: `#review`, icon: `sparkles`, tone: ``, title: `新しい用語を${newAvail}語学ぶ`, sub: `今日の復習で、まだ学んでいない用語をカードで覚えましょう` });
+      } else {
+        items.push({ nav: `#review`, icon: `check-circle`, tone: `is-ok`, title: `今日の復習は完了`, sub: Stats.newCount() ? `今日の新しい用語の上限に達しました(設定で変更できます)` : `すべての用語に着手済みです` });
+      }
     }
     items.push({ nav: rec.nav, icon: rec.icon || `lightbulb`, tone: rec.tone === `warn` ? `is-warn` : rec.tone === `ok` ? `is-ok` : ``, title: rec.title, sub: rec.detail });
     card.innerHTML = `

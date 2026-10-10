@@ -21,6 +21,18 @@ window.Views.glossary = (function () {
     let state = { search: ``, level: `全て`, topic: topicParam || `全て`, status: `all` };
     const PAGE_SIZE = 60;
     let visibleCount = PAGE_SIZE;
+    // 戻るで帰ってきたときは、絞り込みと表示件数を元に戻す(履歴エントリごとに保存)
+    const savedG = !scrollTermId && history.state && typeof history.state === `object` && history.state.gState ? history.state.gState : null;
+    if (savedG) {
+      [`search`, `level`, `topic`, `status`].forEach((k) => { if (typeof savedG[k] === `string`) state[k] = savedG[k]; });
+      if (Number(savedG.visible) > 0) visibleCount = Number(savedG.visible);
+    }
+    function saveState() {
+      try {
+        const st = history.state && typeof history.state === `object` ? history.state : {};
+        history.replaceState(Object.assign({}, st, { gState: { search: state.search, level: state.level, topic: state.topic, status: state.status, visible: Math.max(visibleCount, shownCount) } }), ``);
+      } catch (e) { /* 履歴の保存に失敗しても表示には影響しない */ }
+    }
 
     const wrap = document.createElement(`div`);
     wrap.className = `view glossary-view`;
@@ -39,6 +51,7 @@ window.Views.glossary = (function () {
     root.appendChild(wrap);
 
     const searchInput = wrap.querySelector(`.search-input`);
+    if (state.search) searchInput.value = state.search;
     const chipRow = wrap.querySelector(`[data-role="level-chips"]`);
     const topicChipRow = wrap.querySelector(`[data-role="topic-chips"]`);
     const statusSeg = wrap.querySelector(`[data-role="status-seg"]`);
@@ -179,6 +192,7 @@ window.Views.glossary = (function () {
         // ボタンは作り直さず文言だけ更新する(キーボード操作のフォーカスを保つ)
         if (shownCount >= currentTerms.length) loadMoreBtn.remove();
         else loadMoreBtn.textContent = `もっと見る(残り${currentTerms.length - shownCount}件)`;
+        saveState();
       });
       grid.insertAdjacentElement(`afterend`, loadMoreBtn);
     }
@@ -194,13 +208,20 @@ window.Views.glossary = (function () {
 
       const noFilters = !state.search && state.level === `全て` && state.topic === `全て` && state.status === `all`;
       const needsFullRenderForScroll = scrollTermId && noFilters;
-      shownCount = needsFullRenderForScroll ? currentTerms.length : Math.min(visibleCount, currentTerms.length);
+      // 直リンク(#glossary/<id>)は、全件ではなくその用語まで描画する(全件描画は端末によっては数秒かかる)
+      let needCount = visibleCount;
+      if (needsFullRenderForScroll) {
+        const idx = currentTerms.findIndex((t) => t.id === scrollTermId);
+        needCount = Math.max(visibleCount, idx + 6);
+      }
+      shownCount = Math.min(needCount, currentTerms.length);
 
       grid.innerHTML = ``;
       const fragment = document.createDocumentFragment();
       currentTerms.slice(0, shownCount).forEach((term) => fragment.appendChild(buildCard(term)));
       grid.appendChild(fragment);
       renderLoadMore();
+      saveState();
 
       if (needsFullRenderForScroll) {
         const target = grid.querySelector(`[data-term-id="${window.CSS && CSS.escape ? CSS.escape(scrollTermId) : scrollTermId}"]`);

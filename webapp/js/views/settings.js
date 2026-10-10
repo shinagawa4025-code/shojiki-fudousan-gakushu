@@ -48,7 +48,7 @@ window.Views.settings = (function () {
       <div class="card settings-card">
         <h3 class="settings-card-title">${UI.icon(`upload`)}インポート(復元・移行)</h3>
         <p class="view-desc">エクスポートしたJSONファイルを選択すると、現在のデータを上書きして復元します。</p>
-        <input type="file" accept="application/json" data-role="import-file" id="settings-import-file" class="settings-file-input sr-only">
+        <input type="file" accept="application/json,.json" data-role="import-file" id="settings-import-file" class="settings-file-input sr-only">
         <label for="settings-import-file" class="btn btn-secondary settings-file-label">${UI.icon(`upload`)}バックアップ(JSON)を選択</label>
         <p class="settings-import-status" data-role="import-status" hidden></p>
       </div>
@@ -139,7 +139,8 @@ window.Views.settings = (function () {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // iPhoneのSafariではすぐに解放するとダウンロードが失敗することがあるため、少し待ってから解放する
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
       UI.toast(`バックアップをダウンロードしました`, `success`);
     });
 

@@ -82,9 +82,14 @@ window.Router = (function () {
   }
 
   function navigate(hash) {
-    saveScroll();
-    if (location.hash === hash) render();
-    else location.hash = hash;
+    if (location.hash === hash) {
+      // 同じ画面をもう一度開くとき(検索結果など)は、保存位置ではなく画面側のスクロール(対象の項目へ)を優先する
+      try { history.replaceState(Object.assign({}, history.state, { y: 0 }), ``); } catch (e) { /* 無視 */ }
+      render();
+    } else {
+      saveScroll();
+      location.hash = hash;
+    }
   }
 
   function current() {

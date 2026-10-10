@@ -118,6 +118,14 @@ window.Views.quiz = (function () {
     const levelState = { value: `全て` };
     const topicState = { value: focusQuizId ? `全て` : (initialTopic || `全て`) };
     let statusFilter = `all`;
+    // 戻るで帰ってきたときは、絞り込みと表示件数を元に戻す(履歴エントリごとに保存)
+    const saved = !focusQuizId && window.history.state && typeof window.history.state === `object` && window.history.state.qState ? window.history.state.qState : null;
+    if (saved) {
+      if (typeof saved.level === `string`) levelState.value = saved.level;
+      if (typeof saved.topic === `string`) topicState.value = saved.topic;
+      if ([`all`, `unanswered`, `ng`, `bookmark`].includes(saved.status)) statusFilter = saved.status;
+    }
+    let restoreShown = saved && Number(saved.shown) > 0 ? Number(saved.shown) : 0;
 
     body.innerHTML = `
       <div class="toolbar toolbar-stack">
@@ -136,6 +144,14 @@ window.Views.quiz = (function () {
     const list = body.querySelector(`[data-role="quiz-list"]`);
     const summary = body.querySelector(`[data-role="summary"]`);
     const statusGroup = body.querySelector(`[data-role="status"]`);
+    statusGroup.querySelectorAll(`[data-status]`).forEach((b) => b.setAttribute(`aria-pressed`, String(b.dataset.status === statusFilter)));
+
+    function saveState() {
+      try {
+        const st = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
+        window.history.replaceState(Object.assign({}, st, { qState: { level: levelState.value, topic: topicState.value, status: statusFilter, shown: shownCount } }), ``);
+      } catch (e) { /* 履歴の保存に失敗しても表示には影響しない */ }
+    }
 
     buildLevelChips(body.querySelector(`[data-role="level-chips"]`), levelState, renderList);
     buildTopicChips(body.querySelector(`[data-role="topic-chips"]`), topicState, renderList);
@@ -193,6 +209,7 @@ window.Views.quiz = (function () {
         shownCount = next;
         if (shownCount >= currentQuestions.length) btn.remove();
         else btn.textContent = `もっと見る(残り${currentQuestions.length - shownCount}問)`;
+        saveState();
       });
       list.insertAdjacentElement(`afterend`, btn);
     }
@@ -228,9 +245,11 @@ window.Views.quiz = (function () {
         if (idx >= 0) need = Math.max(PAGE, idx + 5);
       }
       firstList = false;
+      if (restoreShown) { need = Math.max(need, restoreShown); restoreShown = 0; }
       shownCount = Math.min(questions.length, need);
       appendCards(0, shownCount);
       renderMore();
+      saveState();
     }
 
     renderList();
@@ -240,7 +259,10 @@ window.Views.quiz = (function () {
       if (target) {
         target.classList.add(`highlighted`);
         requestAnimationFrame(() => UI.scrollIntoView(target));
-        setTimeout(() => target.classList.remove(`highlighted`), 2400);
+        // スクロールに時間がかかる端末でも目に入るよう、強調は長めに残す
+        setTimeout(() => target.classList.remove(`highlighted`), 5000);
+      } else {
+        UI.toast(`指定された問題が見つかりませんでした`, `default`);
       }
     }
   }
