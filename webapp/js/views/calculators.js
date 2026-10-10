@@ -69,7 +69,7 @@ window.Views.calculators = (function () {
     ptSmallCity: r(1 / 3, `小規模住宅用地・都市計画税`, `地方税法702条の3第2項`, null, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`, ``, `評価額×1/3`),
     ptGeneralCity: r(2 / 3, `一般住宅用地・都市計画税`, `地方税法702条の3第1項`, null, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`, ``, `評価額×2/3`),
     ptCommercialCap: r(0.7, `商業地等の負担水準の上限(負担調整措置)`, `地方税法附則18条`, `2027-03-31`, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`, `令和8年度分までの措置。令和9年度(評価替え)以降は改正内容を要確認`, `評価額×70%`),
-    ptNewHouse: r(0.5, `新築住宅の固定資産税の減額`, `地方税法附則15条の6`, `2031-03-31`, SRC.nagoyaNew, `名古屋市 新築住宅の減額`, null, `令和8年度改正で5年延長(令和13年3月31日までの新築)。床面積要件は令和8年4月1日以後の新築から40㎡以上240㎡以下(東京都特別区の特定都市再生緊急整備地域は50㎡以上のまま)`, `120㎡分の税額×1/2`),
+    ptNewHouse: r(0.5, `新築住宅の固定資産税の減額`, `地方税法附則15条の6`, `2031-03-31`, SRC.nagoyaNew, `名古屋市 新築住宅の減額`, null, `令和8年度改正で5年延長(令和13年3月31日までの新築)。床面積要件は令和8年4月1日以後の新築から40㎡以上240㎡以下(東京都特別区の特定都市再生緊急整備地域の住宅は、貸家用のマンション・アパートの住戸を除き50㎡以上のまま)`, `120㎡分の税額×1/2`),
     ptLongLife: r(0.5, `認定長期優良住宅の固定資産税の減額`, `地方税法附則15条の7`, `2031-03-31`, SRC.nagoyaNew, `名古屋市 新築住宅の減額`, null, `令和8年度改正で5年延長`, `120㎡分の税額×1/2(5年度分・中高層耐火は7年度分)`),
     ptExempt: r(null, `固定資産税の免税点`, `地方税法351条`, null, SRC.soumuR8, `総務省 令和8年度地方税制改正 事務連絡`, null, `家屋の免税点は令和9年度分から30万円に引上げ`, `土地30万円・家屋20万円(令和9年度分から30万円)`),
     // --- 譲渡所得 ---
@@ -254,7 +254,9 @@ window.Views.calculators = (function () {
             land.reductionArea = Math.min(floorArea * 2, 200);
             land.reductionCalc = floorTo(land.unit * land.reductionArea * rate, 1);
           }
-          land.reduction = Math.max(RATES.acqLandReduction.value, land.reductionCalc);
+          // 減額の最低額は「150万円×税率」(3%の特例中は45,000円)
+          land.reductionMin = floorTo(1500000 * rate, 1);
+          land.reduction = Math.max(land.reductionMin, land.reductionCalc);
           land.reductionApplied = true;
         } else {
           notes.push(`住宅の床面積が要件(${range.min}㎡以上${range.max}㎡以下)を満たさないため、住宅用土地の減額は計算に入れていません。`);
@@ -677,8 +679,8 @@ window.Views.calculators = (function () {
             { label: `土地の税額`, value: L.exempt ? `0円(免税点未満)` : `${yen(L.tax)}円`, cls: `is-total` },
           ], `土地の内訳`) + formulaHtml([
             `課税標準 × 税率 = ${yen(L.base)}円 × ${pct(v.rate)}`,
-            L.reductionApplied ? `減額 = 次の多い方: 45,000円 / 1㎡当たり価格${s.takuchi ? `(1/2後)` : ``} ${yen(L.unit)}円 × ${parseFloat(L.reductionArea.toFixed(2))}㎡(床面積×2・200㎡限度) × ${pct(v.rate)} = ${yen(L.reductionCalc)}円` : ``,
-            L.reductionApplied && !(num(s.landArea) > 0) ? `土地の面積が未入力のため45,000円で計算しています。` : ``,
+            L.reductionApplied ? `減額 = 次の多い方: 150万円×${pct(v.rate)} = ${yen(L.reductionMin)}円 / 1㎡当たり価格${s.takuchi ? `(1/2後)` : ``} ${yen(L.unit)}円 × ${parseFloat(L.reductionArea.toFixed(2))}㎡(床面積×2・200㎡限度) × ${pct(v.rate)} = ${yen(L.reductionCalc)}円` : ``,
+            L.reductionApplied && !(num(s.landArea) > 0) ? `土地の面積が未入力のため150万円×税率(${yen(L.reductionMin)}円)で計算しています。` : ``,
           ]);
         }
         let bldgBody = ``;
@@ -699,7 +701,7 @@ window.Views.calculators = (function () {
           ${notesHtml(v.notes.map((n) => UI.escapeHtml(n)))}
         `) + (landBody ? cardHtml(`土地の内訳`, landBody) : ``) + (bldgBody ? cardHtml(`建物の内訳`, bldgBody) : ``) + cardHtml(`特例の要件(概要)`, `
           ${notesHtml([
-            `新築住宅の控除: 床面積${v.after ? `40㎡以上240㎡以下` : `50㎡以上240㎡以下(戸建以外の貸家住宅は40㎡以上)`}。東京都特別区の特定都市再生緊急整備地域は下限50㎡のまま(令和8年度改正)。`,
+            `新築住宅の控除: 床面積${v.after ? `40㎡以上240㎡以下` : `50㎡以上240㎡以下(戸建以外の貸家住宅は40㎡以上)`}。令和13年3月31日までに取得する東京都特別区の特定都市再生緊急整備地域の住宅(貸家用のマンション・アパートの住戸を除く)は下限50㎡のまま(令和8年度改正)。`,
             `中古住宅の控除: 自己居住用で床面積${v.after ? `40` : `50`}㎡以上240㎡以下。昭和56年12月31日以前の新築は新耐震基準への適合証明が必要。`,
             `住宅用土地の減額: 土地取得から原則2年以内(令和13年3月31日までの取得は3年以内)に住宅を新築した場合など。中古住宅は土地と住宅の取得が前後1年以内。`,
             `免税点(${v.after ? `令和8年4月1日以後` : `令和8年3月31日以前`}の取得): 土地${yen(v.exempt.land)}円・家屋の建築${yen(v.exempt.build)}円・家屋の売買等${yen(v.exempt.other)}円未満は非課税。`,
@@ -929,7 +931,7 @@ window.Views.calculators = (function () {
           ${notesHtml(v.notes.map((n) => UI.escapeHtml(n)))}
         `) + (landBody ? cardHtml(`土地の内訳`, landBody) : ``) + (bldgBody ? cardHtml(`建物の内訳`, bldgBody) : ``) + cardHtml(`特例の要件(概要)`, `
           ${notesHtml([
-            `新築住宅の減額: 居住部分が床面積の1/2以上で、居住部分の床面積が${s.builtDate === `before` ? `50㎡以上280㎡以下(戸建以外の貸家住宅は40㎡以上)` : `40㎡以上240㎡以下(令和8年4月1日以後の新築。東京都特別区の特定都市再生緊急整備地域は50㎡以上)`}。120㎡までの部分の固定資産税が1/2になります。都市計画税は減額されません。`,
+            `新築住宅の減額: 居住部分が床面積の1/2以上で、居住部分の床面積が${s.builtDate === `before` ? `50㎡以上280㎡以下(戸建以外の貸家住宅は40㎡以上)` : `40㎡以上240㎡以下(令和8年4月1日以後の新築。東京都特別区の特定都市再生緊急整備地域の住宅は、貸家用のマンション・アパートの住戸を除き50㎡以上)`}。120㎡までの部分の固定資産税が1/2になります。都市計画税は減額されません。`,
             `減額期間: 一般の住宅3年度分、3階建以上の耐火・準耐火建築物5年度分。認定長期優良住宅はそれぞれ5年度分・7年度分。`,
             `令和11年4月1日以後に災害危険区域等で新築された一定の住宅は対象外になります(令和8年度改正)。`,
             `住宅用地の特例は、空き家で管理不全空家等・特定空家等として勧告を受けると対象外になります。`,
