@@ -38,10 +38,41 @@ window.QuizEngine = (function () {
     return picked;
   }
 
-  // 根拠法令クイズ用: 自分と異なるlawRefを持つ他の用語からダミー候補を集める
+  // lawRef を「法令名+条番号」のキー集合に分解する
+  // 例: 「宅地建物取引業法35条1項・37条、同施行規則16条」→ {宅地建物取引業法35条, 宅地建物取引業法37条, 同施行規則16条}
+  function lawKeys(ref) {
+    const keys = new Set();
+    String(ref || ``).split(/[、,，]/).forEach((seg) => {
+      const nameMatch = seg.trim().match(/^[^\d(（]+/);
+      const name = nameMatch ? nameMatch[0].trim() : ``;
+      const re = /(\d+)条(の\d+)?/g;
+      let m;
+      while ((m = re.exec(seg))) keys.add(`${name}${m[1]}条${m[2] || ``}`);
+    });
+    return keys;
+  }
+
+  // 2つの根拠法令が「同じ答え」とみなせるか(一方が他方を含む、または同じ条文を共有する)
+  function lawRefsOverlap(a, b) {
+    if (!a || !b) return false;
+    if (a === b || a.includes(b) || b.includes(a)) return true;
+    const ka = lawKeys(a);
+    for (const k of lawKeys(b)) if (ka.has(k)) return true;
+    return false;
+  }
+
+  // 根拠法令クイズ用: 正解と重ならないlawRefを持つ他の用語からダミー候補を集める(ダミー同士の重複も避ける)
+  function lawRefPool(allTerms, correctTerm) {
+    return allTerms.filter((t) => t.id !== correctTerm.id && t.lawRef && !lawRefsOverlap(t.lawRef, correctTerm.lawRef));
+  }
   function pickLawRefDistractors(allTerms, correctTerm, want) {
-    const pool = allTerms.filter((t) => t.id !== correctTerm.id && t.lawRef && t.lawRef !== correctTerm.lawRef);
-    return shuffle(pool).slice(0, want);
+    const picked = [];
+    for (const t of shuffle(lawRefPool(allTerms, correctTerm))) {
+      if (picked.some((p) => p.lawRef === t.lawRef)) continue;
+      picked.push(t);
+      if (picked.length >= want) break;
+    }
+    return picked;
   }
 
   // 上限文字数の直前(手前15文字以内)に句読点があればそこで切り、不自然な文中カットを避ける
@@ -77,7 +108,7 @@ window.QuizEngine = (function () {
   // 1つの用語から出題可能なら問題オブジェクトを、4択が揃わなければ null を返す
   function buildQuestionForTerm(term, opts) {
     opts = opts || {};
-    const lawEligible = !!term.lawRef && AppIndex.allTerms.filter((t) => t.id !== term.id && t.lawRef && t.lawRef !== term.lawRef).length >= 3;
+    const lawEligible = !!term.lawRef && new Set(lawRefPool(AppIndex.allTerms, term).map((t) => t.lawRef)).size >= 3;
     const typeOptions = opts.types || (lawEligible ? [`name-from-def`, `def-from-name`, `law-ref`] : [`name-from-def`, `def-from-name`]);
     const usableTypes = typeOptions.filter((t) => t !== `law-ref` || lawEligible);
     if (!usableTypes.length) return null;

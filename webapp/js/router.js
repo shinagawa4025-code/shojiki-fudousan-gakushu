@@ -11,7 +11,8 @@ window.Router = (function () {
   }
 
   function parseHash() {
-    const hash = decodeURIComponent(location.hash.replace(/^#/, ``));
+    let hash = location.hash.replace(/^#/, ``);
+    try { hash = decodeURIComponent(hash); } catch (e) { /* 不正な%表記はそのまま使う */ }
     const [view, ...rest] = hash.split(`/`);
     return { view: view || DEFAULT_VIEW, param: rest.join(`/`) || null };
   }

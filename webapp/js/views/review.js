@@ -68,6 +68,7 @@ window.Views.review = (function () {
 
     const session = { done: 0, again: 0, total: queue.length };
     let undoStack = [];
+    let lastToast = null;
 
     const wrap = document.createElement(`div`);
     wrap.className = `view review-view`;
@@ -102,7 +103,7 @@ window.Views.review = (function () {
       area.innerHTML = ``;
       const next = nextDueInfo();
       const nextText = next ? `次の復習は${next.days === 1 ? `明日` : `${next.days}日後`}(${next.count}件)です。` : ``;
-      const moreNew = candidates.length > newRemaining;
+      const moreNew = newCandidates().length > 0;
       let el;
       if (session.done) {
         el = UI.emptyState({
@@ -185,7 +186,9 @@ window.Views.review = (function () {
       if (undoStack.length > 20) undoStack.shift();
       renderQueue();
       const shortName = term.name.length > 14 ? `${term.name.slice(0, 13)}…` : term.name;
-      UI.toast(`「${shortName}」は${Srs.intervalLabel(Srs.getCard(term.id).interval)}に出題`, `default`, { action: { label: `元に戻す`, onClick: undo }, duration: 3200 });
+      // 前のトーストは閉じる(古いトーストの「元に戻す」で別の評価が取り消されないように)
+      if (lastToast) lastToast.dismiss();
+      lastToast = UI.toast(`「${shortName}」は${Srs.intervalLabel(Srs.getCard(term.id).interval)}に出題`, `default`, { action: { label: `元に戻す`, onClick: undo }, duration: 3200 });
     }
 
     function undo() {
@@ -213,6 +216,8 @@ window.Views.review = (function () {
       if (!document.body.contains(wrap)) { document.removeEventListener(`keydown`, onKey); return; }
       if (e.target.closest && e.target.closest(`input, textarea, select, [contenteditable]`)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // 図解のシートやダイアログが開いている間は操作しない
+      if (document.querySelector(`.modal-overlay, .sheet-backdrop, .onb-overlay`)) return;
       const card = area.querySelector(`.flip-card`);
       if ((e.key === `u` || e.key === `U`) && undoStack.length) { e.preventDefault(); undo(); return; }
       if (!card) return;

@@ -202,7 +202,7 @@ window.Stats = (function () {
     const quizHistory = obj(`quizHistory`);
     const score = {};
     Object.keys(auto).forEach((id) => {
-      const s = auto[id];
+      const s = auto[id] || {};
       const diff = (s.wrong || 0) - (s.correct || 0);
       if ((s.wrong || 0) > 0 && diff >= 0) score[id] = (score[id] || 0) + diff + 1;
     });

@@ -20,7 +20,7 @@ window.Recommend = (function () {
 
     const stats = Storage.get(`autoQuizStats`, {});
     const weakIds = Object.keys(stats).filter((id) => {
-      const s = stats[id];
+      const s = stats[id] || {};
       const total = (s.wrong || 0) + (s.correct || 0);
       return AppIndex.termsById[id] && total >= 3 && (s.wrong || 0) > (s.correct || 0);
     });
