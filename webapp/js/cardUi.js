@@ -144,17 +144,15 @@ window.CardUi = (function () {
         known[term.id] = !known[term.id];
         Storage.set(`flashcards`, known);
         if (window.Streak) Streak.recordToday();
-        if (opts.onToggleKnown) {
-          opts.onToggleKnown(term);
-        } else {
-          const on = !!known[term.id];
-          card.querySelectorAll(`[data-role="known-toggle"]`).forEach((b) => {
-            b.classList.toggle(`is-known`, on);
-            b.setAttribute(`aria-pressed`, String(on));
-            b.setAttribute(`aria-label`, on ? `記憶済みを取り消す` : `記憶済みにする`);
-            b.innerHTML = ic(on ? `star-fill` : `star`);
-          });
-        }
+        // 星はその場で塗り替える(一覧を作り直すとスクロール位置が飛ぶため、呼び出し側には通知だけする)
+        const on = !!known[term.id];
+        card.querySelectorAll(`[data-role="known-toggle"]`).forEach((b) => {
+          b.classList.toggle(`is-known`, on);
+          b.setAttribute(`aria-pressed`, String(on));
+          b.setAttribute(`aria-label`, on ? `記憶済みを取り消す` : `記憶済みにする`);
+          b.innerHTML = ic(on ? `star-fill` : `star`);
+        });
+        if (opts.onToggleKnown) opts.onToggleKnown(term, on);
       });
     });
 
