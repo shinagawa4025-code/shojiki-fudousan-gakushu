@@ -26,7 +26,7 @@ window.Views.summary = (function () {
 
     const episodeTopicIndex = {};
     window.APP_DATA.topics.forEach((topic) => {
-      topic.episodes.forEach((epId) => { episodeTopicIndex[epId] = topic; });
+      topic.episodes.forEach((epId) => { (episodeTopicIndex[epId] = episodeTopicIndex[epId] || []).push(topic); });
     });
 
     window.APP_DATA.specials.forEach((sp) => specialsList.appendChild(buildSpecialCard(sp)));
@@ -66,13 +66,16 @@ window.Views.summary = (function () {
         return `<button type="button" class="chip chip-small" data-nav="#glossary/${termId}">${t.name}</button>`;
       }).join(``);
 
-      const topic = episodeTopicIndex[ep.id];
+      // 1話が複数トピックに属する場合はすべて表示
+      const topicChips = (episodeTopicIndex[ep.id] || [])
+        .map((topic) => `<button type="button" class="chip chip-small chip-topic" data-nav="#topics/${topic.id}">${topic.name}</button>`)
+        .join(``);
 
       card.innerHTML = `
         <div class="card-header">
           <span class="episode-label">${ep.displayLabel}</span>
           <span class="episode-theme">${ep.theme}</span>
-          ${topic ? `<button type="button" class="chip chip-small chip-topic" data-nav="#topics/${topic.id}">${topic.name}</button>` : ``}
+          ${topicChips ? `<span class="episode-topic-chips">${topicChips}</span>` : ``}
         </div>
         <p class="episode-summary">${ep.summary}</p>
         ${ep.termsNote ? `<p class="terms-note">${ep.termsNote}</p>` : ``}
