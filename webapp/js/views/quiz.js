@@ -1,4 +1,4 @@
-// クイズビュー: 固定24問(苦手復習対応) + 自動生成クイズ(トピック絞り込み・苦手優先・根拠法令問題対応)
+// クイズビュー: 固定86問(即時フィードバック・苦手復習・SRS連携) + 自動生成クイズ(トピック絞り込み・苦手優先・根拠法令問題対応)
 window.Views = window.Views || {};
 window.Views.quiz = (function () {
   const LEVELS = [`全て`, `超入門`, `初級`, `中級`, `上級`];
@@ -8,7 +8,10 @@ window.Views.quiz = (function () {
     let startMode = `fixed`;
     let topicParam = param;
     let initialWeak = false;
-    if (param && param.startsWith(`auto/`)) {
+    if (param === `auto`) {
+      startMode = `auto`;
+      topicParam = null;
+    } else if (param && param.startsWith(`auto/`)) {
       startMode = `auto`;
       topicParam = param.slice(`auto/`.length);
       if (topicParam === `weak`) {
@@ -23,7 +26,7 @@ window.Views.quiz = (function () {
     wrap.innerHTML = `
       <h2>クイズ</h2>
       <div class="chip-row" data-role="mode-chips">
-        <button type="button" class="chip${startMode === `fixed` ? ` active` : ``}" data-mode="fixed">確認問題(24問)</button>
+        <button type="button" class="chip${startMode === `fixed` ? ` active` : ``}" data-mode="fixed">確認問題(86問)</button>
         <button type="button" class="chip${startMode === `auto` ? ` active` : ``}" data-mode="auto">自動生成クイズ</button>
       </div>
       <div data-role="quiz-body"></div>
@@ -76,6 +79,7 @@ window.Views.quiz = (function () {
     const chipRow = body.querySelector(`[data-role="level-chips"]`);
     const topicChipRow = body.querySelector(`[data-role="topic-chips"]`);
     const list = body.querySelector(`[data-role="quiz-list"]`);
+    const reviewOnlyCheckbox = body.querySelector(`[data-role="review-only"]`);
 
     LEVELS.forEach((lvl) => {
       const chip = document.createElement(`button`);
@@ -92,13 +96,21 @@ window.Views.quiz = (function () {
 
     buildTopicChips(topicChipRow, topicState, renderList);
 
-    body.querySelector(`[data-role="review-only"]`).addEventListener(`change`, (e) => {
+    reviewOnlyCheckbox.addEventListener(`change`, (e) => {
       reviewOnly = e.target.checked;
       renderList();
     });
 
     function handleResultChange() {
       if (reviewOnly) renderList();
+    }
+
+    function handleGotoReviewOnly() {
+      if (!reviewOnly) {
+        reviewOnly = true;
+        reviewOnlyCheckbox.checked = true;
+        renderList();
+      }
     }
 
     function renderList() {
@@ -113,13 +125,13 @@ window.Views.quiz = (function () {
         list.innerHTML = `<p class="view-desc">${reviewOnly ? `苦手な問題はありません。「わからなかった」を選んだ問題がここに表示されます。` : `該当する問題がありません。`}</p>`;
         return;
       }
-      questions.forEach((q) => list.appendChild(buildQuestionCard(q, history, handleResultChange)));
+      questions.forEach((q) => list.appendChild(buildQuestionCard(q, history, handleResultChange, handleGotoReviewOnly)));
     }
 
     renderList();
   }
 
-  function buildQuestionCard(q, history, onResultChange) {
+  function buildQuestionCard(q, history, onResultChange, onReviewOnly) {
     const card = document.createElement(`div`);
     card.className = `card quiz-card`;
     const episodeChips = (q.episodes || []).map((epId) => {
@@ -144,6 +156,7 @@ window.Views.quiz = (function () {
         <button type="button" class="btn" data-result="ok">わかった</button>
         <button type="button" class="btn" data-result="ng">わからなかった</button>
       </div>
+      <div data-role="result-badge"></div>
     `;
 
     card.querySelector(`[data-role="reveal"]`).addEventListener(`click`, (e) => {
@@ -159,10 +172,23 @@ window.Views.quiz = (function () {
 
     card.querySelectorAll(`[data-result]`).forEach((btn) => {
       btn.addEventListener(`click`, () => {
-        history[q.id] = btn.dataset.result;
+        const result = btn.dataset.result;
+        history[q.id] = result;
         Storage.set(`quizHistory`, history);
         if (window.Streak) window.Streak.recordToday();
+        if (result === `ng` && q.relatedTermId) Srs.grade(q.relatedTermId, 1);
         card.querySelectorAll(`[data-result]`).forEach((b) => b.classList.toggle(`active`, b === btn));
+
+        const badge = card.querySelector(`[data-role="result-badge"]`);
+        badge.innerHTML = result === `ok`
+          ? `<span class="review-status review-status-ok">わかった</span>`
+          : `<span class="review-status review-status-ng">わからなかった → 今日の復習に追加</span> <button type="button" class="link-btn" data-role="goto-review-only">→ 苦手のみで復習する</button>`;
+        const reviewOnlyLink = badge.querySelector(`[data-role="goto-review-only"]`);
+        if (reviewOnlyLink) reviewOnlyLink.addEventListener(`click`, () => { if (onReviewOnly) onReviewOnly(); });
+
+        card.classList.add(result === `ok` ? `flash-ok` : `flash-ng`);
+        setTimeout(() => card.classList.remove(`flash-ok`, `flash-ng`), 700);
+
         if (onResultChange) onResultChange();
       });
     });
@@ -242,6 +268,36 @@ window.Views.quiz = (function () {
     return withScore.map((x) => x.t);
   }
 
+  // 1つの用語から出題可能なら question オブジェクトを、4択が揃わなければ null を返す
+  function buildQuestionForTerm(term) {
+    const lawEligible = !!term.lawRef && AppIndex.allTerms.filter((t) => t.id !== term.id && t.lawRef && t.lawRef !== term.lawRef).length >= 3;
+    const typeOptions = lawEligible ? [`name-from-def`, `def-from-name`, `law-ref`] : [`name-from-def`, `def-from-name`];
+    const type = typeOptions[Math.floor(Math.random() * typeOptions.length)];
+
+    const correctText = buildChoiceText(term, type);
+    const usedTexts = new Set([correctText]);
+    const candidates = type === `law-ref` ? pickLawRefDistractors(AppIndex.allTerms, term, 8) : pickDistractors(AppIndex.allTerms, term, 8);
+    const distractors = [];
+    candidates.forEach((cand) => {
+      if (distractors.length >= 3) return;
+      const text = buildChoiceText(cand, type);
+      if (usedTexts.has(text)) return; // 選択肢テキストの重複(切り詰め後の偶然の一致含む)を回避
+      usedTexts.add(text);
+      distractors.push({ text, correct: false });
+    });
+    if (distractors.length < 3) return null; // 4択が揃わない用語は出題をスキップ
+
+    const choices = shuffle([{ text: correctText, correct: true }, ...distractors]);
+    const stem = type === `name-from-def` ? term.simpleExplanation
+      : type === `law-ref` ? `${term.name} の根拠法令は?`
+      : term.name;
+    return { stem, choices, term, type };
+  }
+
+  function buildQuestionsFromTerms(terms) {
+    return terms.map(buildQuestionForTerm).filter(Boolean);
+  }
+
   function generateAutoQuiz(level, topicId, count, weakStats) {
     let pool = AppIndex.allTerms.filter((t) => level === `全て` || t.level === level);
     if (topicId && topicId !== `全て`) pool = pool.filter((t) => (t.topicIds || []).includes(topicId));
@@ -250,29 +306,8 @@ window.Views.quiz = (function () {
     const questions = [];
     orderedPool.some((term) => {
       if (questions.length >= count) return true;
-
-      const lawEligible = !!term.lawRef && AppIndex.allTerms.filter((t) => t.id !== term.id && t.lawRef && t.lawRef !== term.lawRef).length >= 3;
-      const typeOptions = lawEligible ? [`name-from-def`, `def-from-name`, `law-ref`] : [`name-from-def`, `def-from-name`];
-      const type = typeOptions[Math.floor(Math.random() * typeOptions.length)];
-
-      const correctText = buildChoiceText(term, type);
-      const usedTexts = new Set([correctText]);
-      const candidates = type === `law-ref` ? pickLawRefDistractors(AppIndex.allTerms, term, 8) : pickDistractors(AppIndex.allTerms, term, 8);
-      const distractors = [];
-      candidates.forEach((cand) => {
-        if (distractors.length >= 3) return;
-        const text = buildChoiceText(cand, type);
-        if (usedTexts.has(text)) return; // 選択肢テキストの重複(切り詰め後の偶然の一致含む)を回避
-        usedTexts.add(text);
-        distractors.push({ text, correct: false });
-      });
-      if (distractors.length < 3) return false; // 4択が揃わない用語は出題をスキップし次の候補へ
-
-      const choices = shuffle([{ text: correctText, correct: true }, ...distractors]);
-      const stem = type === `name-from-def` ? term.simpleExplanation
-        : type === `law-ref` ? `${term.name} の根拠法令は?`
-        : term.name;
-      questions.push({ stem, choices, term, type });
+      const q = buildQuestionForTerm(term);
+      if (q) questions.push(q);
       return false;
     });
     return questions;
@@ -286,6 +321,8 @@ window.Views.quiz = (function () {
     let weakFirst = !!initialWeak;
     let score = 0;
     let answered = 0;
+    let totalQuestions = 0;
+    let missedTermIds = new Set();
     const stats = Storage.get(`autoQuizStats`, {});
 
     body.innerHTML = `
@@ -298,12 +335,14 @@ window.Views.quiz = (function () {
       <p class="progress-text" data-role="score"></p>
       <div class="weak-terms-panel" data-role="weak-terms"></div>
       <div class="quiz-list" data-role="auto-list"></div>
+      <div class="card quiz-summary" data-role="summary" hidden></div>
     `;
     const chipRow = body.querySelector(`[data-role="level-chips"]`);
     const topicChipRow = body.querySelector(`[data-role="topic-chips"]`);
     const list = body.querySelector(`[data-role="auto-list"]`);
     const scoreText = body.querySelector(`[data-role="score"]`);
     const weakPanel = body.querySelector(`[data-role="weak-terms"]`);
+    const summaryEl = body.querySelector(`[data-role="summary"]`);
 
     LEVELS.forEach((lvl) => {
       const chip = document.createElement(`button`);
@@ -325,7 +364,7 @@ window.Views.quiz = (function () {
       generate();
     });
 
-    body.querySelector(`[data-role="retry"]`).addEventListener(`click`, generate);
+    body.querySelector(`[data-role="retry"]`).addEventListener(`click`, () => generate());
 
     function renderWeakPanel() {
       const weakIds = Object.keys(stats)
@@ -340,12 +379,19 @@ window.Views.quiz = (function () {
       weakPanel.querySelectorAll(`[data-nav]`).forEach((btn) => btn.addEventListener(`click`, () => Router.navigate(btn.dataset.nav)));
     }
 
-    function generate() {
+    function generate(missedOnly) {
       score = 0;
       answered = 0;
       updateScore();
       renderWeakPanel();
-      const questions = generateAutoQuiz(level, topicState.value, AUTO_COUNT, weakFirst ? stats : null);
+      summaryEl.hidden = true;
+      summaryEl.innerHTML = ``;
+      const priorMissed = missedTermIds;
+      missedTermIds = new Set();
+      const questions = (missedOnly && priorMissed.size)
+        ? buildQuestionsFromTerms(Array.from(priorMissed).map((id) => AppIndex.termsById[id]).filter(Boolean))
+        : generateAutoQuiz(level, topicState.value, AUTO_COUNT, weakFirst ? stats : null);
+      totalQuestions = questions.length;
       list.innerHTML = ``;
       if (!questions.length) {
         list.innerHTML = `<p class="view-desc">該当する用語がありません。フィルタを変更してください。</p>`;
@@ -358,11 +404,25 @@ window.Views.quiz = (function () {
       scoreText.textContent = `スコア: ${score} / ${answered}`;
     }
 
+    function checkCompletion() {
+      if (totalQuestions === 0 || answered < totalQuestions) return;
+      summaryEl.hidden = false;
+      summaryEl.innerHTML = `
+        <p class="progress-text">今回の結果: ${score} / ${totalQuestions} 問正解</p>
+        ${missedTermIds.size
+          ? `<button type="button" class="btn" data-role="redo-missed">間違えた問題だけもう一度(${missedTermIds.size}問)</button>`
+          : `<p class="view-desc">全問正解です。お疲れ様でした。</p>`}
+      `;
+      const redoBtn = summaryEl.querySelector(`[data-role="redo-missed"]`);
+      if (redoBtn) redoBtn.addEventListener(`click`, () => generate(true));
+    }
+
     function recordStat(termId, correct) {
       if (!stats[termId]) stats[termId] = { wrong: 0, correct: 0 };
       stats[termId][correct ? `correct` : `wrong`]++;
       Storage.set(`autoQuizStats`, stats);
       if (window.Streak) window.Streak.recordToday();
+      if (!correct) Srs.grade(termId, 1);
     }
 
     function buildAutoCard(q) {
@@ -393,11 +453,13 @@ window.Views.quiz = (function () {
             btn.classList.add(`incorrect`);
             const correctBtn = Array.from(choiceList.children).find((b, i) => q.choices[i].correct);
             if (correctBtn) correctBtn.classList.add(`correct`);
+            missedTermIds.add(q.term.id);
           }
           recordStat(q.term.id, choice.correct);
           renderWeakPanel();
           answered++;
           updateScore();
+          checkCompletion();
         });
         choiceList.appendChild(btn);
       });

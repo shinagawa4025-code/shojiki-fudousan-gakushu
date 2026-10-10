@@ -397,7 +397,10 @@ h3 { font-weight: 700; color: var(--color-primary-dark); margin-top: 28px; }
 .source-row .law-name a:hover { text-decoration: underline; }
 
 /* クイズ */
-.quiz-card { }
+.quiz-card { transition: background 0.3s; }
+.quiz-card.flash-ok { background: #dcefe2; }
+.quiz-card.flash-ng { background: #f6dede; }
+.quiz-summary { margin-top: 14px; }
 .quiz-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .quiz-question { margin: 8px 0; }
 .quiz-answer { background: var(--color-surface-muted); padding: 10px; border-radius: var(--radius); }
