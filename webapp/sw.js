@@ -1,5 +1,5 @@
 // Service Worker: オフライン閲覧対応(同一オリジンのみプリキャッシュ+ネットワークフォールバック)
-const CACHE_NAME = `shojiki-gakushu-v4`;
+const CACHE_NAME = `shojiki-gakushu-v5`;
 
 const PRECACHE_URLS = [
   `./`,

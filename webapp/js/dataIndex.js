@@ -59,7 +59,7 @@ window.AppIndex = (function () {
     t.aliases.forEach((alias) => { termByName[alias] = t.id; });
   });
 
-  console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length} (期待値117), topics=${data.topics.length} (期待値10), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length} (期待値24), sources=${data.sources.length} (期待値13)`);
+  console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length} (期待値117), topics=${data.topics.length} (期待値10), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length} (期待値86), sources=${data.sources.length} (期待値13)`);
 
   return { episodesById, topicsById, termsById, allTerms, sourcesById, episodeTermIndex, topicTermIndex, topicQuizIndex, topicLawIndex, termByName };
 })();
