@@ -25,8 +25,8 @@ window.Views.more = (function () {
           : `<button type="button" class="tile" data-action="${t.action}"><span class="tile-icon">${ic(t.icon)}</span><span class="tile-title">${t.title}</span><span class="tile-desc">${t.desc}</span></button>`
         ).join(``)}
       </div>
-      <div class="card card-compact" style="margin-top: var(--sp-4); display:flex; align-items:center; justify-content:space-between; gap: var(--sp-3);">
-        <span style="display:flex; align-items:center; gap: var(--sp-2); font-weight:700;">${ic(`moon`)}ダークモード</span>
+      <div class="card card-compact" style="margin-top: var(--sp-4); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap: var(--sp-3);">
+        <span style="display:flex; align-items:center; gap: var(--sp-2); font-weight:700; white-space:nowrap;">${ic(`moon`)}テーマ</span>
         <div class="segmented" role="group" aria-label="テーマ" data-role="theme"></div>
       </div>
     `;
@@ -36,7 +36,7 @@ window.Views.more = (function () {
     guide.addEventListener(`click`, () => { if (window.Onboarding) Onboarding.show(); });
 
     const themeGroup = wrap.querySelector(`[data-role="theme"]`);
-    const options = [{ id: `system`, label: `自動` }, { id: `light`, label: `ライト` }, { id: `dark`, label: `ダーク` }];
+    const options = [{ id: `system`, label: `端末に合わせる` }, { id: `light`, label: `ライト` }, { id: `dark`, label: `ダーク` }];
     function paint() {
       const cur = ThemeManager.getPreference();
       themeGroup.innerHTML = options.map((o) => `<button type="button" class="segmented-item" data-theme-pref="${o.id}" aria-pressed="${o.id === cur}">${o.label}</button>`).join(``);

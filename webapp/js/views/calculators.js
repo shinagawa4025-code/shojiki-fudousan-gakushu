@@ -8,7 +8,8 @@ window.Views.calculators = (function () {
     nta7191: `https://www.nta.go.jp/taxes/shiraberu/taxanswer/inshi/7191.htm`,
     nta7108: `https://www.nta.go.jp/taxes/shiraberu/taxanswer/inshi/7108.htm`,
     nta7140: `https://www.nta.go.jp/taxes/shiraberu/taxanswer/inshi/7140.htm`,
-    nta3440: `https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3440.htm`,
+    nta3208: `https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3208.htm`,
+    nta3211: `https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3211.htm`,
     nta3302: `https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3302.htm`,
     nta3258: `https://www.nta.go.jp/taxes/shiraberu/taxanswer/joto/3258.htm`,
     nta4124: `https://www.nta.go.jp/taxes/shiraberu/taxanswer/sozoku/4124.htm`,
@@ -50,7 +51,7 @@ window.Views.calculators = (function () {
     acqLongLifeDed: r(13000000, `認定長期優良住宅の控除額の特例`, `地方税法附則11条8項`, `2031-03-31`, SRC.kanagawaNew, `神奈川県 新築住宅の軽減`, null, `令和8年度改正で5年延長(令和13年3月31日までの取得)`, `1,300万円`),
     acqUsedHouseDed: r(null, `既存(中古)住宅の課税標準からの控除`, `地方税法73条の14第3項`, null, SRC.kanagawaUsed, `神奈川県 中古住宅の軽減`, null, `自己居住用・床面積40㎡以上240㎡以下(令和8年3月31日以前の取得は50㎡以上)。控除額は新築時期で決まる`, `新築時期に応じて100万〜1,200万円`),
     acqLandReduction: r(45000, `住宅用土地の税額の減額`, `地方税法73条の24`, null, SRC.kanagawaNew, `神奈川県 新築住宅の軽減`, null, `45,000円と「1㎡当たり価格×住宅床面積の2倍(1戸200㎡限度)×税率」の多い方`, `45,000円 または 計算額`),
-    acqExempt: r(null, `不動産取得税の免税点`, `地方税法73条の15の2`, null, SRC.soumuR8, `総務省 令和8年度地方税制改正 事務連絡`, null, `令和8年4月1日以後の取得: 土地16万円・家屋(建築)66万円・家屋(売買等)34万円。それ以前は10万・23万・12万円`, `土地16万円 / 建築66万円 / 売買等34万円`),
+    acqExempt: r(null, `不動産取得税の免税点`, `地方税法73条の15の2`, null, `https://www.tax.metro.tokyo.lg.jp/kazei/real_estate/fudosan`, `東京都主税局 不動産取得税`, `src22`, `令和8年4月1日以後の取得: 土地16万円・家屋(建築)66万円・家屋(売買等)34万円。それ以前は10万・23万・12万円`, `土地16万円 / 建築66万円 / 売買等34万円`),
     // --- 印紙税 ---
     stampStd: r(null, `不動産売買契約書・金銭消費貸借契約書の税額(本則)`, `印紙税法 別表第一 第1号文書`, null, SRC.nta7140, `国税庁 No.7140`, null, ``, `契約金額に応じて200円〜60万円`),
     stampReduced: r(null, `不動産譲渡契約書の印紙税の軽減`, `租税特別措置法91条`, `2027-03-31`, SRC.nta7108, `国税庁 No.7108`, `src19`, `平成26年4月1日〜令和9年3月31日に作成される契約書(契約金額10万円超)`, `契約金額に応じて200円〜48万円`),
@@ -64,16 +65,16 @@ window.Views.calculators = (function () {
     ptStd: r(0.014, `固定資産税の標準税率`, `地方税法350条1項`, null, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`),
     ptCityMax: r(0.003, `都市計画税の制限税率(上限)`, `地方税法702条の4`, null, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`, `税率は0.3%を上限に市町村が条例で定める`),
     ptSmallFixed: r(1 / 6, `小規模住宅用地(200㎡以下の部分)・固定資産税`, `地方税法349条の3の2第2項`, null, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`, ``, `評価額×1/6`),
-    ptGeneralFixed: r(1 / 3, `一般住宅用地(200㎡超の部分)・固定資産税`, `地方税法349条の3の2第1項`, null, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`, `家屋の床面積の10倍が限度`, `評価額×1/3`),
+    ptGeneralFixed: r(1 / 3, `一般住宅用地(200㎡超の部分)・固定資産税`, `地方税法349条の3の2第1項`, null, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`, `住宅用地全体で家屋の床面積の10倍が限度`, `評価額×1/3`),
     ptSmallCity: r(1 / 3, `小規模住宅用地・都市計画税`, `地方税法702条の3第2項`, null, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`, ``, `評価額×1/3`),
     ptGeneralCity: r(2 / 3, `一般住宅用地・都市計画税`, `地方税法702条の3第1項`, null, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`, ``, `評価額×2/3`),
     ptCommercialCap: r(0.7, `商業地等の負担水準の上限(負担調整措置)`, `地方税法附則18条`, `2027-03-31`, SRC.soumuKotei, `総務省 固定資産税の概要`, `src21`, `令和8年度分までの措置。令和9年度(評価替え)以降は改正内容を要確認`, `評価額×70%`),
-    ptNewHouse: r(0.5, `新築住宅の固定資産税の減額`, `地方税法附則15条の6`, `2031-03-31`, SRC.nagoyaNew, `名古屋市 新築住宅の減額`, null, `令和8年度改正で5年延長(令和13年3月31日までの新築)。床面積要件は令和8年4月1日以後の新築から40㎡以上240㎡以下`, `120㎡分の税額×1/2`),
+    ptNewHouse: r(0.5, `新築住宅の固定資産税の減額`, `地方税法附則15条の6`, `2031-03-31`, SRC.nagoyaNew, `名古屋市 新築住宅の減額`, null, `令和8年度改正で5年延長(令和13年3月31日までの新築)。床面積要件は令和8年4月1日以後の新築から40㎡以上240㎡以下(東京都特別区の特定都市再生緊急整備地域は50㎡以上のまま)`, `120㎡分の税額×1/2`),
     ptLongLife: r(0.5, `認定長期優良住宅の固定資産税の減額`, `地方税法附則15条の7`, `2031-03-31`, SRC.nagoyaNew, `名古屋市 新築住宅の減額`, null, `令和8年度改正で5年延長`, `120㎡分の税額×1/2(5年度分・中高層耐火は7年度分)`),
     ptExempt: r(null, `固定資産税の免税点`, `地方税法351条`, null, SRC.soumuR8, `総務省 令和8年度地方税制改正 事務連絡`, null, `家屋の免税点は令和9年度分から30万円に引上げ`, `土地30万円・家屋20万円(令和9年度分から30万円)`),
     // --- 譲渡所得 ---
-    trLong: r(0.20315, `長期譲渡所得の税率(所得税15%+復興特別所得税0.315%+住民税5%)`, `租税特別措置法31条・地方税法附則34条`, null, SRC.nta3440, `国税庁 No.3440`, null, `令和9年分以後は復興特別所得税1.1%+防衛特別所得税1%(合計2.1%)となり、合計税率は同じ`),
-    trShort: r(0.3963, `短期譲渡所得の税率(所得税30%+復興特別所得税0.63%+住民税9%)`, `租税特別措置法32条・地方税法附則35条`, null, SRC.nta3440, `国税庁 No.3440`),
+    trLong: r(0.20315, `長期譲渡所得の税率(所得税15%+復興特別所得税0.315%+住民税5%)`, `租税特別措置法31条・地方税法附則34条`, null, SRC.nta3208, `国税庁 No.3208`, null, `令和9年分以後は復興特別所得税1.1%+防衛特別所得税1%(合計2.1%)となり、合計税率は同じ(財務省「令和8年度税制改正の大綱」: ${SRC.mofR8Defense})`),
+    trShort: r(0.3963, `短期譲渡所得の税率(所得税30%+復興特別所得税0.63%+住民税9%)`, `租税特別措置法32条・地方税法附則35条`, null, SRC.nta3211, `国税庁 No.3211`),
     trSpecial3000: r(30000000, `居住用財産を譲渡した場合の3,000万円の特別控除`, `租税特別措置法35条`, null, SRC.nta3302, `国税庁 No.3302`, null, ``, `3,000万円`),
     trEstimatedCost: r(0.05, `取得費が分からない場合の概算取得費`, `租税特別措置法31条の4`, null, SRC.nta3258, `国税庁 No.3258`, null, ``, `譲渡価額×5%`),
     // --- 相続税の土地評価 ---
@@ -361,7 +362,8 @@ window.Views.calculators = (function () {
     // 税率が未入力(0)のときは標準税率・制限税率を使う
     const fixedRate = num(s.fixedRatePct) > 0 ? num(s.fixedRatePct) / 100 : RATES.ptStd.value;
     const cityPlan = !!s.cityPlan;
-    const cityRate = cityPlan ? (num(s.cityRatePct) > 0 ? num(s.cityRatePct) / 100 : RATES.ptCityMax.value) : 0;
+    // 都市計画税は0.3%が法定の上限(地方税法702条の4)
+    const cityRate = cityPlan ? (num(s.cityRatePct) > 0 ? Math.min(num(s.cityRatePct) / 100, RATES.ptCityMax.value) : RATES.ptCityMax.value) : 0;
     const landYen = manToYen(s.landMan);
     const landArea = num(s.landArea);
     const residential = s.landUse !== `nonres`;
@@ -443,9 +445,11 @@ window.Views.calculators = (function () {
     const regLand = registration({ kind: `land-sale`, valueMan: s.landMan });
     items.push({ id: `registration`, label: `登録免許税(土地の所有権移転)`, amount: regLand.tax, skipped: !(num(s.landMan) > 0) });
     const houseType = type === `new-house` && s.longLife ? `longlife-apt` : `general`;
-    const regBldg = type === `none` ? null : registration({ kind: type === `new-house` ? `bldg-new` : `bldg-sale`, valueMan: s.bldgMan, useHouse: isHouse && !!s.houseReg, houseType });
+    // 登録免許税の住宅用家屋の軽減は床面積50㎡以上が要件(不動産取得税の40㎡要件とは別)
+    const houseRegOk = isHouse && !!s.houseReg && num(s.floorArea) >= 50;
+    const regBldg = type === `none` ? null : registration({ kind: type === `new-house` ? `bldg-new` : `bldg-sale`, valueMan: s.bldgMan, useHouse: houseRegOk, houseType });
     items.push({ id: `registration`, label: type === `new-house` ? `登録免許税(建物の所有権保存)` : `登録免許税(建物の所有権移転)`, amount: regBldg ? regBldg.tax : 0, skipped: !regBldg || !(num(s.bldgMan) > 0) });
-    const regMort = loanMan > 0 ? registration({ kind: `mortgage`, debtMan: loanMan, useHouse: isHouse && !!s.houseReg }) : null;
+    const regMort = loanMan > 0 ? registration({ kind: `mortgage`, debtMan: loanMan, useHouse: houseRegOk }) : null;
     items.push({ id: `registration`, label: `登録免許税(抵当権の設定)`, amount: regMort ? regMort.tax : 0, skipped: !regMort });
 
     const acq = acquisition({ acqDate: `after`, landMan: s.landMan, takuchi: s.takuchi, bldgType: type, bldgMan: s.bldgMan, longLife: s.longLife, usedEra: s.usedEra, floorArea: s.floorArea, landReduction: s.landReduction, landArea: s.landArea, how: `buy` });
@@ -461,7 +465,7 @@ window.Views.calculators = (function () {
     const taxesAndFees = items.reduce((a, b) => a + (b.skipped ? 0 : b.amount), 0);
     const extrasTotal = extras.reduce((a, b) => a + b.amount, 0);
     const total = taxesAndFees + extrasTotal;
-    return { priceYen, items, extras, taxesAndFees, extrasTotal, total, ratio: priceYen > 0 ? total / priceYen : 0, fee, st, stLoan, regLand, regBldg, regMort, acq, type, isHouse, houseType, loanMan };
+    return { priceYen, items, extras, taxesAndFees, extrasTotal, total, ratio: priceYen > 0 ? total / priceYen : 0, fee, st, stLoan, regLand, regBldg, regMort, acq, type, isHouse, houseType, loanMan, houseRegOk, houseRegFloorNg: isHouse && !!s.houseReg && !houseRegOk };
   }
 
   const calc = { loan, inherit, transfer, registration, acquisition, stamp, brokerage, propertyTax, purchaseCosts, saleFeeTiers, floorTo };
@@ -622,6 +626,8 @@ window.Views.calculators = (function () {
             <li>中古住宅は昭和57年1月1日以後の建築、または新耐震基準に適合することの証明があること</li>
             <li>市区町村の「住宅用家屋証明書」を登記申請時に添付すること(後から出しても軽減は受けられない)</li>
             <li>抵当権は住宅の新築・取得のための借入れに係るものであること</li>
+            <li>建物の所有権移転の軽減(0.3%)は売買・競落による取得に限る(贈与・交換などは対象外)</li>
+            <li>認定長期優良住宅・認定低炭素住宅の移転の軽減は、新築で未使用の住宅を取得した場合に限る</li>
           </ul></details>` : ``;
         return cardHtml(`登録免許税の額`, `
           <div class="calc-stats">${statHtml(`納める税額`, v.tax, { primary: true, sub: reduced ? `軽減なしなら ${yen(v.stdTax)}円` : `` })}</div>
@@ -764,7 +770,7 @@ window.Views.calculators = (function () {
             ])}
             ${notesHtml([
               v.residential && !v.consent ? `居住用建物は、依頼を受ける際に承諾を得ていない限り、依頼者の一方から受けられるのは賃料0.5か月分(+消費税)までです。` : ``,
-              v.longVacant ? `長期の空家等の特例: 長期間使われていない(または今後も使用の見込みがない)物件では、貸主から上乗せして合計2か月分(+消費税)まで受けられます。借主の負担は通常の上限のままです。賃貸募集中の空室は対象外です。` : ``,
+              v.longVacant ? `長期の空家等の特例: 長期間使われていない(または今後も使用の見込みがない)物件では、貸主から上乗せして合計2か月分(+消費税)まで受けられます。借主の負担は通常の上限のままです。目安は少なくとも1年を超えて使われていない物件です(国土交通省「解釈・運用の考え方」)。` : ``,
               `店舗・事務所など居住用以外で権利金(返還されないもの)の授受がある場合は、権利金を売買代金とみなして売買の計算式で上限を出すこともできます。`,
             ])}
             ${basisHtml(keys, today)}
@@ -839,6 +845,8 @@ window.Views.calculators = (function () {
           ${notesHtml([
             `「詳しく」を押すと、この条件を入れた各計算機を開きます。`,
             `不動産取得税は取得日が令和8年4月1日以後として計算しています。`,
+            v.houseRegFloorNg ? `床面積が50㎡未満のため、登録免許税の住宅用家屋の軽減(床面積50㎡以上が要件)は使わず本則税率で計算しています。` : ``,
+            `印紙税は物件価格(税込)で判定しています。契約書に消費税額が区分記載されていれば税抜金額で判定します。`,
             v.fee && v.fee.price > 0 ? `仲介手数料は上限額(${UI.escapeHtml(v.fee.quick)}+消費税)です。新築分譲を売主から直接買う場合はかかりません。` : ``,
           ])}
           ${basisHtml(keys, today)}
@@ -852,8 +860,8 @@ window.Views.calculators = (function () {
       }),
       itemLinks: (v, s) => v.items.map((it) => {
         if (it.label.includes(`金銭消費貸借`)) return { stamp: { docType: `loan`, amountMan: String(s.loanMan), noAmount: false, copies: `1` } };
-        if (it.label.includes(`建物の所有権`)) return { registration: { kind: s.bldgType === `new-house` ? `bldg-new` : `bldg-sale`, valueMan: String(s.bldgMan), useHouse: !!s.houseReg && (s.bldgType === `new-house` || s.bldgType === `used-house`), houseType: v.houseType } };
-        if (it.label.includes(`抵当権`)) return { registration: { kind: `mortgage`, debtMan: String(s.loanMan), useHouse: !!s.houseReg && (s.bldgType === `new-house` || s.bldgType === `used-house`) } };
+        if (it.label.includes(`建物の所有権`)) return { registration: { kind: s.bldgType === `new-house` ? `bldg-new` : `bldg-sale`, valueMan: String(s.bldgMan), useHouse: !!v.houseRegOk, houseType: v.houseType } };
+        if (it.label.includes(`抵当権`)) return { registration: { kind: `mortgage`, debtMan: String(s.loanMan), useHouse: !!v.houseRegOk } };
         return null;
       }),
     },
@@ -921,7 +929,7 @@ window.Views.calculators = (function () {
           ${notesHtml(v.notes.map((n) => UI.escapeHtml(n)))}
         `) + (landBody ? cardHtml(`土地の内訳`, landBody) : ``) + (bldgBody ? cardHtml(`建物の内訳`, bldgBody) : ``) + cardHtml(`特例の要件(概要)`, `
           ${notesHtml([
-            `新築住宅の減額: 居住部分が床面積の1/2以上で、居住部分の床面積が${s.builtDate === `before` ? `50㎡以上280㎡以下(戸建以外の貸家住宅は40㎡以上)` : `40㎡以上240㎡以下(令和8年4月1日以後の新築)`}。120㎡までの部分の固定資産税が1/2になります。都市計画税は減額されません。`,
+            `新築住宅の減額: 居住部分が床面積の1/2以上で、居住部分の床面積が${s.builtDate === `before` ? `50㎡以上280㎡以下(戸建以外の貸家住宅は40㎡以上)` : `40㎡以上240㎡以下(令和8年4月1日以後の新築。東京都特別区の特定都市再生緊急整備地域は50㎡以上)`}。120㎡までの部分の固定資産税が1/2になります。都市計画税は減額されません。`,
             `減額期間: 一般の住宅3年度分、3階建以上の耐火・準耐火建築物5年度分。認定長期優良住宅はそれぞれ5年度分・7年度分。`,
             `令和11年4月1日以後に災害危険区域等で新築された一定の住宅は対象外になります(令和8年度改正)。`,
             `住宅用地の特例は、空き家で管理不全空家等・特定空家等として勧告を受けると対象外になります。`,

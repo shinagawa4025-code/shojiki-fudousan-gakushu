@@ -158,7 +158,8 @@ window.Views.review = (function () {
         if (head) head.insertAdjacentHTML(`afterbegin`, `<span class="badge badge-new">新規</span>`);
       }
       area.appendChild(card);
-      card.focus({ preventScroll: true });
+      const flipBtn = card.querySelector(`.flip-card-front [data-role="flip"]`);
+      if (flipBtn) flipBtn.focus({ preventScroll: true });
     }
 
     function doGrade(term, g, isNew) {
@@ -219,9 +220,9 @@ window.Views.review = (function () {
         e.preventDefault();
         const btn = card.querySelector(`[data-grade="${e.key}"]`);
         if (btn) btn.click();
-      } else if (e.key === ` ` && document.activeElement !== card && !e.target.closest(`button, a`)) {
+      } else if (e.key === ` ` && !e.target.closest(`button, a`)) {
         e.preventDefault();
-        card.click();
+        if (card.flip) card.flip(true); else card.click();
       }
     }
     document.addEventListener(`keydown`, onKey);

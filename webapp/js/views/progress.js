@@ -200,7 +200,7 @@ window.Views.progress = (function () {
       for (let c = 0; c < WEEKS; c++) {
         const d = days[c * 7 + r];
         if (!d) { rows.push(`<span class="heat-cell is-future" aria-hidden="true"></span>`); continue; }
-        rows.push(`<span class="streak-day heat-cell${d.date === today ? ` today` : ``}" data-level="${d.level}" title="${DateUtil.toJapanese(d.date, true)}: ${d.count ? `${d.count}回` : `記録なし`}"></span>`);
+        rows.push(`<span class="streak-day heat-cell${d.date === today ? ` today` : ``}" data-level="${d.level}" role="img" aria-label="${DateUtil.toJapanese(d.date, true)}: ${d.count ? `${d.count}回` : `記録なし`}" title="${DateUtil.toJapanese(d.date, true)}: ${d.count ? `${d.count}回` : `記録なし`}"></span>`);
       }
     }
 
@@ -211,7 +211,7 @@ window.Views.progress = (function () {
       </div>
       <p class="calc-note prog-note">${active
         ? `直近${WEEKS}週間で${active}日・合計${total}回学習しました。`
-        : `まだ学習の記録がありません。カードやクイズで学習すると、その日のマスに色が付きます。`}マスにカーソルを合わせると日付と回数が出ます。</p>
+        : `まだ学習の記録がありません。カードやクイズで学習すると、その日のマスに色が付きます。`}マスにカーソルを合わせる(またはタップする)と日付と回数が出ます。</p>
       <div class="heat-wrap">
         <div class="heat-grid" role="img" aria-label="直近${WEEKS}週間の学習記録。学習した日は${active}日です。">
           <span class="heat-month"></span>${monthCells.join(``)}

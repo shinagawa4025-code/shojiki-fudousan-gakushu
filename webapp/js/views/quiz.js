@@ -120,7 +120,7 @@ window.Views.quiz = (function () {
     let statusFilter = `all`;
 
     body.innerHTML = `
-      <div class="toolbar" style="flex-direction:column; align-items:stretch;">
+      <div class="toolbar toolbar-stack">
         <div class="chip-row" data-role="level-chips"></div>
         <div class="chip-row chip-row-scroll" data-role="topic-chips"></div>
         <div class="segmented" role="group" aria-label="表示する問題" data-role="status">
@@ -314,7 +314,7 @@ window.Views.quiz = (function () {
     const stats = Storage.get(`autoQuizStats`, {});
 
     body.innerHTML = `
-      <div class="toolbar" style="flex-direction:column; align-items:stretch;">
+      <div class="toolbar toolbar-stack">
         <div class="chip-row" data-role="level-chips"></div>
         <div class="chip-row chip-row-scroll" data-role="topic-chips"></div>
         <div class="chip-row" style="align-items:center;">
