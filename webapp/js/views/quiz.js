@@ -288,9 +288,13 @@ window.Views.quiz = (function () {
         bodyEl.querySelector(`[data-role="answer-area"]`).hidden = false;
         e.currentTarget.hidden = true;
       });
+      let lastResult = null;
       bodyEl.querySelectorAll(`[data-result]`).forEach((btn) => {
         btn.addEventListener(`click`, () => {
           const result = btn.dataset.result;
+          // 同じボタンの連打で記録・復習登録が重複しないように(答えの変更は可)
+          if (result === lastResult) return;
+          lastResult = result;
           recordFixedResult(q, result, history);
           bodyEl.querySelectorAll(`[data-result]`).forEach((b) => b.classList.toggle(`active`, b === btn));
           showResult(result);
@@ -312,6 +316,8 @@ window.Views.quiz = (function () {
     let totalQuestions = 0;
     let missedTermIds = new Set();
     const stats = Storage.get(`autoQuizStats`, {});
+    // 壊れたデータ(null等)の項目は除外
+    Object.keys(stats).forEach((k) => { if (!Storage.isPlainObject(stats[k])) delete stats[k]; });
 
     body.innerHTML = `
       <div class="toolbar toolbar-stack">
@@ -366,6 +372,7 @@ window.Views.quiz = (function () {
         ? QuizEngine.buildQuestionsFromTerms(Array.from(priorMissed).map((id) => AppIndex.termsById[id]).filter(Boolean))
         : QuizEngine.generateAutoQuiz(levelState.value, topicState.value, AUTO_COUNT, weakFirst ? stats : null);
       totalQuestions = questions.length;
+      updateScore();
       list.innerHTML = ``;
       if (!questions.length) {
         list.appendChild(UI.emptyState({ icon: `search`, title: `出題できる用語がありません`, body: `レベルやトピックの絞り込みを変えてみてください。` }));

@@ -81,12 +81,12 @@ window.Views.settings = (function () {
         const type = Stats.examType(t.examTypeId);
         return `
           <div class="target-row">
-            <button type="button" class="btn btn-icon known-toggle${t.primary ? ` is-known` : ``}" data-primary="${t.id}" aria-pressed="${!!t.primary}" aria-label="${t.primary ? `ホームに表示中` : `ホームに表示する`}">${UI.icon(t.primary ? `star-fill` : `star`)}</button>
+            <button type="button" class="btn btn-icon known-toggle${t.primary ? ` is-known` : ``}" data-primary="${UI.escapeHtml(t.id)}" aria-pressed="${!!t.primary}" aria-label="${t.primary ? `ホームに表示中` : `ホームに表示する`}">${UI.icon(t.primary ? `star-fill` : `star`)}</button>
             <div class="target-row-main">
               <div class="target-row-name">${UI.escapeHtml(t.name)}<span class="source-tag">${UI.escapeHtml(type ? type.shortName : `その他`)}</span></div>
               <div class="target-row-date">${DateUtil.toJapanese(t.date, true)}・<span class="nowrap">${d > 0 ? `あと${d}日` : d === 0 ? `今日` : `終了`}</span></div>
             </div>
-            <button type="button" class="btn btn-icon" data-remove="${t.id}" aria-label="「${UI.escapeHtml(t.name)}」を削除">${UI.icon(`trash`)}</button>
+            <button type="button" class="btn btn-icon" data-remove="${UI.escapeHtml(t.id)}" aria-label="「${UI.escapeHtml(t.name)}」を削除">${UI.icon(`trash`)}</button>
           </div>`;
       }).join(``);
       targetList.querySelectorAll(`[data-primary]`).forEach((b) => b.addEventListener(`click`, () => {
@@ -151,8 +151,12 @@ window.Views.settings = (function () {
           if (!parsed || typeof parsed !== `object` || Array.isArray(parsed)) throw new Error(`invalid`);
           const keys = Object.keys(parsed);
           if (!keys.length) throw new Error(`empty`);
-          const ok = await UI.confirm(`${keys.length}件のデータ(${keys.join(`, `)})で現在のデータを上書きします。よろしいですか?`, { confirmLabel: `上書きする`, danger: true });
+          const ok = await UI.confirm(`${keys.length}件のデータ(${keys.map(UI.escapeHtml).join(`, `)})で現在のデータを上書きします。よろしいですか?`, { confirmLabel: `上書きする`, danger: true });
           if (!ok) { importInput.value = ``; return; }
+          // 「上書きして復元」: バックアップに無いキーも消してから書き込む(テーマ設定は残す)
+          Object.keys(localStorage)
+            .filter((k) => k.startsWith(PREFIX) && k !== `${PREFIX}themePreference` && !keys.includes(k.slice(PREFIX.length)))
+            .forEach((k) => localStorage.removeItem(k));
           keys.forEach((k) => Storage.set(k, parsed[k]));
           importStatus.hidden = false;
           importStatus.textContent = `インポートが完了しました。再読み込みすると反映されます。`;

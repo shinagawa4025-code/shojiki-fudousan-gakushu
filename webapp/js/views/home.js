@@ -187,7 +187,7 @@ window.Views.home = (function () {
   function examCard() {
     const card = document.createElement(`section`);
     card.className = `card`;
-    const history = Stats.examHistory().filter((e) => e && typeof e.score === `number`);
+    const history = Stats.examHistory().filter((e) => e && typeof e.score === `number` && typeof e.total === `number` && e.total > 0);
     const last = history[0];
     const best = history.reduce((m, e) => (!m || e.score / e.total > m.score / m.total ? e : m), null);
     const session = Storage.get(`examSession`, null);

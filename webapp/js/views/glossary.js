@@ -181,10 +181,12 @@ window.Views.glossary = (function () {
       }
 
       if (needsFullRenderForScroll) {
-        const target = grid.querySelector(`[data-term-id="${scrollTermId}"]`);
+        const target = grid.querySelector(`[data-term-id="${window.CSS && CSS.escape ? CSS.escape(scrollTermId) : scrollTermId}"]`);
+        // 直リンクの対象は最初の1回だけ開く(星やフィルタ操作のたびに戻らないように)
+        scrollTermId = null;
         if (target) {
           target.classList.add(`flipped`);
-          requestAnimationFrame(() => target.scrollIntoView({ behavior: `smooth`, block: `center` }));
+          requestAnimationFrame(() => UI.scrollIntoView(target));
         }
       }
     }

@@ -53,7 +53,11 @@ window.Srs = (function () {
 
   // 評価gを付けた後のカードを返す(元のカードは変更しない純粋関数)
   function nextCard(prev, g) {
-    const card = Object.assign(DEFAULT_CARD(), prev || {});
+    const card = Object.assign(DEFAULT_CARD(), Storage.isPlainObject(prev) ? prev : {});
+    // 壊れたインポートで文字列になっていても計算できるよう数値に揃える
+    card.ease = Number(card.ease) || 2.5;
+    card.interval = Number(card.interval) || 0;
+    card.reps = Number(card.reps) || 0;
     if (g === 1) { // もう一度
       card.reps = 0;
       card.interval = 0;

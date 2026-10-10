@@ -875,7 +875,7 @@ window.Views.exam = (function () {
       const ae = document.activeElement;
       const tag = (ae && ae.tagName) || ``;
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (ae && ae.isContentEditable)) return;
-      if (document.querySelector(`.modal-overlay, .sheet-backdrop`)) return;
+      if (document.querySelector(`.modal-overlay, .sheet-backdrop, .onb-overlay`)) return;
       const q = s.questions[s.current];
       if (/^[1-9]$/.test(e.key) && Number(e.key) <= q.choices.length) {
         e.preventDefault();

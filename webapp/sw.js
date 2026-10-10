@@ -1,7 +1,7 @@
 // Service Worker: オフライン閲覧対応(同一オリジンのみプリキャッシュ+ネットワークフォールバック)
 // ファイルを追加したら PRECACHE_URLS に追記し、デプロイ毎に CACHE_NAME を上げること
 // (1件でも存在しないURLがあるとインストールが失敗し、古いキャッシュのままになる)
-const CACHE_NAME = `shojiki-gakushu-v6`;
+const CACHE_NAME = `shojiki-gakushu-v7`;
 
 const PRECACHE_URLS = [
   `./`,
