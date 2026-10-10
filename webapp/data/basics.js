@@ -8,7 +8,7 @@ window.APP_DATA.basics = [
     relatedEpisodes: [] },
   { id: `basicA02`, name: `更新料・更新事務手数料`, aliases: [], level: `初級`, source: `general`, topicIds: [`topicA`], sources: [`src10`], lawRef: `最高裁判所平成23年7月15日判決(更新料条項の有効性)`,
     simpleExplanation: `契約更新時に借主が貸主(または管理会社)に支払う金銭で、地域や物件によって相場が異なる`,
-    deepDive: `更新料の支払い義務は契約書の特約で定められるもので法律上一律の義務ではなく、特約がなければ請求されない場合もある`,
+    deepDive: `更新料の支払い義務は契約書の特約(合意)で定められるもので法律上一律の義務ではなく、特約(合意)がなければ借主に支払義務はない`,
     relatedEpisodes: [`111-112`] },
   { id: `basicA03`, name: `入居審査(属性確認・年収基準)の流れ`, aliases: [`入居審査`], level: `初級`, source: `general`, topicIds: [`topicA`], sources: [`src01`],
     simpleExplanation: `申込後に収入・勤務先・連帯保証人などを貸主側が確認し、入居の可否を判断する手続き`,
