@@ -1,1 +1,229 @@
-/* ○×一問一答 */
+/* ○×一問一答(js/views/ox.js 専用) */
+
+/* スマホは全幅、PCは中央寄せの1カラム */
+.ox-view { max-width: 680px; margin-inline: auto; }
+
+/* ○×の記号(SVG)。○は success、×は danger */
+.ox-view .ox-glyph { display: inline-block; flex-shrink: 0; }
+.ox-view .ox-glyph-o { color: var(--color-success); }
+.ox-view .ox-glyph-x { color: var(--color-danger); }
+.ox-view .ox-glyph-inline { width: 1.2em; height: 1.2em; }
+
+/* ---------- トップ ---------- */
+.ox-view .ox-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.ox-view .ox-stats .stat-tile { padding: var(--sp-2) var(--sp-3); }
+.ox-view .ox-stats .stat-value { font-size: var(--fs-xl); }
+
+.ox-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+  color: var(--color-text);
+  font-size: var(--fs-md);
+  line-height: var(--lh-snug);
+}
+.ox-notice .icon { color: var(--color-warning); margin-top: 1px; }
+
+.ox-resume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  border: 2px solid var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.ox-resume-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  background: var(--color-primary-fill);
+  color: var(--color-on-primary);
+  flex-shrink: 0;
+}
+.ox-resume-main { flex: 1 1 160px; min-width: 0; }
+.ox-resume-title { margin: 0; font-weight: 700; color: var(--color-heading); line-height: var(--lh-snug); }
+.ox-resume-meta { margin: 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
+
+.ox-setup { padding: var(--sp-4) var(--sp-4) var(--sp-5); }
+.ox-setup-title { margin: 0; font-size: var(--fs-lg); }
+.ox-label { margin: var(--sp-4) 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); line-height: var(--lh-tight); }
+
+.ox-scope-chip { gap: var(--sp-2); padding: 0 var(--sp-2) 0 var(--sp-3); font-size: var(--fs-sm); }
+.ox-chip-count {
+  min-width: 24px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+}
+.ox-scope-chip[aria-pressed="true"] .ox-chip-count { background: var(--color-surface); color: var(--color-primary); }
+.ox-scope-chip:disabled { opacity: .5; cursor: not-allowed; }
+.ox-scope-chip:disabled:hover { border-color: var(--color-border-strong); color: var(--color-text); }
+
+/* 「間違えたことがある」が長いため、件数はラベルの下に */
+.ox-filter .segmented-item {
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0;
+  min-height: 48px;
+  padding: var(--sp-1) var(--sp-2);
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
+}
+.ox-filter .segmented-count { margin-left: 0; }
+.ox-count .segmented-item { flex: 1 1 0; min-height: 40px; }
+
+.ox-setup-note { margin: var(--sp-4) 0 var(--sp-3); font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
+.ox-setup-note.is-empty { color: var(--color-warning); font-weight: 500; }
+
+.ox-keys { margin: var(--sp-3) 0 0; text-align: center; font-size: var(--fs-xs); color: var(--color-text-muted); line-height: 2; }
+.ox-keys kbd {
+  font-family: var(--font-sans);
+  font-size: var(--fs-2xs);
+  padding: 0 5px;
+  border: 1px solid var(--color-border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+@media (hover: none), (pointer: coarse) { .ox-keys { display: none; } }
+
+/* ---------- 出題中 ---------- */
+.ox-run-label { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 500; line-height: var(--lh-snug); }
+
+.ox-stage { padding: var(--sp-4); border-radius: var(--radius-lg); margin-bottom: 0; }
+.ox-run-head { display: flex; align-items: center; gap: var(--sp-3); }
+.ox-run-count { font-size: var(--fs-lg); font-weight: 700; color: var(--color-heading); white-space: nowrap; line-height: 1; }
+.ox-run-count small { font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 500; }
+.ox-view .ox-quit { min-height: 40px; padding: 0 var(--sp-2); margin-right: calc(var(--sp-2) * -1); color: var(--color-text-muted); }
+.ox-view .ox-quit:hover { color: var(--color-text); background: var(--color-surface-muted); }
+
+.ox-q-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
+.ox-context { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
+.ox-statement { margin: var(--sp-2) 0 0; font-size: var(--fs-lg); font-weight: 500; line-height: var(--lh-body); color: var(--color-text); }
+.ox-statement:focus { outline: none; }
+
+/* ○ / × の大きなボタン(左右に二分) */
+.ox-answer-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin-top: var(--sp-5); }
+.ox-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-height: 96px;
+  padding: var(--sp-3) var(--sp-2);
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background var(--dur-1), border-color var(--dur-1), opacity var(--dur-2), transform var(--dur-1);
+}
+.ox-btn .ox-glyph { width: 44px; height: 44px; }
+.ox-btn:active:not(:disabled) { transform: translateY(1px); }
+.ox-btn-o:hover:not(:disabled) { border-color: var(--color-success); background: var(--color-success-bg); }
+.ox-btn-x:hover:not(:disabled) { border-color: var(--color-danger); background: var(--color-danger-bg); }
+.ox-btn:disabled { cursor: default; }
+.ox-btn:disabled:not(.is-answer):not(.is-wrong) { opacity: .4; }
+.ox-btn.is-answer { border-color: var(--color-success); background: var(--color-success-bg); box-shadow: inset 0 0 0 1px var(--color-success); }
+.ox-btn.is-wrong { border-color: var(--color-danger); background: var(--color-danger-bg); box-shadow: inset 0 0 0 1px var(--color-danger); }
+.ox-btn-tag {
+  margin-top: 2px;
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--color-on-primary);
+}
+.ox-btn.is-answer .ox-btn-tag { background: var(--color-success-fill); }
+.ox-btn.is-wrong .ox-btn-tag { background: var(--color-danger-fill); }
+
+/* 回答後の判定と解説 */
+.ox-view [data-role="result"] {
+  scroll-margin-top: calc(var(--app-bar-h) + var(--safe-top) + var(--sp-3));
+  scroll-margin-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--sp-3));
+}
+.ox-result {
+  margin-top: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  animation: fade-in var(--dur-2) var(--ease-out);
+}
+.ox-result.is-ok { border-color: var(--color-success); background: var(--color-success-bg); }
+.ox-result.is-ng { border-color: var(--color-danger); background: var(--color-danger-bg); }
+.ox-result-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-1) var(--sp-3); margin: 0; }
+.ox-verdict { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-lg); font-weight: 700; line-height: var(--lh-tight); }
+.ox-result.is-ok .ox-verdict { color: var(--color-success); }
+.ox-result.is-ng .ox-verdict { color: var(--color-danger); }
+.ox-truth { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-sm); color: var(--color-text); }
+.ox-truth-mark { display: inline-flex; align-items: center; gap: 2px; }
+.ox-note { margin: var(--sp-2) 0 0; font-size: var(--fs-md); line-height: var(--lh-body); color: var(--color-text); }
+.ox-note-label { font-weight: 700; }
+.ox-review { display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--color-text-muted); }
+.ox-links { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.ox-links .chip { min-height: 40px; background: var(--color-surface); color: var(--color-text); }
+.ox-next { margin-top: var(--sp-3); }
+
+/* 正解・不正解の一瞬の強調(動きを減らす設定では出さない) */
+@media (prefers-reduced-motion: no-preference) {
+  .ox-stage.ox-flash-ok { animation: ox-ring-ok 650ms var(--ease-out); }
+  .ox-stage.ox-flash-ng { animation: ox-ring-ng 650ms var(--ease-out); }
+  .ox-stage.ox-flash-ok .ox-btn.is-answer .ox-glyph { animation: ox-pop 360ms var(--ease-out); }
+  .ox-stage.ox-flash-ng .ox-btn.is-wrong { animation: shake-x var(--dur-3) var(--ease-std); }
+}
+@keyframes ox-ring-ok { from { box-shadow: 0 0 0 0 var(--color-success); } to { box-shadow: 0 0 0 14px transparent; } }
+@keyframes ox-ring-ng { from { box-shadow: 0 0 0 0 var(--color-danger); } to { box-shadow: 0 0 0 14px transparent; } }
+@keyframes ox-pop { 0% { transform: scale(.7); } 60% { transform: scale(1.15); } 100% { transform: none; } }
+
+/* ---------- 結果 ---------- */
+.ox-summary { padding: var(--sp-4) var(--sp-4) var(--sp-5); border-radius: var(--radius-lg); }
+.ox-summary-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-2); font-size: var(--fs-lg); }
+.ox-score { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); margin: 0 0 var(--sp-3); }
+.ox-score-value { font-size: var(--fs-display); font-weight: 700; color: var(--color-primary); line-height: 1; }
+.ox-score-of { font-size: var(--fs-base); font-weight: 700; color: var(--color-text); }
+.ox-score-pct { margin-left: auto; font-size: var(--fs-xl); font-weight: 700; color: var(--color-text-muted); }
+.ox-summary-note { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
+.ox-summary-actions { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-4); }
+
+.ox-section h3 { margin: var(--sp-6) 0 var(--sp-3); font-size: var(--fs-lg); }
+.ox-view .ox-cat-bars { margin: 0; }
+.ox-wrong-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.ox-view .ox-wrong-item { margin: 0; padding: var(--sp-3) var(--sp-4); border-left: 4px solid var(--color-danger); }
+.ox-wrong-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.ox-wrong-answer { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-sm); }
+.ox-wrong-text { margin: var(--sp-2) 0 0; font-size: var(--fs-base); line-height: var(--lh-body); }
+.ox-wrong-note { margin: var(--sp-2) 0 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--color-surface-muted); font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text); }
+.ox-wrong-item .link-btn { margin-top: var(--sp-1); min-height: 40px; font-size: var(--fs-sm); }
+.ox-all-correct { display: flex; align-items: center; gap: var(--sp-2); margin: 0; color: var(--color-success); font-weight: 700; }
+
+/* ---------- タブレット・PC ---------- */
+@media (min-width: 768px) {
+  .ox-stage { padding: var(--sp-5) var(--sp-6) var(--sp-6); }
+  .ox-statement { font-size: var(--fs-xl); }
+  .ox-btn { min-height: 112px; font-size: var(--fs-base); }
+  .ox-btn .ox-glyph { width: 52px; height: 52px; }
+  .ox-summary-actions { flex-direction: row; flex-wrap: wrap; }
+  .ox-summary-actions .btn { flex: 1 1 auto; }
+}
+@media (min-width: 1024px) {
+  .ox-view [data-role="result"] { scroll-margin-top: var(--sp-4); scroll-margin-bottom: var(--sp-4); }
+}

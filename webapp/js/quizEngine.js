@@ -173,7 +173,7 @@ window.QuizEngine = (function () {
   function fromFixedMc(item, opts) {
     opts = opts || {};
     if (!isMcItem(item)) return null;
-    const notes = Array.isArray(item.choiceNotes) && item.choiceNotes.length === 4 ? item.choiceNotes : null;
+    const notes = cleanNotes(item.choiceNotes);
     const truths = statementTruths(item);
     const choices = item.choices.map((text, i) => ({ text, correct: i === item.correctIndex, note: notes ? notes[i] : ``, truth: truths ? truths[i] : null }));
     return {
@@ -191,6 +191,12 @@ window.QuizEngine = (function () {
     };
   }
 
+  // choiceNotes を表示用に整える。先頭の「○:」「×:」は画面側で○×を表示するので取り除く
+  function cleanNotes(notes) {
+    if (!Array.isArray(notes) || notes.length !== 4) return null;
+    return notes.map((n) => String(n || ``).replace(/^\s*[○〇×✕]\s*[:：]\s*/, ``));
+  }
+
   // 正誤判定型(ask: 'correct' = 正しいものを選ぶ / 'incorrect' = 誤っているものを選ぶ)の各選択肢の正誤
   function statementTruths(item) {
     if (!isMcItem(item) || (item.ask !== `correct` && item.ask !== `incorrect`)) return null;
@@ -202,7 +208,7 @@ window.QuizEngine = (function () {
   function statementsFrom(item) {
     const truths = statementTruths(item);
     if (!truths) return [];
-    const notes = Array.isArray(item.choiceNotes) && item.choiceNotes.length === 4 ? item.choiceNotes : null;
+    const notes = cleanNotes(item.choiceNotes);
     return item.choices.map((text, i) => ({
       id: `${item.id}#${i}`,
       quizId: item.id,

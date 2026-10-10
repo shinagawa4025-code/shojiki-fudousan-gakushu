@@ -168,6 +168,20 @@ window.Views.home = (function () {
     let type = Stats.examType(typeId);
     if (!type || !Array.isArray(type.categories)) { typeId = `takken`; type = Stats.examType(`takken`); }
     const rows = Stats.byCategory(typeId, { compact: true });
+    // 正答率は弱点分析(○×・模擬試験を含む)と同じ数え方にそろえる。統合表示の分野(税・その他)は合算
+    const merge = type.compactMerge || {};
+    const totals = {};
+    try {
+      if (window.Analysis && Analysis.byCategory) {
+        Analysis.byCategory(typeId).forEach((r) => {
+          const key = merge[r.id] || r.id;
+          totals[key] = totals[key] || { correct: 0, attempts: 0 };
+          totals[key].correct += r.correct || 0;
+          totals[key].attempts += r.attempts || 0;
+        });
+      }
+    } catch (e) { /* 分析に失敗しても進捗バーは表示する */ }
+    const accuracyOf = (r) => (totals[r.id] ? (totals[r.id].attempts ? Math.round((totals[r.id].correct / totals[r.id].attempts) * 100) : null) : r.accuracy);
     card.innerHTML = `
       <div class="recommend-head">
         <h3 class="card-title" style="margin:0;">分野別の進捗</h3>
@@ -177,10 +191,34 @@ window.Views.home = (function () {
       <div class="cat-bars">
         ${rows.map((r) => `
           <div>
-            <div class="cat-bar-head"><span class="cat-bar-name">${esc(r.name)}${r.questions ? `<span class="topic-group-meta">(例年${r.questions}問)</span>` : ``}</span><span class="cat-bar-meta">${r.done}/${r.total}${r.accuracy != null ? `・正答率${r.accuracy}%` : ``}</span></div>
+            <div class="cat-bar-head"><span class="cat-bar-name">${esc(r.name)}${r.questions ? `<span class="topic-group-meta">(例年${r.questions}問)</span>` : ``}</span><span class="cat-bar-meta">${r.done}/${r.total}${accuracyOf(r) != null ? `・正答率${accuracyOf(r)}%` : ``}</span></div>
             <div class="progress-bar"><div class="progress-bar-fill" style="width:${r.pct}%"></div></div>
           </div>`).join(``)}
       </div>`;
+    return card;
+  }
+
+  // 弱点分析のまとめ(js/analysis.js)。回答がまだなければ出さない
+  function analysisCard() {
+    if (!window.Analysis || typeof Analysis.summary !== `function`) return null;
+    let s = null;
+    try { s = Analysis.summary(); } catch (e) { return null; }
+    if (!s || !s.hasData || s.mastery == null) return null;
+    const a = s.topStudyAction;
+    const card = document.createElement(`section`);
+    card.className = `card`;
+    card.innerHTML = `
+      <div class="recommend-head">
+        <h3 class="card-title" style="margin:0;">弱点分析</h3>
+        <a class="link-btn" href="#progress/weak">詳しく${ic(`chevron-right`, 16)}</a>
+      </div>
+      <p class="calc-note" style="margin:0 0 var(--sp-3);">${esc(s.examName)}の総合習熟度 <strong>${s.mastery}</strong>/100${s.focus ? `。いま伸ばしたい分野は<strong>${esc(s.focus.name)}</strong>(習熟度${s.focus.mastery}${s.focus.accuracy != null ? `・正答率${s.focus.accuracy}%` : ``})` : ``}</p>
+      ${a ? `
+        <a class="todo-item" href="${esc(a.nav)}">
+          <span class="todo-icon">${ic(a.icon || `lightbulb`)}</span>
+          <span class="todo-main"><span class="todo-title">${esc(a.title)}</span><span class="todo-sub">${esc(a.detail)}</span></span>
+          ${ic(`chevron-right`, 18)}
+        </a>` : ``}`;
     return card;
   }
 
@@ -267,7 +305,7 @@ window.Views.home = (function () {
     const grid = wrap.querySelector(`[data-role="grid"]`);
     const news = whatsNewCard();
     if (news) grid.appendChild(news);
-    [countdownCard(), todoCard(), streakCard(), categoryCard(), examCard(), continueCard()].forEach((c) => grid.appendChild(c));
+    [countdownCard(), todoCard(), streakCard(), analysisCard(), categoryCard(), examCard(), continueCard()].filter(Boolean).forEach((c) => grid.appendChild(c));
   }
 
   return { render, openTargetForm };
