@@ -101,6 +101,8 @@ window.Views.exam = (function () {
       choices: q.choices.map((c) => c.text),
       correctIndex: q.choices.findIndex((c) => c.correct),
       explanation: q.explanation || ``,
+      // 選択肢ごとの解説(4択の確認問題に choiceNotes がある場合のみ)
+      notes: q.choices.some((c) => c.note) ? q.choices.map((c) => c.note || ``) : null,
     };
   }
 
@@ -218,6 +220,7 @@ window.Views.exam = (function () {
       kind: w.kind, refId: w.refId, termId: w.termId || null, categoryId: w.categoryId || null,
       level: w.level || ``, type: w.type || ``, prompt: w.prompt || ``, stem: w.stem,
       choices: w.choices.slice(), correctIndex: w.correctIndex, explanation: w.explanation || ``,
+      notes: Array.isArray(w.notes) && w.notes.length === w.choices.length ? w.notes.slice() : null,
     }));
     return {
       v: 1,
@@ -304,6 +307,7 @@ window.Views.exam = (function () {
           no: i + 1, kind: q.kind, refId: q.refId, termId: q.termId || null, categoryId: q.categoryId || null,
           level: q.level || ``, type: q.type || ``, prompt: q.prompt || ``, stem: q.stem, choices: q.choices.slice(),
           correctIndex: q.correctIndex, chosen, explanation: q.explanation || ``,
+          notes: Array.isArray(q.notes) && q.notes.length === q.choices.length ? q.notes.slice() : null,
         });
       }
     });
@@ -1025,6 +1029,12 @@ window.Views.exam = (function () {
     }
   }
 
+  // 選択肢ごとの解説(あれば)
+  function noteOf(w, i) {
+    const n = Array.isArray(w.notes) ? w.notes[i] : ``;
+    return n ? `<span class="exam-choice-note">${esc(n)}</span>` : ``;
+  }
+
   function wrongItemHtml(w) {
     const chosen = Number.isInteger(w.chosen) && w.chosen >= 0 && w.chosen < w.choices.length ? w.chosen : null;
     const term = w.termId ? AppIndex.termsById[w.termId] : null;
@@ -1043,8 +1053,8 @@ window.Views.exam = (function () {
         ${w.prompt ? `<p class="exam-q-prompt">${esc(w.prompt)}</p>` : ``}
         <p class="exam-stem">${esc(w.stem)}</p>
         <dl class="exam-compare">
-          <div class="exam-compare-row is-yours"><dt>${ic(chosen === null ? `info` : `x-circle`, 16)}あなたの解答</dt><dd>${chosen === null ? `未回答` : `${chosen + 1}. ${esc(w.choices[chosen])}`}</dd></div>
-          <div class="exam-compare-row is-correct"><dt>${ic(`check-circle`, 16)}正解</dt><dd>${w.correctIndex + 1}. ${esc(w.choices[w.correctIndex])}</dd></div>
+          <div class="exam-compare-row is-yours"><dt>${ic(chosen === null ? `info` : `x-circle`, 16)}あなたの解答</dt><dd>${chosen === null ? `未回答` : `${chosen + 1}. ${esc(w.choices[chosen])}${noteOf(w, chosen)}`}</dd></div>
+          <div class="exam-compare-row is-correct"><dt>${ic(`check-circle`, 16)}正解</dt><dd>${w.correctIndex + 1}. ${esc(w.choices[w.correctIndex])}${noteOf(w, w.correctIndex)}</dd></div>
         </dl>
         ${showExplain ? `<p class="quiz-explanation"><strong>解説</strong> ${esc(w.explanation)}</p>` : ``}
         ${links.length ? `<div class="chip-row exam-wrong-links">${links.join(``)}</div>` : ``}

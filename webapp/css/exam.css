@@ -257,3 +257,5 @@ body.exam-active .subnav { display: none; }
   .exam-side { display: block; position: sticky; top: calc(var(--sp-10) + var(--sp-4)); max-height: calc(100vh - var(--sp-10) - var(--sp-6)); overflow-y: auto; }
   .exam-q-card { padding: var(--sp-6); }
 }
+/* 選択肢ごとの解説 */
+.exam-choice-note { display: block; margin-top: var(--sp-1); font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
