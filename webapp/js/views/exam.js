@@ -820,7 +820,8 @@ window.Views.exam = (function () {
       if (navSheet) navSheet.close();
       const entry = finalizeSession(s, finishedAt);
       if (message) UI.toast(message);
-      Router.navigate(`#exam/result/${s.mode === `retry` ? `retry` : entry.id}`);
+      // 受験画面の履歴を結果で置き換える(戻るで「受験中の試験はありません」に戻らないように)
+      location.replace(`#exam/result/${s.mode === `retry` ? `retry` : entry.id}`);
     }
 
     async function submit() {

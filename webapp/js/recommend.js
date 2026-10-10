@@ -35,11 +35,23 @@ window.Recommend = (function () {
       };
     }
 
+    // 弱点分析のおすすめ(回答データがあるとき)
+    try {
+      const s = !opts.skipAnalysis && window.Analysis && Analysis.summary ? Analysis.summary() : null;
+      const a = s && s.hasData ? s.topStudyAction : null;
+      if (a && a.nav) return { title: a.title, detail: a.detail, ctaLabel: `はじめる`, nav: a.nav, icon: a.icon || `target`, tone: `info` };
+    } catch (e) { /* 分析に失敗したら従来のおすすめにする */ }
+
+    // 目標の試験があれば、その試験の分野に含まれるトピックから選ぶ(なければ全トピック)
+    const target = Stats.primaryTarget ? Stats.primaryTarget() : null;
+    const type = target ? Stats.examType(target.examTypeId) : null;
+    const allowed = type && Array.isArray(type.categories) ? new Set(type.categories.flatMap((c) => c.topicIds || [])) : null;
     const basicsProgress = Storage.get(`basicsProgress`, {});
     let weakestTopic = null;
     let weakestPct = 101;
     window.APP_DATA.topics.forEach((topic) => {
       if (!topic.basicIds.length) return;
+      if (allowed && allowed.size && !allowed.has(topic.id)) return;
       const done = topic.basicIds.filter((id) => basicsProgress[id] && basicsProgress[id].learned).length;
       const pct = Math.round((done / topic.basicIds.length) * 100);
       if (pct < weakestPct) { weakestPct = pct; weakestTopic = topic; }

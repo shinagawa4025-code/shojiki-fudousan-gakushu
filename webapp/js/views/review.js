@@ -148,17 +148,26 @@ window.Views.review = (function () {
       const hints = {};
       const pv = Srs.preview(term.id);
       [1, 2, 3, 4].forEach((g) => { hints[g] = Srs.intervalLabel(pv[g]); });
-      const card = CardUi.buildFlipCard(term, {
-        known,
-        showGrading: true,
-        gradeHints: hints,
-        onGrade: (t, g) => doGrade(t, g, isNew),
-      });
+      // 評価ボタンはカードの外(下)に置く。裏面の説明が長い用語でもボタンが隠れないように
+      const card = CardUi.buildFlipCard(term, { known });
       if (isNew) {
         const head = card.querySelector(`.flip-face-tags`);
         if (head) head.insertAdjacentHTML(`afterbegin`, `<span class="badge badge-new">新規</span>`);
       }
       area.appendChild(card);
+      const gradeRow = document.createElement(`div`);
+      gradeRow.className = `grade-row review-grade-row`;
+      gradeRow.setAttribute(`role`, `group`);
+      gradeRow.setAttribute(`aria-label`, `覚えていたかを評価`);
+      const labels = { 1: [`grade-again`, `もう一度`], 2: [`grade-hard`, `難しい`], 3: [`grade-good`, `普通`], 4: [`grade-easy`, `簡単`] };
+      gradeRow.innerHTML = [1, 2, 3, 4].map((g) => `<button type="button" class="btn grade-btn ${labels[g][0]}" data-grade="${g}">${labels[g][1]}<small>${hints[g]}</small></button>`).join(``);
+      gradeRow.hidden = true;
+      gradeRow.querySelectorAll(`[data-grade]`).forEach((b) => b.addEventListener(`click`, () => doGrade(term, Number(b.dataset.grade), isNew)));
+      area.appendChild(gradeRow);
+      // 裏返したら評価ボタンを出す(表のままでは答えを見ずに評価できないように)
+      const syncGrade = () => { gradeRow.hidden = !card.classList.contains(`flipped`); };
+      if (window.MutationObserver) new MutationObserver(syncGrade).observe(card, { attributes: true, attributeFilter: [`class`] });
+      syncGrade();
       const flipBtn = card.querySelector(`.flip-card-front [data-role="flip"]`);
       if (flipBtn) flipBtn.focus({ preventScroll: true });
     }
@@ -230,7 +239,7 @@ window.Views.review = (function () {
       if (!card) return;
       if (/^[1-4]$/.test(e.key) && card.classList.contains(`flipped`)) {
         e.preventDefault();
-        const btn = card.querySelector(`[data-grade="${e.key}"]`);
+        const btn = area.querySelector(`.review-grade-row [data-grade="${e.key}"]`);
         if (btn) btn.click();
       } else if (e.key === ` ` && !e.target.closest(`button, a`)) {
         e.preventDefault();

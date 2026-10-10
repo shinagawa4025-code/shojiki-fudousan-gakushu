@@ -1418,3 +1418,6 @@ a.topic-card { text-decoration: none; color: inherit; }
 .cat-bar-meta { white-space: nowrap; flex-shrink: 0; }
 /* タッチ端末では小さいチップも40px以上に */
 @media (pointer: coarse) { .chip-small { min-height: 40px; } }
+/* 今日の復習: カードの下に置く評価ボタン */
+.review-grade-row { max-width: 460px; margin: var(--sp-3) auto 0; padding-top: 0; }
+.review-grade-row[hidden] { display: none; }

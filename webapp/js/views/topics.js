@@ -156,9 +156,9 @@ window.Views.topics = (function () {
         </div>
         <aside class="topic-rail" aria-label="このトピックの進捗">
           <div class="card" style="margin:0;">
-            <div class="stat-value">${stat.pct}<small>%</small></div>
-            <div class="stat-label">学習済み ${stat.done}/${stat.total}項目</div>
-            <div class="progress-bar" style="margin-top: var(--sp-2);"><div class="progress-bar-fill" style="width:${stat.pct}%"></div></div>
+            <div class="stat-value" data-role="rail-pct">${stat.pct}<small>%</small></div>
+            <div class="stat-label" data-role="rail-label">学習済み ${stat.done}/${stat.total}項目</div>
+            <div class="progress-bar" style="margin-top: var(--sp-2);"><div class="progress-bar-fill" data-role="rail-bar" style="width:${stat.pct}%"></div></div>
           </div>
           <div class="card card-compact" style="margin:0;">
             <div class="side-nav-heading" style="padding:0 0 var(--sp-2);">このページの内容</div>
@@ -178,6 +178,16 @@ window.Views.topics = (function () {
     function updateBasicsCount() {
       const done = topic.basicIds.filter((id) => basicsProgress[id] && basicsProgress[id].learned).length;
       basicsCount.textContent = `学習済み ${done}/${topic.basicIds.length}`;
+      // 右側の進捗(広い画面)も更新する
+      const st = Stats.byTopic().find((r) => r.topic.id === topic.id);
+      if (st) {
+        const pctEl = wrap.querySelector(`[data-role="rail-pct"]`);
+        const labelEl = wrap.querySelector(`[data-role="rail-label"]`);
+        const barEl = wrap.querySelector(`[data-role="rail-bar"]`);
+        if (pctEl) pctEl.innerHTML = `${st.pct}<small>%</small>`;
+        if (labelEl) labelEl.textContent = `学習済み ${st.done}/${st.total}項目`;
+        if (barEl) barEl.style.width = `${st.pct}%`;
+      }
     }
     updateBasicsCount();
     if (!topic.basicIds.length) {
@@ -247,7 +257,7 @@ window.Views.topics = (function () {
     // 用語フリップカード(作品由来+基礎知識)
     const termGrid = wrap.querySelector(`[data-role="term-grid"]`);
     const termsToShow = termIds.map((termId) => AppIndex.termsById[termId]).filter(Boolean);
-    renderPaged(termGrid, termsToShow, (term) => CardUi.buildFlipCard(term, { known }), 12, `語`);
+    renderPaged(termGrid, termsToShow, (term) => CardUi.buildFlipCard(term, { known, onToggleKnown: () => updateBasicsCount() }), 12, `語`);
     if (!termIds.length) termGrid.appendChild(UI.emptyState({ icon: `layers`, title: `用語は準備中です` }));
 
     // 正直不動産の具体例
