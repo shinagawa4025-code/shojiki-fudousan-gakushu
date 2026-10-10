@@ -1,16 +1,209 @@
 /* 計算機(js/views/calculators.js 専用) */
-.calc-card { margin-top: var(--sp-3); }
-.calc-card-title { margin: 0 0 var(--sp-2); font-size: var(--fs-lg); }
-.calc-field-grid { display: flex; flex-direction: column; gap: var(--sp-3); margin: var(--sp-3) 0; max-width: 440px; }
+
+/* 分類(セグメント)と計算機チップ */
+.calculators-view .calc-groups { margin: var(--sp-4) 0 var(--sp-3); }
+.calculators-view .calc-groups .segmented-item { min-height: 40px; }
+.calculators-view .calc-chips { margin-bottom: var(--sp-4); }
+.calculators-view .calc-chips .chip { flex-shrink: 0; }
+.calculators-view .calc-chips[hidden] { display: none; }
+
+/* 見出し */
+.calc-head { display: flex; gap: var(--sp-3); align-items: flex-start; margin-bottom: var(--sp-4); }
+.calc-head-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  display: grid;
+  place-items: center;
+}
+.calc-head-text { min-width: 0; }
+.calc-title { margin: 0 0 var(--sp-1); font-size: var(--fs-xl); line-height: var(--lh-tight); color: var(--color-heading); }
+.calc-desc { margin: 0; font-size: var(--fs-md); color: var(--color-text-muted); line-height: var(--lh-snug); }
+
+/* レイアウト: スマホは縦積み、デスクトップは左フォーム・右結果 */
+.calc-layout { display: grid; gap: var(--sp-4); align-items: start; }
+.calc-layout > * { min-width: 0; }
+.calc-form-card { margin: 0; }
+.calc-results { display: flex; flex-direction: column; gap: var(--sp-3); }
+.calc-results > .card { margin: 0; }
+
+/* 入力フォーム */
+.calc-form { display: flex; flex-direction: column; gap: var(--sp-3); }
 .calc-field { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 500; }
-.calc-field-checkbox { flex-direction: row; align-items: center; font-size: var(--fs-md); gap: var(--sp-2); min-height: 40px; color: var(--color-text); }
-.calc-field-checkbox input { width: 18px; height: 18px; accent-color: var(--color-primary-fill); }
-.calc-result-grid { display: flex; flex-wrap: wrap; gap: var(--sp-5); margin-top: var(--sp-4); }
-.calc-result-col { flex: 1 1 200px; }
-.calc-result-col h4 { margin: 0 0 var(--sp-2); }
-.calc-disclaimer { font-size: var(--fs-xs); color: var(--color-text-muted); margin-top: var(--sp-4); line-height: var(--lh-snug); }
-.calc-note { font-size: var(--fs-sm); color: var(--color-text-muted); }
+.calc-field[hidden], .calc-check[hidden] { display: none; }
+.calc-field-label { color: var(--color-text); line-height: var(--lh-snug); }
+.calc-field-unit { color: var(--color-text-muted); font-weight: 400; margin-left: 2px; }
+.calc-input-wrap { position: relative; display: flex; align-items: center; }
+.calc-field .calc-input-wrap input[type="text"] { padding-right: 4.5em; font-variant-numeric: tabular-nums; }
+.calc-field input:focus, .calc-field select:focus { outline: none; border-color: var(--color-focus); box-shadow: 0 0 0 3px var(--color-primary-soft); }
+.calc-unit {
+  position: absolute;
+  right: var(--sp-3);
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  pointer-events: none;
+}
+.calc-hint, .calc-conv { font-size: var(--fs-xs); color: var(--color-text-muted); font-weight: 400; }
+.calc-conv { font-variant-numeric: tabular-nums; min-height: 1em; }
+.calc-conv:empty { display: none; }
+.calc-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-height: 40px;
+  padding: var(--sp-2) 0;
+  font-size: var(--fs-md);
+  color: var(--color-text);
+  line-height: var(--lh-snug);
+  cursor: pointer;
+}
+.calc-check input { flex-shrink: 0; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--color-primary-fill); }
+.calc-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--color-border);
+}
+.calc-live-hint { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); color: var(--color-text-muted); }
+
+/* 結果カード */
+.calc-result-card { display: flex; flex-direction: column; gap: var(--sp-3); }
+.calc-result-title { margin: 0; font-size: var(--fs-base); color: var(--color-heading); }
+.calc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-2); }
+.calc-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  min-width: 0;
+}
+.calc-stat.is-primary { background: var(--color-primary-soft); }
+.calc-stats:has(> :nth-child(3)) > .calc-stat.is-primary { grid-column: 1 / -1; }
+.calc-stat .stat-value { overflow-wrap: anywhere; }
+.calc-stat:not(.is-primary) .stat-value { font-size: var(--fs-xl); color: var(--color-heading); }
+.calc-stat-sub { font-size: var(--fs-xs); color: var(--color-text-muted); }
+.calc-empty { flex-direction: row; align-items: center; color: var(--color-text-muted); }
+.calc-empty p { margin: 0; }
+
+/* 内訳表 */
+.calc-table { width: 100%; border-collapse: collapse; font-size: var(--fs-md); }
+.calc-table th, .calc-table td { padding: var(--sp-2) 0; border-bottom: 1px solid var(--color-border); vertical-align: top; line-height: var(--lh-snug); }
+.calc-table th { text-align: left; font-weight: 400; color: var(--color-text-muted); padding-right: var(--sp-3); }
+.calc-table td { text-align: right; font-variant-numeric: tabular-nums; color: var(--color-text); white-space: nowrap; }
+.calc-table tr.is-total th, .calc-table tr.is-total td { font-weight: 700; color: var(--color-heading); border-top: 2px solid var(--color-border-strong); }
+.calc-table tr.is-good td { color: var(--color-success); }
+.calc-table tr.is-muted td, .calc-table tr.is-muted th { color: var(--color-text-muted); }
+.calc-table tr:last-child th, .calc-table tr:last-child td { border-bottom: none; }
+.calc-table-scroll { overflow-x: auto; }
+.calc-table-3 th, .calc-table-3 td { padding-left: var(--sp-2); }
+.calc-table-3 th:first-child { padding-left: 0; }
+.calc-table-3 thead th { font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); text-align: right; }
+.calc-table-3 thead th:first-child { text-align: left; }
+.calc-table-3 tr.is-hit th, .calc-table-3 tr.is-hit td { background: var(--color-primary-soft); color: var(--color-heading); font-weight: 700; }
+.calc-table tr.is-wrap td { white-space: normal; }
+
+@media (max-width: 480px) {
+  /* 4分類をスマホ幅に収める */
+  .calculators-view .calc-groups .segmented-item { padding: 0 var(--sp-2); }
+  .calculators-view .calc-groups .segmented-item .icon { display: none; }
+}
+
+/* 「詳しく」リンク(購入諸費用まとめ) */
+.calc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  margin-left: var(--sp-1);
+  padding: 0 var(--sp-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-primary);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.calc-link:hover { background: var(--color-primary-soft); }
+.calc-table th:has(.calc-link) { padding-top: 0; padding-bottom: 0; }
+.calc-table th:has(.calc-link) + td { vertical-align: middle; }
+
+/* 計算式 */
+.calc-formula {
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--color-surface-muted);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+.calc-formula p { margin: var(--sp-1) 0 0; font-variant-numeric: tabular-nums; }
+.calc-formula-label { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); font-weight: 700; color: var(--color-primary); }
+
+/* 注記・要件 */
+.calc-notes { margin: 0; padding-left: 1.2em; font-size: var(--fs-sm); color: var(--color-text); line-height: var(--lh-snug); }
+.calc-notes li + li { margin-top: var(--sp-1); }
+.calc-details { border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 0 var(--sp-3); font-size: var(--fs-sm); }
+.calc-details summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; font-weight: 700; color: var(--color-heading); }
+.calc-details ul { margin: 0 0 var(--sp-3); padding-left: 1.2em; line-height: var(--lh-snug); }
+
+/* 注意バナー */
+.calc-alert {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  padding: var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+.calc-alert > .icon { flex-shrink: 0; margin-top: 1px; }
+.calc-alert-warning { background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid var(--color-warning); }
+.calc-alert-warning strong { color: inherit; }
+.calc-alert-info { background: var(--color-primary-soft); color: var(--color-text); }
+
+/* 根拠と適用期限 */
+.calc-basis { padding-top: var(--sp-2); border-top: 1px dashed var(--color-border-strong); font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
+.calc-basis-title { display: flex; align-items: center; gap: var(--sp-1); margin: 0 0 var(--sp-2); font-weight: 700; color: var(--color-text); }
+.calc-basis ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.calc-basis li { display: flex; flex-direction: column; gap: 1px; }
+.calc-basis-name { color: var(--color-text); }
+.calc-basis-name strong { color: var(--color-heading); }
+.calc-basis-note { color: var(--color-text-muted); }
+.calc-basis a { color: var(--color-accent); display: inline-flex; align-items: center; gap: 2px; min-height: 24px; overflow-wrap: anywhere; }
+
+.calc-disclaimer {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--sp-4);
+  line-height: var(--lh-snug);
+}
+.calc-disclaimer > .icon { flex-shrink: 0; margin-top: 1px; }
 
 @media (min-width: 1024px) {
-  .calc-field-grid { max-width: 480px; }
+  .calc-layout { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: var(--sp-5); }
+  .calc-results {
+    position: sticky;
+    top: var(--sp-5);
+    max-height: calc(100vh - var(--sp-5) * 2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: var(--sp-1);
+    scrollbar-width: thin;
+  }
 }
