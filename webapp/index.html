@@ -2,52 +2,69 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>不動産学習サイト</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%231e3a5f'/%3E%3Cpath d='M20 55 L50 28 L80 55 M28 48 V78 H72 V48' stroke='%23ffffff' stroke-width='7' fill='none' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>不動産学習</title>
+  <meta name="description" content="宅建士・税理士試験の学習にも使える、不動産の基礎から法令・税務までを学べる学習サイト(非公式)">
+  <link rel="icon" type="image/svg+xml" href="icons/logo.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="theme-color" content="#1e3a5f">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="不動産学習">
-  <link rel="stylesheet" href="css/style.css">
   <script>
+    // 描画前にテーマを確定してちらつきを防ぐ(theme.js と同じ判定)
     (function () {
+      var theme = `light`;
       try {
         var pref = JSON.parse(localStorage.getItem(`shojikiLearn.v1.themePreference`));
-        if (pref === `light` || pref === `dark`) document.documentElement.setAttribute(`data-theme`, pref);
-      } catch (e) { /* 初回起動時はキー未設定のため無視 */ }
+        if (pref === `light` || pref === `dark`) theme = pref;
+        else if (window.matchMedia && window.matchMedia(`(prefers-color-scheme: dark)`).matches) theme = `dark`;
+      } catch (e) {
+        if (window.matchMedia && window.matchMedia(`(prefers-color-scheme: dark)`).matches) theme = `dark`;
+      }
+      document.documentElement.setAttribute(`data-theme`, theme);
     })();
   </script>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/calculators.css">
+  <link rel="stylesheet" href="css/exam.css">
+  <link rel="stylesheet" href="css/features.css">
 </head>
 <body>
-  <header class="app-header">
-    <h1>不動産学習サイト</h1>
-    <div class="global-search-wrap">
-      <input type="search" id="global-search-input" class="global-search-input" placeholder="全体を検索…" aria-label="サイト全体検索" autocomplete="off">
-      <button type="button" id="theme-toggle-btn" class="theme-toggle-btn" aria-label="ダークモード切替" title="ダークモード切替"></button>
+  <header class="app-header" id="app-header">
+    <div class="app-bar">
+      <a class="brand" href="#home" aria-label="不動産学習 ホームへ">
+        <img class="brand-mark" src="icons/logo.svg" alt="" width="28" height="28">
+        <span class="brand-name">不動産学習</span>
+      </a>
+      <div class="app-bar-actions">
+        <button type="button" class="btn btn-icon" id="search-toggle-btn" aria-label="検索を開く" aria-expanded="false" aria-controls="global-search-wrap"></button>
+        <button type="button" class="btn btn-icon" id="theme-toggle-btn" aria-label="ダークモードに切り替え"></button>
+      </div>
     </div>
-    <nav class="tab-bar">
-      <button type="button" data-view="topics" onclick="Router.navigate('#topics')">学習トピック</button>
-      <button type="button" data-view="glossary" onclick="Router.navigate('#glossary')">用語集</button>
-      <button type="button" data-view="review" onclick="Router.navigate('#review')">今日の復習</button>
-      <button type="button" data-view="quiz" onclick="Router.navigate('#quiz')">クイズ</button>
-      <button type="button" data-view="calculators" onclick="Router.navigate('#calculators')">計算機</button>
-      <button type="button" data-view="sources" onclick="Router.navigate('#sources')">情報源</button>
-      <button type="button" data-view="summary" onclick="Router.navigate('#summary')">動画一覧</button>
-      <button type="button" data-view="settings" onclick="Router.navigate('#settings')">設定</button>
-    </nav>
+    <div class="global-search-wrap" id="global-search-wrap" role="search">
+      <div class="global-search-field" id="global-search-field">
+        <input type="search" id="global-search-input" class="global-search-input" placeholder="用語・トピック・問題を検索" aria-label="サイト全体検索" autocomplete="off" enterkeyhint="search">
+        <kbd class="global-search-kbd" aria-hidden="true">/</kbd>
+      </div>
+    </div>
+    <nav class="side-nav" id="side-nav" aria-label="メインメニュー"></nav>
   </header>
 
-  <div id="global-search-results" class="global-search-results" hidden></div>
+  <div id="global-search-results" class="global-search-results" role="listbox" aria-label="検索結果" hidden></div>
 
-  <main id="view-root"></main>
+  <main id="view-root" tabindex="-1"></main>
 
   <footer class="app-footer">
     このサイトは個人が学習用に作った非公式サイトで、「正直不動産」の作品・公式チャンネルとは関係ありません。<br>
-    「正直不動産」エピソードの出典: <a href="https://www.youtube.com/@shojiki_comicanime/videos" target="_blank" rel="noopener">正直不動産【公式】チャンネル</a>(2026年10月4日時点の全119本)
+    「正直不動産」エピソードの出典: <a href="https://www.youtube.com/@shojiki_comicanime/videos" target="_blank" rel="noopener">正直不動産【公式】チャンネル</a>(2026年10月4日時点の全119本)<br>
+    法令・税制は改正されることがあります。実際の取引や申告は必ず最新の一次情報と専門家に確認してください。
   </footer>
+
+  <nav class="bottom-nav" id="bottom-nav" aria-label="メインメニュー"></nav>
 
   <script src="data/episodes.js"></script>
   <script src="data/specials.js"></script>
@@ -57,25 +74,40 @@
   <script src="data/laws.js"></script>
   <script src="data/quiz.js"></script>
   <script src="data/sources.js"></script>
+  <script src="data/exams.js"></script>
   <script src="js/storage.js"></script>
+  <script src="js/dates.js"></script>
+  <script src="js/icons.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/dataIndex.js"></script>
   <script src="js/search.js"></script>
   <script src="js/router.js"></script>
+  <script src="js/nav.js"></script>
   <script src="js/theme.js"></script>
   <script src="js/tts.js"></script>
   <script src="js/srs.js"></script>
   <script src="js/streak.js"></script>
+  <script src="js/stats.js"></script>
   <script src="js/recommend.js"></script>
+  <script src="js/bookmarkStore.js"></script>
+  <script src="js/quizEngine.js"></script>
+  <script src="js/diagrams.js"></script>
   <script src="js/cardUi.js"></script>
+  <script src="js/onboarding.js"></script>
+  <script src="js/views/home.js"></script>
   <script src="js/views/topics.js"></script>
   <script src="js/views/glossary.js"></script>
+  <script src="js/views/bookmarks.js"></script>
+  <script src="js/views/figures.js"></script>
   <script src="js/views/review.js"></script>
-  <script src="js/views/summary.js"></script>
   <script src="js/views/quiz.js"></script>
+  <script src="js/views/exam.js"></script>
+  <script src="js/views/progress.js"></script>
+  <script src="js/views/summary.js"></script>
   <script src="js/views/calculators.js"></script>
   <script src="js/views/sources.js"></script>
   <script src="js/views/settings.js"></script>
+  <script src="js/views/more.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

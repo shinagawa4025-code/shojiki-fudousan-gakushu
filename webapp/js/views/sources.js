@@ -19,14 +19,13 @@ window.Views.sources = (function () {
 
     categories.forEach((category) => {
       const section = document.createElement(`div`);
-      section.className = `source-category`;
-      section.innerHTML = `<h3>${category}</h3><div class="source-row-grid" data-role="rows"></div>`;
+      section.innerHTML = `<h3 class="source-category">${category}</h3><div class="source-row-grid" data-role="rows"></div>`;
       const rowsEl = section.querySelector(`[data-role="rows"]`);
       window.APP_DATA.sources.filter((src) => src.category === category).forEach((src) => {
         const row = document.createElement(`div`);
-        row.className = `law-row source-row`;
+        row.className = `card card-compact law-row source-row`;
         row.innerHTML = `
-          <div class="law-name"><a href="${src.url}" target="_blank" rel="noopener">${src.orgName} ↗</a></div>
+          <div class="law-name"><a href="${src.url}" target="_blank" rel="noopener">${src.orgName}${UI.icon(`external`, { size: 14 })}</a></div>
           <div class="law-desc">${src.description}</div>
         `;
         rowsEl.appendChild(row);

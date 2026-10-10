@@ -1,11 +1,16 @@
 // Service Worker: オフライン閲覧対応(同一オリジンのみプリキャッシュ+ネットワークフォールバック)
-const CACHE_NAME = `shojiki-gakushu-v5`;
+// ファイルを追加したら PRECACHE_URLS に追記し、デプロイ毎に CACHE_NAME を上げること
+// (1件でも存在しないURLがあるとインストールが失敗し、古いキャッシュのままになる)
+const CACHE_NAME = `shojiki-gakushu-v6`;
 
 const PRECACHE_URLS = [
   `./`,
   `./index.html`,
   `./manifest.json`,
   `./css/style.css`,
+  `./css/calculators.css`,
+  `./css/exam.css`,
+  `./css/features.css`,
   `./data/episodes.js`,
   `./data/specials.js`,
   `./data/terms.js`,
@@ -14,28 +19,45 @@ const PRECACHE_URLS = [
   `./data/laws.js`,
   `./data/quiz.js`,
   `./data/sources.js`,
+  `./data/exams.js`,
   `./js/storage.js`,
+  `./js/dates.js`,
+  `./js/icons.js`,
   `./js/ui.js`,
   `./js/dataIndex.js`,
   `./js/search.js`,
   `./js/router.js`,
+  `./js/nav.js`,
   `./js/theme.js`,
   `./js/tts.js`,
   `./js/srs.js`,
   `./js/streak.js`,
+  `./js/stats.js`,
   `./js/recommend.js`,
+  `./js/bookmarkStore.js`,
+  `./js/quizEngine.js`,
+  `./js/diagrams.js`,
   `./js/cardUi.js`,
+  `./js/onboarding.js`,
   `./js/app.js`,
+  `./js/views/home.js`,
   `./js/views/topics.js`,
   `./js/views/glossary.js`,
+  `./js/views/bookmarks.js`,
+  `./js/views/figures.js`,
   `./js/views/review.js`,
-  `./js/views/summary.js`,
   `./js/views/quiz.js`,
+  `./js/views/exam.js`,
+  `./js/views/progress.js`,
+  `./js/views/summary.js`,
   `./js/views/calculators.js`,
   `./js/views/sources.js`,
   `./js/views/settings.js`,
+  `./js/views/more.js`,
+  `./icons/logo.svg`,
   `./icons/icon-192.png`,
   `./icons/icon-512.png`,
+  `./icons/icon-maskable-512.png`,
   `./icons/apple-touch-icon.png`,
 ];
 
@@ -43,7 +65,10 @@ self.addEventListener(`install`, (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => Promise.all(
-        PRECACHE_URLS.map((url) => fetch(url, { cache: `reload` }).then((res) => cache.put(url, res)))
+        PRECACHE_URLS.map((url) => fetch(url, { cache: `reload` }).then((res) => {
+          if (!res.ok) throw new Error(`precache failed: ${url} (${res.status})`);
+          return cache.put(url, res);
+        }))
       ))
       .then(() => self.skipWaiting())
   );
@@ -64,7 +89,7 @@ self.addEventListener(`fetch`, (event) => {
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.match(req).then((cached) => {
+    caches.match(req, { ignoreSearch: true }).then((cached) => {
       const networkFetch = fetch(req).then((res) => {
         if (res && res.status === 200) {
           const copy = res.clone();

@@ -2,20 +2,24 @@
 window.Srs = (function () {
   const DEFAULT_CARD = () => ({ ease: 2.5, interval: 0, reps: 0, dueDate: todayStr(), lastGrade: null });
 
+  // 日付計算はローカル日付基準のDateUtilに委譲(関数名は既存呼び出しとの互換のため維持)
   function todayStr() {
-    return new Date().toISOString().slice(0, 10);
+    return DateUtil.today();
   }
 
   function addDays(dateStr, days) {
-    const d = new Date(dateStr + `T00:00:00`);
-    d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
+    return DateUtil.addDays(dateStr, days);
+  }
+
+  function getAllCards() {
+    const cards = Storage.get(`srsCards`, {});
+    return cards && typeof cards === `object` && !Array.isArray(cards) ? cards : {};
   }
 
   function migrateIfNeeded() {
     const migrated = Storage.get(`srsMigrated`, false);
     if (migrated) return;
-    const cards = Storage.get(`srsCards`, {});
+    const cards = getAllCards();
     const known = Storage.get(`flashcards`, {});
     Object.keys(known).forEach((termId) => {
       if (known[termId] && !cards[termId]) {
@@ -27,8 +31,7 @@ window.Srs = (function () {
   }
 
   function getCard(termId) {
-    const cards = Storage.get(`srsCards`, {});
-    return cards[termId] || null;
+    return getAllCards()[termId] || null;
   }
 
   function isDue(termId) {
@@ -41,8 +44,15 @@ window.Srs = (function () {
     return allTermIds.filter(isDue);
   }
 
+  // 作成済みカードのうち期限到来分のみ(未学習の新規は含まない)
+  function getReviewDueIds() {
+    const cards = getAllCards();
+    const today = todayStr();
+    return Object.keys(cards).filter((id) => cards[id] && cards[id].dueDate <= today);
+  }
+
   function grade(termId, g) {
-    const cards = Storage.get(`srsCards`, {});
+    const cards = getAllCards();
     const card = cards[termId] || DEFAULT_CARD();
 
     if (g === 1) { // もう一度
@@ -71,8 +81,9 @@ window.Srs = (function () {
     cards[termId] = card;
     Storage.set(`srsCards`, cards);
     if (window.Streak) window.Streak.recordToday();
+    window.dispatchEvent(new CustomEvent(`srs:change`, { detail: { termId, grade: g } }));
     return card;
   }
 
-  return { migrateIfNeeded, getCard, isDue, getDueTermIds, grade, todayStr, addDays };
+  return { migrateIfNeeded, getCard, getAllCards, isDue, getDueTermIds, getReviewDueIds, grade, todayStr, addDays };
 })();

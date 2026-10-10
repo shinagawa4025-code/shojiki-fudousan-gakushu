@@ -78,8 +78,8 @@ window.Views.summary = (function () {
         ${ep.termsNote ? `<p class="terms-note">${ep.termsNote}</p>` : ``}
         ${chipsHtml ? `<div class="episode-chip-row">${chipsHtml}</div>` : ``}
         <div class="video-links">
-          <a href="${ep.videos.zenpen.url}" target="_blank" rel="noopener" class="btn">▶ ${ep.videos.zenpen.label}</a>
-          <a href="${ep.videos.kouhen.url}" target="_blank" rel="noopener" class="btn">▶ ${ep.videos.kouhen.label}</a>
+          <a href="${ep.videos.zenpen.url}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">${UI.icon(`play`, { size: 16 })}${ep.videos.zenpen.label}</a>
+          <a href="${ep.videos.kouhen.url}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">${UI.icon(`play`, { size: 16 })}${ep.videos.kouhen.label}</a>
         </div>
       `;
 
@@ -97,7 +97,7 @@ window.Views.summary = (function () {
         <div class="card-header"><span class="episode-theme">${sp.title}</span></div>
         <p class="episode-summary">${sp.description}</p>
         <p class="special-duration">${sp.duration}</p>
-        <div class="video-links"><a href="${sp.url}" target="_blank" rel="noopener" class="btn">▶ 視聴</a></div>
+        <div class="video-links"><a href="${sp.url}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">${UI.icon(`play`, { size: 16 })}視聴</a></div>
       `;
       return card;
     }
