@@ -10,17 +10,90 @@
   "background_color": "#f3f5f7",
   "theme_color": "#1e3a5f",
   "lang": "ja",
-  "categories": ["education"],
+  "categories": [
+    "education"
+  ],
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "icons/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ],
   "shortcuts": [
-    { "name": "今日の復習", "short_name": "復習", "url": "./index.html#review", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "模擬試験", "short_name": "模擬試験", "url": "./index.html#exam", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "クイズ", "short_name": "クイズ", "url": "./index.html#quiz", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "計算機", "short_name": "計算機", "url": "./index.html#calculators", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+    {
+      "name": "今日の復習",
+      "short_name": "復習",
+      "url": "./index.html#review",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "模擬試験",
+      "short_name": "模擬試験",
+      "url": "./index.html#exam",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "○×一問一答",
+      "short_name": "○×",
+      "url": "./index.html#ox",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "クイズ",
+      "short_name": "クイズ",
+      "url": "./index.html#quiz",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "計算機",
+      "short_name": "計算機",
+      "url": "./index.html#calculators",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }

@@ -130,7 +130,10 @@ window.CardUi = (function () {
     }
     syncFaces();
     if (window.MutationObserver) new MutationObserver(syncFaces).observe(card, { attributes: true, attributeFilter: [`class`] });
+    // 作った直後のタップは裏返さない(前のカードの評価ボタンを2回押したとき、次のカードの答えが見えてしまうため)
+    const createdAt = Date.now();
     card.addEventListener(`click`, (e) => {
+      if (Date.now() - createdAt < 400) return;
       const flipBtn = e.target.closest(`[data-role="flip"]`);
       if (flipBtn) { e.stopPropagation(); toggleFlip(e.detail === 0); return; }
       if (e.target.closest(interactive)) return;
@@ -141,8 +144,14 @@ window.CardUi = (function () {
     card.querySelectorAll(`[data-role="known-toggle"]`).forEach((btn) => {
       btn.addEventListener(`click`, (e) => {
         e.stopPropagation();
-        known[term.id] = !known[term.id];
-        Storage.set(`flashcards`, known);
+        // 別のタブでの変更を消さないよう、最新の値に反映してから保存する
+        const latest = Storage.get(`flashcards`, {});
+        latest[term.id] = !known[term.id];
+        if (!latest[term.id]) delete latest[term.id];
+        Object.keys(known).forEach((k) => { if (!(k in latest)) delete known[k]; });
+        Object.assign(known, latest);
+        if (!latest[term.id]) delete known[term.id];
+        Storage.set(`flashcards`, latest);
         if (window.Streak) Streak.recordToday();
         // 星はその場で塗り替える(一覧を作り直すとスクロール位置が飛ぶため、呼び出し側には通知だけする)
         const on = !!known[term.id];

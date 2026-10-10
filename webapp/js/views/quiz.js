@@ -167,6 +167,36 @@ window.Views.quiz = (function () {
       if (window.scrollY > top) window.scrollTo(0, Math.max(0, top));
     }
 
+    // 一度に全問を描画すると端末によっては数秒かかるため、30問ずつ表示して「もっと見る」で末尾に追加する
+    const PAGE = 30;
+    let currentQuestions = [];
+    let shownCount = 0;
+    let firstList = true;
+
+    function appendCards(from, to) {
+      const fragment = document.createDocumentFragment();
+      currentQuestions.slice(from, to).forEach((q) => fragment.appendChild(buildFixedCard(q, { history, onResult: handleResult, onGotoNg: gotoNg })));
+      list.appendChild(fragment);
+    }
+
+    function renderMore() {
+      const existing = list.nextElementSibling;
+      if (existing && existing.classList.contains(`load-more-btn`)) existing.remove();
+      if (shownCount >= currentQuestions.length) return;
+      const btn = document.createElement(`button`);
+      btn.type = `button`;
+      btn.className = `btn load-more-btn`;
+      btn.textContent = `もっと見る(残り${currentQuestions.length - shownCount}問)`;
+      btn.addEventListener(`click`, () => {
+        const next = Math.min(currentQuestions.length, shownCount + PAGE);
+        appendCards(shownCount, next);
+        shownCount = next;
+        if (shownCount >= currentQuestions.length) btn.remove();
+        else btn.textContent = `もっと見る(残り${currentQuestions.length - shownCount}問)`;
+      });
+      list.insertAdjacentElement(`afterend`, btn);
+    }
+
     function renderList() {
       list.innerHTML = ``;
       updateSummary();
@@ -185,9 +215,22 @@ window.Views.quiz = (function () {
           bookmark: { icon: `bookmark`, title: `保存した問題はありません`, body: `問題カード右上のブックマークで保存できます。` },
         };
         list.appendChild(UI.emptyState(map[statusFilter] || { icon: `search`, title: `該当する問題がありません`, body: `レベルやトピックの絞り込みを変えてみてください。` }));
+        currentQuestions = [];
+        shownCount = 0;
+        renderMore();
         return;
       }
-      questions.forEach((q) => list.appendChild(buildFixedCard(q, { history, onResult: handleResult, onGotoNg: gotoNg })));
+      currentQuestions = questions;
+      // 直リンク(#quiz/q/<id>)の初回は、その問題まで表示する
+      let need = PAGE;
+      if (firstList && focusQuizId) {
+        const idx = questions.findIndex((q) => q.id === focusQuizId);
+        if (idx >= 0) need = Math.max(PAGE, idx + 5);
+      }
+      firstList = false;
+      shownCount = Math.min(questions.length, need);
+      appendCards(0, shownCount);
+      renderMore();
     }
 
     renderList();
@@ -203,10 +246,12 @@ window.Views.quiz = (function () {
   }
 
   function recordFixedResult(q, result, history) {
+    // 別のタブでの回答を消さないよう、最新の記録を読み直してから書き込む
+    Object.assign(history, getHistory());
     history[q.id] = result;
     Storage.set(`quizHistory`, history);
     if (window.Streak) Streak.recordToday();
-    if (result === `ng` && q.relatedTermId && AppIndex.termsById[q.relatedTermId]) Srs.grade(q.relatedTermId, 1);
+    if (result === `ng` && q.relatedTermId && AppIndex.termsById[q.relatedTermId]) Srs.grade(q.relatedTermId, 1, { silent: true });
   }
 
   // 確認問題のカード。opts: { history, onResult, onGotoNg }
@@ -235,7 +280,7 @@ window.Views.quiz = (function () {
       </div>
       <p class="quiz-question"><strong>Q.</strong> ${esc(q.question)}</p>
       <div data-role="body"></div>
-      <div class="result-badge-row" data-role="result-badge"></div>
+      <div class="result-badge-row" data-role="result-badge" role="status" aria-live="polite"></div>
     `;
     wireBookmark(card, `quiz:${q.id}`);
     const bodyEl = card.querySelector(`[data-role="body"]`);
@@ -273,7 +318,7 @@ window.Views.quiz = (function () {
           }
           // 選択肢ごとの解説(choiceNotes)があれば、表示順に ○/× 付きで並べる
           const hasNotes = mq.choices.some((c) => c.note);
-          const notesHtml = hasNotes ? `<ol class="choice-notes">${mq.choices.map((c, i) => `<li class="${c.correct ? `is-answer` : ``}"><span class="choice-notes-key">${i + 1}</span>${c.truth === true ? `<span class="ox-mark ox-o" aria-label="正しい">○</span>` : c.truth === false ? `<span class="ox-mark ox-x" aria-label="誤り">×</span>` : ``}<span>${esc(c.note || ``)}</span></li>`).join(``)}</ol>` : ``;
+          const notesHtml = hasNotes ? `<ol class="choice-notes">${mq.choices.map((c, i) => `<li class="${c.correct ? `is-answer` : ``}"><span class="choice-notes-key">${i + 1}</span>${c.truth === true ? `<span class="ox-mark ox-o" aria-hidden="true">○</span><span class="sr-only">正しい</span>` : c.truth === false ? `<span class="ox-mark ox-x" aria-hidden="true">×</span><span class="sr-only">誤り</span>` : ``}<span>${esc(c.note || ``)}</span></li>`).join(``)}</ol>` : ``;
           bodyEl.querySelector(`[data-role="explain"]`).innerHTML = `<p class="quiz-answer"><strong>正解: ${correctIdx + 1}</strong> ${esc(mq.explanation)}</p>${notesHtml}`;
           const result = choice.correct ? `ok` : `ng`;
           recordFixedResult(q, result, history);
@@ -420,11 +465,14 @@ window.Views.quiz = (function () {
     }
 
     function recordStat(termId, correct) {
+      // 別のタブでの記録を消さないよう、最新の値を読み直してから加算する
+      const latest = Storage.get(`autoQuizStats`, {});
+      Object.keys(latest).forEach((k) => { if (Storage.isPlainObject(latest[k])) stats[k] = latest[k]; });
       if (!stats[termId]) stats[termId] = { wrong: 0, correct: 0 };
-      stats[termId][correct ? `correct` : `wrong`]++;
+      stats[termId][correct ? `correct` : `wrong`] = (Number(stats[termId][correct ? `correct` : `wrong`]) || 0) + 1;
       Storage.set(`autoQuizStats`, stats);
       if (window.Streak) Streak.recordToday();
-      if (!correct) Srs.grade(termId, 1);
+      if (!correct) Srs.grade(termId, 1, { silent: true });
     }
 
     function buildAutoCard(q, num) {
@@ -440,7 +488,7 @@ window.Views.quiz = (function () {
         </div>
         <p class="quiz-question">${esc(q.stem)}</p>
         <div class="choice-list" role="group" aria-label="選択肢" data-role="choices"></div>
-        <div class="result-badge-row" data-role="after"></div>
+        <div class="result-badge-row" data-role="after" role="status" aria-live="polite"></div>
       `;
       const choiceList = card.querySelector(`[data-role="choices"]`);
       const after = card.querySelector(`[data-role="after"]`);

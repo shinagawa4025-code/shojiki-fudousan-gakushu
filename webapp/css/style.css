@@ -1404,3 +1404,17 @@ a.topic-card { text-decoration: none; color: inherit; }
   .choice-btn.correct:hover { background: var(--color-success-bg); border-color: var(--color-success); }
   .choice-btn.incorrect:hover { background: var(--color-danger-bg); border-color: var(--color-danger); }
 }
+/* トースト: 上部表示と閉じるボタン */
+.toast.toast-top { bottom: auto; top: calc(var(--app-bar-h) + var(--safe-top) + var(--sp-3)); }
+.toast .toast-close { width: 36px; height: 36px; min-height: 36px; padding: 0; background: transparent; color: inherit; }
+/* 用語集・クイズで絞り込み条件から外れたカード(読み上げ向けの補足は不要: 次の操作で一覧から外れる) */
+/* 裏面の見出しバッジ(長い用語名)が右上のボタンを押し出さないように */
+.flip-face-tags { min-width: 0; }
+.flip-card-back .flip-face-tags .badge { white-space: normal; }
+/* スマホではトピックのチップを1行の横スクロールに(.chip-row の折り返し指定より優先) */
+.chip-row.chip-row-scroll { flex-wrap: nowrap; }
+@media (min-width: 768px) { .chip-row.chip-row-scroll { flex-wrap: wrap; } }
+/* 件数(0/12など)の途中で改行しない */
+.cat-bar-meta { white-space: nowrap; flex-shrink: 0; }
+/* タッチ端末では小さいチップも40px以上に */
+@media (pointer: coarse) { .chip-small { min-height: 40px; } }

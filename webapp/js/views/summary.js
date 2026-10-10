@@ -58,7 +58,7 @@ window.Views.summary = (function () {
     renderList();
 
     if (param) {
-      const target = list.querySelector(`[data-episode-id="${param}"]`);
+      const target = list.querySelector(`[data-episode-id="${window.CSS && CSS.escape ? CSS.escape(param) : param}"]`);
       if (target) requestAnimationFrame(() => {
         target.scrollIntoView({ behavior: `smooth`, block: `center` });
         target.classList.add(`highlighted`);

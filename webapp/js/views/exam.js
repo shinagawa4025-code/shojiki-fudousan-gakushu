@@ -353,8 +353,8 @@ window.Views.exam = (function () {
     });
     if (window.Streak) Streak.recordToday();
     hist.unshift(entry);
-    Storage.set(HISTORY_KEY, hist.slice(0, HISTORY_MAX));
-    clearSession();
+    // 履歴を保存できなかった(容量不足など)ときは、結果を失わないよう受験中のデータを残しておく
+    if (Storage.set(HISTORY_KEY, hist.slice(0, HISTORY_MAX))) clearSession();
     return entry;
   }
 
@@ -787,8 +787,13 @@ window.Views.exam = (function () {
       if (top < 0 || top > window.innerHeight * 0.5) window.scrollTo(0, 0);
     }
 
+    let lastChoose = { i: -1, ci: -1, at: 0 };
     function choose(ci) {
       const i = s.current;
+      // 同じ選択肢をすぐに2回押した(ダブルタップ)ときは取り消さない
+      const now = Date.now();
+      if (s.answers[i] === ci && lastChoose.i === i && lastChoose.ci === ci && now - lastChoose.at < 450) return;
+      lastChoose = { i, ci, at: now };
       s.answers[i] = s.answers[i] === ci ? null : ci;
       // 作り直す前に、フォーカスが問題カード内にあったかを覚えておく(作り直すと元のボタンは消える)
       const ae = document.activeElement;
