@@ -23,7 +23,7 @@ window.APP_DATA.laws = {
   ],
   citations: [
     { label: `宅地建物取引業法関係(国土交通省)`, url: `https://www.mlit.go.jp/totikensangyo/const/1_6_bt_000266.html` },
-    { label: `品確法の10年保証について`, url: `https://www.reds.co.jp/p112525/` },
-    { label: `借地借家法32条 賃料増減額請求権`, url: `https://nao-lawoffice.jp/real-estate/columns/lease/2461/` },
+    { label: `住宅の品質確保の促進等に関する法律(e-Gov法令検索)`, url: `https://laws.e-gov.go.jp/law/411AC0000000081` },
+    { label: `借地借家法(e-Gov法令検索、32条=賃料増減額請求権)`, url: `https://laws.e-gov.go.jp/law/403AC0000000090` },
   ],
 };
