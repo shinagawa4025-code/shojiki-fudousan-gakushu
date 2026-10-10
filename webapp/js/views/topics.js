@@ -32,11 +32,17 @@ window.Views.topics = (function () {
     const cats = type && Array.isArray(type.categories) ? type.categories : [];
     const groups = [{ id: `start`, name: `はじめに`, meta: `一人暮らし未経験ならここから`, topics: [] }];
     cats.forEach((c) => groups.push({ id: c.id, name: c.name, meta: c.questions ? `宅建士試験 例年${c.questions}問` : ``, topics: [] }));
+    // 宅建士の範囲外で税理士試験向けのトピック(不動産と消費税など)
+    const zei = Stats.examType(`zeirishi`);
+    const zeiTopicIds = zei && Array.isArray(zei.categories) ? zei.categories.flatMap((c) => c.topicIds || []) : [];
+    groups.push({ id: `zeirishi`, name: `税理士試験`, meta: `宅建士の範囲外・税理士試験向け`, topics: [] });
     groups.push({ id: `practice`, name: `実務・トラブル対応`, meta: `試験範囲外の実務知識`, topics: [] });
     window.APP_DATA.topics.forEach((topic) => {
       if (topic.id === `topicI`) { groups[0].topics.push(topic); return; }
       const cat = cats.find((c) => (c.topicIds || []).includes(topic.id));
-      const g = cat ? groups.find((x) => x.id === cat.id) : groups[groups.length - 1];
+      let g = cat ? groups.find((x) => x.id === cat.id) : null;
+      if (!g && zeiTopicIds.includes(topic.id)) g = groups.find((x) => x.id === `zeirishi`);
+      if (!g) g = groups[groups.length - 1];
       g.topics.push(topic);
     });
     return groups.filter((g) => g.topics.length);

@@ -11,6 +11,7 @@ window.Nav = (function () {
     { view: `summary`, label: `動画一覧`, icon: `play-square`, mobile: `more`, section: `learn` },
     { view: `review`, label: `今日の復習`, icon: `repeat`, mobile: `review`, section: `practice`, badge: true },
     { view: `quiz`, label: `クイズ`, icon: `pencil-check`, mobile: `practice`, section: `practice` },
+    { view: `ox`, label: `○×一問一答`, short: `○×`, icon: `o-x`, mobile: `practice`, section: `practice` },
     { view: `exam`, label: `模擬試験`, icon: `timer`, mobile: `practice`, section: `practice` },
     { view: `calculators`, label: `計算機`, icon: `calculator`, mobile: `more`, section: `tools` },
     { view: `sources`, label: `情報源`, icon: `library`, mobile: `more`, section: `tools` },
@@ -36,7 +37,7 @@ window.Nav = (function () {
   // スマホでタブ内を切り替えるサブナビ
   const SUBNAVS = {
     learn: [`topics`, `glossary`, `figures`, `bookmarks`],
-    practice: [`quiz`, `exam`],
+    practice: [`quiz`, `ox`, `exam`],
   };
 
   function ic(name, size) {

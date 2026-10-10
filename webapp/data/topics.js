@@ -45,4 +45,17 @@ window.APP_DATA.topics = [
     description: `免許・宅建士・営業保証金と保証協会・媒介契約・重要事項説明(35条)・37条書面・報酬・8種制限・監督処分など、宅建士試験で最も配点の大きい宅建業法を体系的に学ぶ`,
     episodes: [`3-4`, `25-26`, `51-52`, `57-58`, `77-78`],
     basicIds: [`basicK01`, `basicK02`, `basicK03`, `basicK04`, `basicK05`, `basicK06`, `basicK07`, `basicK08`, `basicK09`, `basicK10`, `basicK11`, `basicK12`, `basicK13`, `basicK14`, `basicK15`, `basicK16`, `basicK17`, `basicK18`, `basicK19`, `basicK20`, `basicK21`, `basicK22`, `basicB01`, `basicB02`, `basicB07`, `basicF01`, `basicF02`, `basicF03`, `basicF04`, `basicF07`, `basicG01`] },
+  // 以下3トピックの基礎知識は data/content/*.js から ContentPack で追加される
+  { id: `topicL`, icon: `gavel`, name: `権利関係(民法等)`, level: `中上級`,
+    description: `意思表示・代理・時効・物権変動・抵当権・債務不履行・相続など民法の基本と、借地借家法・区分所有法・不動産登記法。宅建士試験の「権利関係」(例年14問)に対応`,
+    episodes: [],
+    basicIds: [] },
+  { id: `topicN`, icon: `mountain`, name: `5問免除科目`, level: `中級`,
+    description: `住宅金融支援機構・不当景品類及び不当表示防止法(公正競争規約)・統計・土地・建物の基礎知識。宅建士試験の問46〜50(登録講習修了者は免除)に対応`,
+    episodes: [],
+    basicIds: [] },
+  { id: `topicO`, icon: `percent`, name: `不動産と消費税`, level: `上級`,
+    description: `土地の譲渡・住宅の貸付けの非課税、土地建物の一括譲渡の按分、居住用賃貸建物の仕入税額控除の制限、課税売上割合など、不動産取引に関わる消費税の論点。税理士試験(消費税法)の対策にも`,
+    episodes: [],
+    basicIds: [] },
 ];

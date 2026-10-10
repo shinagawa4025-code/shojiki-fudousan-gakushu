@@ -78,7 +78,15 @@ window.Icons = (function () {
     // 法令上の制限
     ruler: `<g transform="rotate(-45 12 12)"><rect x="3" y="8.5" width="18" height="7" rx="1.5"/><path d="M7 8.5v3M10.5 8.5v2M14 8.5v3M17.5 8.5v2"/></g>`,
     // 宅建業法
-    scale: `<path d="M12 3.5v17"/><path d="M8 20.5h8"/><path d="M5.5 7h13"/><path d="M5.5 7 3 13.5M5.5 7 8 13.5M3 13.5h5a2.5 2.5 0 0 1-5 0z"/><path d="M18.5 7 16 13.5M18.5 7 21 13.5M16 13.5h5a2.5 2.5 0 0 1-5 0z"/>`
+    scale: `<path d="M12 3.5v17"/><path d="M8 20.5h8"/><path d="M5.5 7h13"/><path d="M5.5 7 3 13.5M5.5 7 8 13.5M3 13.5h5a2.5 2.5 0 0 1-5 0z"/><path d="M18.5 7 16 13.5M18.5 7 21 13.5M16 13.5h5a2.5 2.5 0 0 1-5 0z"/>`,
+    // 権利関係(民法)
+    gavel: `<g transform="rotate(-40 11 9)"><rect x="6.5" y="4" width="9" height="5" rx="1.2"/><path d="M11 9v9"/></g><path d="M13.5 20.5h7"/>`,
+    // 5問免除科目(土地・建物)
+    mountain: `<path d="M3 19.5 9.5 8.5l3.8 6 2.4-3.2 5.3 8.2z"/><path d="M8 11l1.5 1.2L11 11"/>`,
+    // 不動産と消費税
+    percent: `<path d="M5.5 18.5 18.5 5.5"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>`,
+    // ○×一問一答
+    'o-x': `<circle cx="7.5" cy="12" r="4"/><path d="M14.5 8l5.5 8M20 8l-5.5 8"/>`
   };
 
   const warned = {};

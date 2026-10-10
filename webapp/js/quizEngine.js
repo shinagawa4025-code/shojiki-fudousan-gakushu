@@ -173,7 +173,9 @@ window.QuizEngine = (function () {
   function fromFixedMc(item, opts) {
     opts = opts || {};
     if (!isMcItem(item)) return null;
-    const choices = item.choices.map((text, i) => ({ text, correct: i === item.correctIndex }));
+    const notes = Array.isArray(item.choiceNotes) && item.choiceNotes.length === 4 ? item.choiceNotes : null;
+    const truths = statementTruths(item);
+    const choices = item.choices.map((text, i) => ({ text, correct: i === item.correctIndex, note: notes ? notes[i] : ``, truth: truths ? truths[i] : null }));
     return {
       key: `quiz:${item.id}`,
       kind: `fixed`,
@@ -185,11 +187,42 @@ window.QuizEngine = (function () {
       choices: opts.keepOrder ? choices : shuffle(choices),
       explanation: item.explanation || item.answer || ``,
       term: item.relatedTermId ? AppIndex.termsById[item.relatedTermId] || null : null,
+      ask: item.ask || null,
     };
+  }
+
+  // 正誤判定型(ask: 'correct' = 正しいものを選ぶ / 'incorrect' = 誤っているものを選ぶ)の各選択肢の正誤
+  function statementTruths(item) {
+    if (!isMcItem(item) || (item.ask !== `correct` && item.ask !== `incorrect`)) return null;
+    return item.choices.map((_, i) => (item.ask === `correct` ? i === item.correctIndex : i !== item.correctIndex));
+  }
+
+  // ○×一問一答用: 正誤判定型の4択問題を1文ずつの○×問題に分解する
+  // 戻り値: [{ id: 'quiz-K-01#2', quizId, index, text, truth, note, termId, level, topicIds }]
+  function statementsFrom(item) {
+    const truths = statementTruths(item);
+    if (!truths) return [];
+    const notes = Array.isArray(item.choiceNotes) && item.choiceNotes.length === 4 ? item.choiceNotes : null;
+    return item.choices.map((text, i) => ({
+      id: `${item.id}#${i}`,
+      quizId: item.id,
+      index: i,
+      text,
+      truth: truths[i],
+      note: notes ? notes[i] : ``,
+      termId: item.relatedTermId || null,
+      level: item.level,
+      topicIds: item.topicIds || [],
+    }));
+  }
+
+  function allStatements() {
+    return (window.APP_DATA.quiz || []).flatMap(statementsFrom);
   }
 
   return {
     shuffle, truncate, pickDistractors, pickLawRefDistractors, buildChoiceText, orderByWeakness,
     buildQuestionForTerm, buildQuestionsFromTerms, generateAutoQuiz, isMcItem, fromFixedMc,
+    statementTruths, statementsFrom, allStatements, lawRefsOverlap,
   };
 })();

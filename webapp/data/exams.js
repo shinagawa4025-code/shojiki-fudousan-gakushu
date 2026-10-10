@@ -14,11 +14,11 @@ window.APP_DATA.exams = {
       targetNote: `35点はこのアプリ独自の目安です(合格点は毎年変わります)`,
       mockExam: true,
       categories: [
-        { id: `kenri`, name: `権利関係`, questions: 14, topicIds: [`topicB`, `topicA`, `topicD`, `topicE`], termIds: [] },
+        { id: `kenri`, name: `権利関係`, questions: 14, topicIds: [`topicL`, `topicB`, `topicA`, `topicD`, `topicE`], termIds: [] },
         { id: `horei`, name: `法令上の制限`, questions: 8, topicIds: [`topicJ`], termIds: [`basicE08`, `term23`] },
         { id: `zei`, name: `税・価格評定`, questions: 3, topicIds: [`topicH`], termIds: [`basicB04`, `basicB05`, `basicB06`, `basicB08`, `basicC05`, `basicF06`, `basicF08`] },
         { id: `gyoho`, name: `宅建業法`, questions: 20, topicIds: [`topicK`, `topicF`], termIds: [`basicB01`, `basicB02`, `basicB07`, `basicG01`, `term02`, `term03`, `term18`] },
-        { id: `menjo`, name: `5問免除科目`, questions: 5, topicIds: [], termIds: [`term21`, `basicF04`, `basicD08`] },
+        { id: `menjo`, name: `5問免除科目`, questions: 5, topicIds: [`topicN`], termIds: [`term21`, `basicF04`, `basicD08`] },
       ],
       // 一覧などで4分野にまとめて見せる場合の統合先
       compactMerge: { menjo: `zei` },
@@ -31,6 +31,7 @@ window.APP_DATA.exams = {
       mockExam: false,
       categories: [
         { id: `shisan`, name: `不動産税務`, questions: null, topicIds: [`topicH`], termIds: [`basicB04`, `basicB05`, `basicB06`, `basicB08`, `basicC05`] },
+        { id: `shohi`, name: `不動産と消費税`, questions: null, topicIds: [`topicO`], termIds: [] },
       ],
     },
     {
