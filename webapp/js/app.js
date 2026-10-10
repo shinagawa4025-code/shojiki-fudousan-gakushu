@@ -1,6 +1,6 @@
 // 初期化: 画面の登録・ナビ・検索・テーマ・Service Worker
 (function () {
-  [`home`, `topics`, `glossary`, `bookmarks`, `figures`, `review`, `quiz`, `exam`, `progress`,
+  [`home`, `topics`, `glossary`, `bookmarks`, `figures`, `review`, `quiz`, `ox`, `exam`, `progress`,
     `summary`, `calculators`, `sources`, `settings`, `more`].forEach((name) => {
     if (window.Views[name]) Router.register(name, window.Views[name]);
     else console.warn(`[app] 画面 ${name} が見つかりません`);

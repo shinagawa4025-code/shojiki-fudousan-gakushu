@@ -1,7 +1,7 @@
 // Service Worker: オフライン閲覧対応(同一オリジンのみプリキャッシュ+ネットワークフォールバック)
 // ファイルを追加したら PRECACHE_URLS に追記し、デプロイ毎に CACHE_NAME を上げること
 // (1件でも存在しないURLがあるとインストールが失敗し、古いキャッシュのままになる)
-const CACHE_NAME = `shojiki-gakushu-v7`;
+const CACHE_NAME = `shojiki-gakushu-v8`;
 
 const PRECACHE_URLS = [
   `./`,
@@ -11,6 +11,7 @@ const PRECACHE_URLS = [
   `./css/calculators.css`,
   `./css/exam.css`,
   `./css/features.css`,
+  `./css/ox.css`,
   `./data/episodes.js`,
   `./data/specials.js`,
   `./data/terms.js`,
@@ -20,6 +21,14 @@ const PRECACHE_URLS = [
   `./data/quiz.js`,
   `./data/sources.js`,
   `./data/exams.js`,
+  `./data/contentPack.js`,
+  `./data/content/kenri.js`,
+  `./data/content/horei.js`,
+  `./data/content/zei.js`,
+  `./data/content/menjo.js`,
+  `./data/content/shohizei.js`,
+  `./data/content/quizmc_a.js`,
+  `./data/content/quizmc_b.js`,
   `./js/storage.js`,
   `./js/dates.js`,
   `./js/icons.js`,
@@ -34,6 +43,7 @@ const PRECACHE_URLS = [
   `./js/streak.js`,
   `./js/stats.js`,
   `./js/recommend.js`,
+  `./js/analysis.js`,
   `./js/bookmarkStore.js`,
   `./js/quizEngine.js`,
   `./js/diagrams.js`,
@@ -48,6 +58,7 @@ const PRECACHE_URLS = [
   `./js/views/review.js`,
   `./js/views/quiz.js`,
   `./js/views/exam.js`,
+  `./js/views/ox.js`,
   `./js/views/progress.js`,
   `./js/views/summary.js`,
   `./js/views/calculators.js`,

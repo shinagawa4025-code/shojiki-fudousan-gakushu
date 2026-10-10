@@ -263,7 +263,10 @@ window.Views.quiz = (function () {
             btn.classList.add(`incorrect`);
             choiceList.children[correctIdx].classList.add(`correct`);
           }
-          bodyEl.querySelector(`[data-role="explain"]`).innerHTML = `<p class="quiz-answer"><strong>正解: ${correctIdx + 1}</strong> ${esc(mq.explanation)}</p>`;
+          // 選択肢ごとの解説(choiceNotes)があれば、表示順に ○/× 付きで並べる
+          const hasNotes = mq.choices.some((c) => c.note);
+          const notesHtml = hasNotes ? `<ol class="choice-notes">${mq.choices.map((c, i) => `<li class="${c.correct ? `is-answer` : ``}"><span class="choice-notes-key">${i + 1}</span>${c.truth === true ? `<span class="ox-mark ox-o" aria-label="正しい">○</span>` : c.truth === false ? `<span class="ox-mark ox-x" aria-label="誤り">×</span>` : ``}<span>${esc(c.note || ``)}</span></li>`).join(``)}</ol>` : ``;
+          bodyEl.querySelector(`[data-role="explain"]`).innerHTML = `<p class="quiz-answer"><strong>正解: ${correctIdx + 1}</strong> ${esc(mq.explanation)}</p>${notesHtml}`;
           const result = choice.correct ? `ok` : `ng`;
           recordFixedResult(q, result, history);
           showResult(result);

@@ -90,6 +90,9 @@ window.AppIndex = (function () {
       if (!Array.isArray(q.choices) || q.choices.length !== 4) issues.push(`${q.id}: 4択問題の選択肢が4つではない`);
       else if (new Set(q.choices).size !== 4) issues.push(`${q.id}: 選択肢に重複がある`);
       if (!Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex > 3) issues.push(`${q.id}: correctIndex が0〜3ではない`);
+      if (q.ask != null && q.ask !== `correct` && q.ask !== `incorrect`) issues.push(`${q.id}: ask は correct / incorrect のどちらか`);
+      if (q.choiceNotes != null && (!Array.isArray(q.choiceNotes) || q.choiceNotes.length !== 4 || q.choiceNotes.some((n) => typeof n !== `string` || !n))) issues.push(`${q.id}: choiceNotes は空でない文字列4つ`);
+      if (!q.explanation) issues.push(`${q.id}: 4択問題に explanation がない`);
     } else if (!q.answer) {
       issues.push(`${q.id}: 記述式なのに answer がない`);
     }
@@ -107,7 +110,12 @@ window.AppIndex = (function () {
   }
 
   const examTypeCount = data.exams && Array.isArray(data.exams.types) ? data.exams.types.length : 0;
-  console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length} (期待値139), topics=${data.topics.length} (期待値11), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length} (期待値106), sources=${data.sources.length} (期待値18), 試験種別=${examTypeCount} (期待値3), 警告=${issues.length}件`);
+  const packs = window.ContentPack ? ContentPack.list() : [];
+  const packNote = packs.map((p) => p.patched != null ? `${p.id}(上書き${p.patched})` : `${p.id}(基礎${p.basics}・問題${p.quiz})`).join(` `) || `なし`;
+  const mcCount = data.quiz.filter((q) => q.format === `mc`).length;
+  const emptyTopics = data.topics.filter((t) => !t.basicIds.length).map((t) => t.id);
+  if (emptyTopics.length) issues.push(`基礎知識が0件のトピック: ${emptyTopics.join(`, `)}`);
+  console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length}, topics=${data.topics.length} (期待値14), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length}(うち4択${mcCount}), sources=${data.sources.length}, 試験種別=${examTypeCount} (期待値3), 追加パック=${packNote}, 警告=${issues.length}件`);
   issues.forEach((msg) => console.warn(`[データ整合性チェック] ${msg}`));
 
   return { episodesById, topicsById, termsById, allTerms, sourcesById, episodeTermIndex, topicTermIndex, topicQuizIndex, topicLawIndex, termByName, issues };
