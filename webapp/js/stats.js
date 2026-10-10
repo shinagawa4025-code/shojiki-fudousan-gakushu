@@ -1,6 +1,12 @@
 // 学習統計: ホーム・進捗・復習バッジ・模擬試験が共通で使う集計処理
 // 試験目標(examTargets)の保存・取得もここで扱う
 window.Stats = (function () {
+  // 回数として使える0以上の整数に変換(壊れたデータ対策)
+  function cnt(v) {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  }
+
   function obj(key) {
     const v = Storage.get(key, {});
     return v && typeof v === `object` && !Array.isArray(v) ? v : {};
@@ -115,8 +121,10 @@ window.Stats = (function () {
       if (isDone(t.id, known, bp)) r.done += 1;
       const s = auto[t.id];
       if (s) {
-        r.quizCorrect += s.correct || 0;
-        r.quizAttempted += (s.correct || 0) + (s.wrong || 0);
+        // 読み込んだデータが文字列や負の数でも計算が崩れないよう、0以上の数値にそろえる
+        const c = cnt(s.correct);
+        r.quizCorrect += c;
+        r.quizAttempted += c + cnt(s.wrong);
       }
     });
 
@@ -134,8 +142,9 @@ window.Stats = (function () {
         const r = byId[cid];
         const v = e.byCategory[cid];
         if (!r || !v) return;
-        r.quizCorrect += v.correct || 0;
-        r.quizAttempted += v.total || 0;
+        const total = cnt(v.total);
+        r.quizCorrect += Math.min(cnt(v.correct), total);
+        r.quizAttempted += total;
       });
     });
 

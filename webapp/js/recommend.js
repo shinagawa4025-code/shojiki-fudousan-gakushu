@@ -18,12 +18,8 @@ window.Recommend = (function () {
       }
     }
 
-    const stats = Storage.get(`autoQuizStats`, {});
-    const weakIds = Object.keys(stats).filter((id) => {
-      const s = stats[id] || {};
-      const total = (s.wrong || 0) + (s.correct || 0);
-      return AppIndex.termsById[id] && total >= 3 && (s.wrong || 0) > (s.correct || 0);
-    });
+    // 苦手な用語の数え方は弱点分析・クイズ画面の「苦手な用語」と同じ(Analysis.weakTermIds)
+    const weakIds = window.Analysis && typeof Analysis.weakTermIds === `function` ? Analysis.weakTermIds() : [];
     if (weakIds.length) {
       return {
         title: `苦手な用語が${weakIds.length}件あります`,

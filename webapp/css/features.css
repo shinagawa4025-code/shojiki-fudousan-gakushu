@@ -182,6 +182,8 @@
 .ana-weak-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: var(--lh-snug); }
 .ana-weak-title { font-size: var(--fs-sm); font-weight: 700; color: var(--color-heading); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ana-weak-sub { font-size: var(--fs-xs); color: var(--color-text-muted); }
+/* ○×の文の前提(「宅建業者Aが…場合に関する記述」)。長い前提は2行で省略 */
+.ana-weak-context { font-size: var(--fs-xs); color: var(--color-text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ana-seg { white-space: nowrap; }
 .ana-weak-kind { display: inline-block; margin-right: var(--sp-1); padding: 0 6px; border-radius: var(--radius-xs); background: var(--color-surface-muted); color: var(--color-text); font-size: var(--fs-2xs); font-weight: 700; }
 .ana-weak-item:hover .ana-weak-kind { background: var(--color-surface); }
