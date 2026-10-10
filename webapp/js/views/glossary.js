@@ -19,7 +19,7 @@ window.Views.glossary = (function () {
     wrap.className = `view glossary-view`;
     wrap.innerHTML = `
       <h2>用語集・フラッシュカード</h2>
-      <p class="view-desc">タップでカードをめくって意味を確認。右上の★で「記憶済み」を記録できます。「基礎知識」タグは作中に登場しない一般的な不動産知識です。</p>
+      <p class="view-desc">タップでカードをめくって意味を確認。右上の星マークで「記憶済み」、しおりマークでブックマークできます。「基礎知識」タグは作中に登場しない一般的な不動産知識です。</p>
       <div class="toolbar">
         <input type="search" class="search-input" placeholder="用語を検索…" aria-label="用語検索">
         <div class="chip-row" data-role="level-chips"></div>
