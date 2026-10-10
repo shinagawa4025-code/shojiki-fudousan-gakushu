@@ -170,9 +170,10 @@
     Nav.mount();
     initThemeToggle();
     initGlobalSearch();
+    // 既存ユーザー判定(onboardingDone の記録)をホーム描画より先に行い、初回から「新しくなりました」カードを出す
+    if (window.Onboarding && Onboarding.maybeShow) Onboarding.maybeShow();
     Router.init(document.getElementById(`view-root`));
     initServiceWorker();
-    if (window.Onboarding && Onboarding.maybeShow) Onboarding.maybeShow();
     const D = window.Diagrams;
     console.log(`[データ整合性チェック] 図解=${D && D.defs ? Object.keys(D.defs).length : 0}件`);
   });
