@@ -1,7 +1,8 @@
 // テーマ管理: 設定値(system/light/dark)を解決して、<html data-theme> に常に light か dark を設定する
 // CSSのダーク配色は :root[data-theme="dark"] の1か所だけで定義している
 window.ThemeManager = (function () {
-  const THEME_COLORS = { light: `#1e3a5f`, dark: `#141a22` };
+  // ブラウザのツールバー色はヘッダーの背景(--color-surface)に合わせる
+  const THEME_COLORS = { light: `#ffffff`, dark: `#1c2530` };
   const mql = window.matchMedia ? window.matchMedia(`(prefers-color-scheme: dark)`) : null;
   const listeners = [];
 

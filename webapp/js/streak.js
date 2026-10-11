@@ -8,7 +8,8 @@ window.Streak = (function () {
 
   function countOf(v) {
     if (v === true) return 1;
-    return typeof v === `number` && v > 0 ? v : 0;
+    // 壊れたバックアップの 1e400(=Infinity)などは数えない
+    return typeof v === `number` && Number.isFinite(v) && v > 0 ? v : 0;
   }
 
   function recordToday() {
@@ -64,7 +65,8 @@ window.Streak = (function () {
 
   function totalActiveDays() {
     const log = getLog();
-    return Object.keys(log).filter((d) => countOf(log[d])).length;
+    // 最長記録(getLongestStreak)と同じく、日付として正しいキーだけを数える
+    return Object.keys(log).filter((d) => countOf(log[d]) && DateUtil.isValid(d)).length;
   }
 
   return { recordToday, getCurrentStreak, getLongestStreak, getLastNDays, getLast14Days, totalActiveDays, countOf };

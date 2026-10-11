@@ -36,6 +36,41 @@ window.Views.bookmarks = (function () {
     const filterEl = wrap.querySelector(`[data-role="filter"]`);
     const body = wrap.querySelector(`[data-role="body"]`);
 
+    // 回答した問題(問題ID → 選んだ番号 / 記述は 'ok'・'ng')と、めくった用語カード。
+    // 回答・裏返しでカードの背が伸びるため、戻る・再読み込み・種類の切り替えのあとも同じ表示にする(履歴エントリごとに保存)
+    const hs = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
+    const saved = Storage.isPlainObject(hs.bState) ? hs.bState : null;
+    const answeredMap = {};
+    if (saved && Storage.isPlainObject(saved.answered)) {
+      Object.keys(saved.answered).forEach((id) => {
+        const v = saved.answered[id];
+        if ((Number.isInteger(v) && v >= 0 && v < 4) || v === `ok` || v === `ng`) answeredMap[id] = v;
+      });
+    }
+    const flippedIds = new Set(saved && Array.isArray(saved.flipped) ? saved.flipped.filter((id) => typeof id === `string`) : []);
+    const myHash = location.hash;
+    let saveTimer = null;
+    function saveState() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        // 別の画面へ移ったあとに書き込むと、移動先の履歴エントリに混ざるため
+        if (location.hash !== myHash || !document.body.contains(wrap)) return;
+        try {
+          const st = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
+          window.history.replaceState(Object.assign({}, st, { bState: { answered: Object.assign({}, answeredMap), flipped: Array.from(flippedIds) } }), ``);
+        } catch (e) { /* 履歴の保存に失敗しても表示には影響しない */ }
+      }, 120);
+    }
+    function onResult(result, card, picked, restored) {
+      if (restored) return;
+      answeredMap[card.dataset.quizId] = picked;
+      saveState();
+    }
+    function onFlip(term, on) {
+      if (on) flippedIds.add(term.id); else flippedIds.delete(term.id);
+      saveState();
+    }
+
     function paintFilter(data) {
       const opts = [
         { id: `all`, label: `すべて`, n: data.terms.length + data.quizzes.length },
@@ -85,7 +120,7 @@ window.Views.bookmarks = (function () {
           const known = obj(`flashcards`);
           const grid = document.createElement(`div`);
           grid.className = `card-grid`;
-          data.terms.forEach(({ item }) => grid.appendChild(CardUi.buildFlipCard(item, { known })));
+          data.terms.forEach(({ item }) => grid.appendChild(CardUi.buildFlipCard(item, { known, flipped: flippedIds.has(item.id), onFlip })));
           body.appendChild(filter === `all` ? section(`用語`, `layers`, data.terms.length, grid) : grid);
         } else if (filter === `term`) {
           body.appendChild(UI.emptyState({ icon: `layers`, title: `保存した用語はありません`, body: `用語カードの右上にあるしおりマークで保存できます。`, cta: { label: `用語集を見る`, nav: `#glossary` } }));
@@ -96,7 +131,7 @@ window.Views.bookmarks = (function () {
         if (data.quizzes.length) {
           const list = document.createElement(`div`);
           list.className = `quiz-list`;
-          data.quizzes.forEach(({ item }) => list.appendChild(Views.quiz.buildFixedCard(item, {})));
+          data.quizzes.forEach(({ item }) => list.appendChild(Views.quiz.buildFixedCard(item, { restoreChoice: answeredMap[item.id], onResult })));
           body.appendChild(filter === `all` ? section(`問題`, `pencil-check`, data.quizzes.length, list) : list);
         } else if (filter === `quiz`) {
           body.appendChild(UI.emptyState({ icon: `pencil-check`, title: `保存した問題はありません`, body: `確認問題のカードの右上にあるしおりマークで保存できます。`, cta: { label: `確認問題を見る`, nav: `#quiz` } }));
@@ -124,13 +159,16 @@ window.Views.bookmarks = (function () {
       });
       return data;
     }
+    // 用語カードは表と裏の両方にしおりボタンがあるので、まとめて塗り替える
     function paintBookmarkBtn(el, on) {
-      const btn = el && el.querySelector(`[data-role="bookmark"]`);
-      if (!btn) return;
-      btn.classList.toggle(`is-bookmarked`, on);
-      btn.setAttribute(`aria-pressed`, String(on));
-      btn.setAttribute(`aria-label`, on ? `ブックマークを外す` : `ブックマークする`);
-      btn.innerHTML = UI.icon(on ? `bookmark-fill` : `bookmark`, { size: 20 });
+      if (!el) return;
+      if (CardUi.paintBookmarkButtons) { CardUi.paintBookmarkButtons(el, on); return; }
+      el.querySelectorAll(`[data-role="bookmark"]`).forEach((btn) => {
+        btn.classList.toggle(`is-bookmarked`, on);
+        btn.setAttribute(`aria-pressed`, String(on));
+        btn.setAttribute(`aria-label`, on ? `ブックマークを外す` : `ブックマークする`);
+        btn.innerHTML = UI.icon(on ? `bookmark-fill` : `bookmark`, { size: 20 });
+      });
     }
     function onChange(e) {
       if (!document.body.contains(wrap)) { detach(); return; }

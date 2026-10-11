@@ -99,15 +99,27 @@
   --color-video: #6f8fb0;
   --color-overlay: rgba(20, 26, 34, .5);
 
-  /* 色: 難易度バッジ */
-  --color-intro: #4f7299;
-  --color-beg: #3d7a52;
-  --color-int: #94661a;
-  --color-adv: #ab3b3b;
-  --badge-intro-fg: #ffffff;
-  --badge-beg-fg: #ffffff;
-  --badge-int-fg: #ffffff;
-  --badge-adv-fg: #ffffff;
+  /* 色: 難易度バッジ(超入門→上級を薄い紺→濃い紺の段階で表す。赤・緑・黄は正誤と注意のために残す) */
+  --lv-1-bg: #c9d6e6;
+  --lv-1-fg: #1e3a5f;
+  --lv-2-bg: #8fa9c9;
+  --lv-2-fg: #14283f;
+  --lv-3-bg: #4f7299;
+  --lv-3-fg: #ffffff;
+  --lv-4-bg: #1e3a5f;
+  --lv-4-fg: #ffffff;
+  /* 旧トークン名(互換のため残す。値は上の段階に合わせる) */
+  --color-intro: var(--lv-1-bg);
+  --color-beg: var(--lv-2-bg);
+  --color-int: var(--lv-3-bg);
+  --color-adv: var(--lv-4-bg);
+  --badge-intro-fg: var(--lv-1-fg);
+  --badge-beg-fg: var(--lv-2-fg);
+  --badge-int-fg: var(--lv-3-fg);
+  --badge-adv-fg: var(--lv-4-fg);
+
+  /* 押したときの薄い影(どの背景色にも重ねられるよう半透明) */
+  --color-press: rgba(16, 32, 56, .08);
 
   /* 色: ヒートマップ */
   --heat-0: var(--color-surface-muted);
@@ -131,7 +143,8 @@
   --color-bg: #141a22;
   --color-surface: #1c2530;
   --color-surface-muted: #232e3b;
-  --color-surface-raised: #232f3d;
+  /* シート・ダイアログなど浮いている面は背景より明るく */
+  --color-surface-raised: #2b3949;
   --color-border: #313e4d;
   --color-border-strong: #45556a;
   --color-text: #e7ecf2;
@@ -164,14 +177,16 @@
   --color-video: #8fa9c9;
   --color-overlay: rgba(0, 0, 0, .6);
 
-  --color-intro: #26384d;
-  --color-beg: #1f3a2b;
-  --color-int: #3d3018;
-  --color-adv: #432426;
-  --badge-intro-fg: #a9c6e6;
-  --badge-beg-fg: #8fd3a7;
-  --badge-int-fg: #e8c477;
-  --badge-adv-fg: #f0a0a0;
+  --lv-1-bg: #2a4566;
+  --lv-1-fg: #d9e5f2;
+  --lv-2-bg: #3a618e;
+  --lv-2-fg: #ffffff;
+  --lv-3-bg: #5b8cc2;
+  --lv-3-fg: #0f1720;
+  --lv-4-bg: #8fb8e8;
+  --lv-4-fg: #0f1720;
+
+  --color-press: rgba(255, 255, 255, .08);
 
   --heat-1: #2a4566;
   --heat-2: #3a618e;
@@ -210,7 +225,8 @@ h1, h2, h3, h4 {
   font-weight: 700;
 }
 h2 { font-size: var(--fs-2xl); margin: 0 0 var(--sp-2); }
-h3 { font-size: var(--fs-xl); margin: var(--sp-7) 0 var(--sp-3); }
+/* 見出しの段階: ページ h2 24/30px、セクション h3 18/20px(PC)、カード見出し 18px。画面ごとに h3 の大きさを変えない */
+h3 { font-size: var(--fs-lg); margin: var(--sp-7) 0 var(--sp-3); }
 h4 { font-size: var(--fs-lg); margin: 0 0 var(--sp-2); }
 
 a { color: var(--color-accent); text-underline-offset: 3px; }
@@ -384,7 +400,7 @@ h2[tabindex="-1"]:focus { outline: none; }
   cursor: pointer;
   transition: background var(--dur-1), color var(--dur-1);
 }
-.side-nav-item:hover { background: var(--color-surface-muted); color: var(--color-text); }
+@media (hover: hover) { .side-nav-item:hover { background: var(--color-surface-muted); color: var(--color-text); } }
 .side-nav-item[aria-current="page"] { background: var(--color-primary-soft); color: var(--color-primary); font-weight: 700; }
 .side-nav-item[aria-current="page"]::before {
   content: "";
@@ -491,7 +507,8 @@ footer.app-footer {
   cursor: pointer;
   transition: background var(--dur-1), color var(--dur-1);
 }
-.subnav-item:hover, .segmented-item:hover { color: var(--color-text); }
+/* :hover はマウス操作のときだけ(タッチ端末では押した後も残って選択中のように見えるため) */
+@media (hover: hover) { .subnav-item:hover, .segmented-item:hover { color: var(--color-text); } }
 /* 狭い画面では4項目が収まるよう余白を詰める(基本ルールより後に置く) */
 @media (max-width: 420px) {
   .subnav-item { flex: 1 1 auto; padding: 0 var(--sp-2); gap: 2px; font-size: var(--fs-xs); }
@@ -509,8 +526,9 @@ footer.app-footer {
 @media (min-width: 768px) {
   .chip-row-scroll { flex-wrap: wrap; overflow: visible; margin-inline: 0; padding-inline: 0; }
 }
+/* 選択中は面を一段持ち上げる(ダークでは surface だと溝より暗く沈むため raised を使う。ライトは同じ白) */
 .subnav-item[aria-current="page"], .segmented-item.active, .segmented-item[aria-pressed="true"] {
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   color: var(--color-primary);
   font-weight: 700;
   box-shadow: var(--shadow-1);
@@ -530,7 +548,7 @@ footer.app-footer {
 .card-compact { padding: var(--sp-3) var(--sp-4); }
 .card-flush { padding: 0; overflow: hidden; }
 .card-interactive { cursor: pointer; transition: box-shadow var(--dur-2) var(--ease-std), transform var(--dur-2) var(--ease-std), border-color var(--dur-2); }
-.card-interactive:hover { box-shadow: var(--shadow-2); border-color: var(--color-border-strong); }
+@media (hover: hover) { .card-interactive:hover { box-shadow: var(--shadow-2); border-color: var(--color-border-strong); } }
 .card-interactive:active { transform: translateY(1px); }
 .card-hero {
   border-radius: var(--radius-lg);
@@ -573,20 +591,20 @@ footer.app-footer {
   cursor: pointer;
   transition: background var(--dur-1), border-color var(--dur-1), color var(--dur-1), box-shadow var(--dur-1), transform var(--dur-1);
 }
-.btn:hover { background: var(--color-primary-fill-hover); }
+@media (hover: hover) { .btn:hover { background: var(--color-primary-fill-hover); } }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 .btn.active { box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-accent); }
 .btn-secondary { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border-strong); }
-.btn-secondary:hover { background: var(--color-surface-muted); }
+@media (hover: hover) { .btn-secondary:hover { background: var(--color-surface-muted); } }
 .btn-ghost { background: transparent; color: var(--color-primary); }
-.btn-ghost:hover { background: var(--color-primary-soft); }
+@media (hover: hover) { .btn-ghost:hover { background: var(--color-primary-soft); } }
 .btn-danger { background: var(--color-danger-fill); color: var(--color-on-primary); }
-.btn-danger:hover { background: var(--color-danger-fill-hover); }
+@media (hover: hover) { .btn-danger:hover { background: var(--color-danger-fill-hover); } }
 .btn-success { background: var(--color-success-fill); color: var(--color-on-primary); }
-.btn-success:hover { background: var(--color-success-fill-hover); }
+@media (hover: hover) { .btn-success:hover { background: var(--color-success-fill-hover); } }
 .btn-warning { background: var(--color-warning-fill); color: var(--color-on-primary); }
-.btn-warning:hover { background: var(--color-warning-fill-hover); }
+@media (hover: hover) { .btn-warning:hover { background: var(--color-warning-fill-hover); } }
 .btn-sm { min-height: 36px; padding: var(--sp-1) var(--sp-3); font-size: var(--fs-sm); }
 .btn-lg { min-height: 48px; padding: var(--sp-3) var(--sp-5); font-size: var(--fs-base); border-radius: var(--radius-lg); }
 .btn-block { width: 100%; }
@@ -599,12 +617,13 @@ footer.app-footer {
   color: var(--color-text-muted);
   border-radius: var(--radius-md);
 }
-.btn-icon:hover { background: var(--color-surface-muted); color: var(--color-text); }
+@media (hover: hover) { .btn-icon:hover { background: var(--color-surface-muted); color: var(--color-text); } }
 
-.back-btn { margin-bottom: var(--sp-3); background: transparent; color: var(--color-text-muted); border-color: transparent; padding-left: var(--sp-2); }
-.back-btn:hover { background: var(--color-surface-muted); color: var(--color-text); }
+/* 戻るボタン: 左の山かっこを本文の左端にそろえる */
+.back-btn { margin-bottom: var(--sp-3); margin-left: calc(var(--sp-2) * -1); background: transparent; color: var(--color-text-muted); border-color: transparent; padding-left: var(--sp-1); }
+@media (hover: hover) { .back-btn:hover { background: var(--color-surface-muted); color: var(--color-text); } }
 .load-more-btn { display: flex; margin: var(--sp-4) auto 0; background: var(--color-surface); color: var(--color-primary); border-color: var(--color-border-strong); }
-.load-more-btn:hover { background: var(--color-surface-muted); }
+@media (hover: hover) { .load-more-btn:hover { background: var(--color-surface-muted); } }
 
 .link-btn {
   background: none;
@@ -621,6 +640,9 @@ footer.app-footer {
   gap: var(--sp-1);
   min-height: 32px;
 }
+/* 文中のリンクボタンは行の高さを広げない(押せる範囲は ::after で上下に広げる) */
+:is(.view-desc, .episode-empty-state, p) > .link-btn { display: inline; min-height: 0; padding: 0; vertical-align: baseline; position: relative; }
+:is(.view-desc, .episode-empty-state, p) > .link-btn::after { content: ""; position: absolute; inset: -10px -2px; }
 
 /* チップ */
 .chip-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
@@ -643,12 +665,14 @@ footer.app-footer {
   position: relative;
   transition: background var(--dur-1), color var(--dur-1), border-color var(--dur-1);
 }
-.chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+@media (hover: hover) { .chip:hover { border-color: var(--color-primary); color: var(--color-primary); } }
 .chip.active, .chip[aria-pressed="true"] { background: var(--color-primary-fill); border-color: var(--color-primary-fill); color: var(--color-on-primary); }
 .chip-small { min-height: 34px; padding: 0 var(--sp-3); font-size: var(--fs-sm); }
 .chip-small::after { content: ""; position: absolute; inset: -5px 0; }
 .chip-muted, .chip-topic { background: var(--color-surface-muted); color: var(--color-text-muted); border-color: transparent; }
-.chip-muted:hover, .chip-topic:hover { border-color: var(--color-primary); color: var(--color-primary); }
+@media (hover: hover) { .chip-muted:hover, .chip-topic:hover { border-color: var(--color-primary); color: var(--color-primary); } }
+/* 2行に折り返すことがあるチップは丸い錠剤型にしない */
+.ox-links .chip, .weak-terms-panel .chip { border-radius: var(--radius-md); }
 
 /* バッジ */
 .badge {
@@ -664,10 +688,10 @@ footer.app-footer {
   color: var(--color-on-primary);
   white-space: nowrap;
 }
-.badge-超入門 { background: var(--color-intro); color: var(--badge-intro-fg); }
-.badge-初級 { background: var(--color-beg); color: var(--badge-beg-fg); }
-.badge-中級 { background: var(--color-int); color: var(--badge-int-fg); }
-.badge-上級 { background: var(--color-adv); color: var(--badge-adv-fg); }
+.badge-超入門 { background: var(--lv-1-bg); color: var(--lv-1-fg); }
+.badge-初級 { background: var(--lv-2-bg); color: var(--lv-2-fg); }
+.badge-中級 { background: var(--lv-3-bg); color: var(--lv-3-fg); }
+.badge-上級 { background: var(--lv-4-bg); color: var(--lv-4-fg); }
 .badge-soft { background: var(--color-primary-soft); color: var(--color-primary); }
 .badge-accent { background: var(--color-accent-soft); color: var(--color-accent); }
 
@@ -678,7 +702,7 @@ footer.app-footer {
   border-radius: var(--radius-pill);
   background: var(--color-danger-fill);
   color: var(--color-on-primary);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   line-height: 1;
   display: inline-flex;
@@ -689,10 +713,13 @@ footer.app-footer {
   animation: count-badge-pop var(--dur-3) var(--ease-out);
 }
 
+/* .badge・.source-tag・.review-status は同じ行に並ぶので高さ(行高1.5)をそろえる */
 .source-tag {
   display: inline-flex;
   align-items: center;
+  gap: var(--sp-1);
   font-size: var(--fs-2xs);
+  line-height: 1.5;
   padding: 1px var(--sp-2);
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-border-strong);
@@ -708,6 +735,7 @@ footer.app-footer {
   align-items: center;
   gap: var(--sp-1);
   font-size: var(--fs-2xs);
+  line-height: 1.5;
   padding: 2px var(--sp-2);
   border-radius: var(--radius-pill);
   font-weight: 700;
@@ -879,6 +907,10 @@ footer.app-footer {
   width: 100%;
   animation: pop-in var(--dur-2) var(--ease-out);
 }
+/* ダークでは影が見えにくいので、浮いている面(シート・ダイアログ・検索結果)は背景より明るい面で区別する */
+:root[data-theme="dark"] :is(.sheet, .modal-box, .onb-dialog, .onb-foot, .global-search-results) { background: var(--color-surface-raised); }
+/* 明るくした検索結果の上では、選択中の行は沈ませず一段明るく */
+:root[data-theme="dark"] .global-search-item:is(:hover, :focus-visible, .is-active) { background: var(--color-press); }
 .modal-message { margin: 0 0 var(--sp-4); font-size: var(--fs-base); line-height: var(--lh-snug); }
 .modal-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; flex-wrap: wrap; }
 
@@ -909,6 +941,8 @@ footer.app-footer {
 .toast-success { background: var(--color-success-fill); }
 .toast-error { background: var(--color-danger-fill); }
 .toast .btn { flex-shrink: 0; white-space: nowrap; min-height: 36px; padding: 0 var(--sp-3); background: rgba(255, 255, 255, .16); }
+/* ダークのトーストは地が明るめなので、白く重ねると文字とのコントラストが4.5:1を下回る。暗く重ねる */
+:root[data-theme="dark"] .toast .btn:not(.toast-close) { background: rgba(0, 0, 0, .2); }
 
 /* セクション見出し */
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin: var(--sp-7) 0 var(--sp-3); }
@@ -938,7 +972,7 @@ footer.app-footer {
   display: flex;
   flex-direction: column;
 }
-.flip-card:hover .flip-card-front { box-shadow: var(--shadow-2); border-color: var(--color-border-strong); }
+@media (hover: hover) { .flip-card:hover .flip-card-front { box-shadow: var(--shadow-2); border-color: var(--color-border-strong); } }
 .flip-card-back { transform: rotateY(180deg); }
 .flip-face-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-2); margin: calc(var(--sp-1) * -1) calc(var(--sp-2) * -1) var(--sp-2) 0; }
 .flip-face-tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; padding-top: var(--sp-2); }
@@ -976,7 +1010,7 @@ footer.app-footer {
 .topic-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .topic-group { margin-bottom: var(--sp-6); }
 .topic-group-head { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; margin: var(--sp-6) 0 var(--sp-3); }
-.topic-group-head h3 { margin: 0; font-size: var(--fs-lg); }
+.topic-group-head h3 { margin: 0; }
 .topic-group-meta { font-size: var(--fs-xs); color: var(--color-text-muted); }
 .topic-card { display: flex; flex-direction: column; gap: var(--sp-2); }
 .topic-card-head { display: flex; align-items: center; gap: var(--sp-3); }
@@ -1067,15 +1101,15 @@ a.topic-card { text-decoration: none; color: inherit; }
   align-items: center;
   gap: var(--sp-2);
 }
-.ep-link:hover { text-decoration: underline; }
+@media (hover: hover) { .ep-link:hover { text-decoration: underline; } }
 .law-row { padding: var(--sp-3) var(--sp-4); }
 .law-name { font-weight: 700; color: var(--color-heading); display: flex; align-items: center; gap: var(--sp-2); }
 .law-desc { font-size: var(--fs-md); margin: var(--sp-1) 0; line-height: var(--lh-snug); }
 .law-citations { font-size: var(--fs-sm); color: var(--color-text-muted); }
 .law-citations a { color: var(--color-accent); }
-.source-category { margin: var(--sp-6) 0 var(--sp-3); font-size: var(--fs-lg); }
+.source-category { margin: var(--sp-6) 0 var(--sp-3); }
 .source-row .law-name a { color: var(--color-primary); text-decoration: none; display: inline-flex; align-items: center; gap: var(--sp-1); }
-.source-row .law-name a:hover { text-decoration: underline; }
+@media (hover: hover) { .source-row .law-name a:hover { text-decoration: underline; } }
 
 /* クイズ */
 .quiz-card { transition: background var(--dur-3), border-color var(--dur-3); }
@@ -1106,10 +1140,15 @@ a.topic-card { text-decoration: none; color: inherit; }
   line-height: var(--lh-snug);
   font-size: var(--fs-md);
   white-space: normal;
+  /* 選択肢は読む文章なので、ボタン用の詰め組み(palt)をやめて本文と同じ字間に */
+  font-feature-settings: normal;
+  letter-spacing: .02em;
 }
-.choice-btn:hover { background: var(--color-primary-soft); border-color: var(--color-primary); }
+/* .btn:hover の濃い塗りを打ち消す(タッチ端末で押した後に残る :hover もこれで無色になる) */
+.choice-btn:hover { background: var(--color-surface); border-color: var(--color-border-strong); }
+/* マウス操作のときだけ、控えめなホバー色(選んだ色・正解の色と紛れないよう淡い灰色) */
+@media (hover: hover) { .choice-btn:not(:disabled):hover { background: var(--color-surface-muted); border-color: var(--color-primary); } }
 .choice-btn:disabled { opacity: .72; cursor: default; transform: none; }
-.choice-btn:disabled:hover { background: var(--color-surface); border-color: var(--color-border-strong); }
 .choice-key {
   flex-shrink: 0;
   width: 24px;
@@ -1144,12 +1183,14 @@ a.topic-card { text-decoration: none; color: inherit; }
 .grade-btn { font-size: var(--fs-sm); padding: var(--sp-2) var(--sp-1); min-height: 44px; flex-direction: column; gap: 0; }
 .grade-btn small { font-size: var(--fs-2xs); opacity: .85; font-weight: 400; }
 .grade-again { background: var(--color-danger-fill); }
-.grade-again:hover { background: var(--color-danger-fill-hover); }
 .grade-hard { background: var(--color-warning-fill); }
-.grade-hard:hover { background: var(--color-warning-fill-hover); }
 .grade-good { background: var(--color-primary-fill); }
 .grade-easy { background: var(--color-success-fill); }
-.grade-easy:hover { background: var(--color-success-fill-hover); }
+@media (hover: hover) {
+  .grade-again:hover { background: var(--color-danger-fill-hover); }
+  .grade-hard:hover { background: var(--color-warning-fill-hover); }
+  .grade-easy:hover { background: var(--color-success-fill-hover); }
+}
 .tts-btn { color: var(--color-text-muted); }
 
 /* 設定 */
@@ -1247,7 +1288,7 @@ a.topic-card { text-decoration: none; color: inherit; }
   border: 1px solid transparent;
   transition: border-color var(--dur-1), background var(--dur-1);
 }
-.todo-item:hover { border-color: var(--color-border-strong); background: var(--color-surface); }
+@media (hover: hover) { .todo-item:hover { border-color: var(--color-border-strong); background: var(--color-surface); } }
 .todo-icon { width: 40px; height: 40px; border-radius: var(--radius-md); display: grid; place-items: center; background: var(--color-primary-soft); color: var(--color-primary); flex-shrink: 0; }
 .todo-icon.is-warn { background: var(--color-warning-bg); color: var(--color-warning); }
 .todo-icon.is-ok { background: var(--color-success-bg); color: var(--color-success); }
@@ -1277,7 +1318,7 @@ a.topic-card { text-decoration: none; color: inherit; }
   transition: box-shadow var(--dur-2), border-color var(--dur-2), transform var(--dur-1);
   min-height: 112px;
 }
-.tile:hover { box-shadow: var(--shadow-2); border-color: var(--color-border-strong); }
+@media (hover: hover) { .tile:hover { box-shadow: var(--shadow-2); border-color: var(--color-border-strong); } }
 .tile:active { transform: translateY(1px); }
 .tile-icon { width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--color-primary-soft); color: var(--color-primary); display: grid; place-items: center; }
 .tile-title { font-weight: 700; color: var(--color-heading); font-size: var(--fs-md); font-feature-settings: "palt"; }
@@ -1349,6 +1390,7 @@ a.topic-card { text-decoration: none; color: inherit; }
   .toast { bottom: var(--sp-6); left: calc(50% + var(--sidebar-w) / 2); }
 
   h2 { font-size: var(--fs-3xl); }
+  h3 { font-size: var(--fs-xl); }
 
   .card-list, .quiz-list, .basics-checklist, .episode-checklist, .law-row-grid, .source-row-grid {
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
@@ -1381,7 +1423,7 @@ a.topic-card { text-decoration: none; color: inherit; }
 .settings-file-input:focus-visible + .settings-file-label { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 /* 裏返しボタン(表面のヒント文をボタン化) */
 .flip-hint.flip-toggle { background: none; border: none; padding: var(--sp-2) 0; min-height: 40px; cursor: pointer; font: inherit; font-size: var(--fs-xs); color: var(--color-text-muted); align-self: flex-start; }
-.flip-hint.flip-toggle:hover { color: var(--color-primary); }
+@media (hover: hover) { .flip-hint.flip-toggle:hover { color: var(--color-primary); } }
 /* 4択の選択肢ごとの解説 */
 .choice-notes { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .choice-notes li { display: flex; gap: var(--sp-2); align-items: flex-start; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--color-surface-muted); }
@@ -1396,14 +1438,15 @@ a.topic-card { text-decoration: none; color: inherit; }
 @media (max-width: 1023px) {
   .global-search-input { font-size: 16px; }
 }
-/* 先頭へスクロールしたときに固定ヘッダーの下に隠れないように */
-[data-role="auto-list"], .calc-panel, .quiz-list { scroll-margin-top: calc(var(--app-bar-h) + var(--safe-top) + var(--sp-3)); }
-/* タッチ端末では :hover が押した後も残るため、選択肢のホバー色はマウス操作のときだけ */
-@media (hover: none) {
-  .choice-btn:hover { background: var(--color-surface); border-color: var(--color-border-strong); }
-  .choice-btn.correct:hover { background: var(--color-success-bg); border-color: var(--color-success); }
-  .choice-btn.incorrect:hover { background: var(--color-danger-bg); border-color: var(--color-danger); }
+/* スクロールやTab移動で、固定ヘッダー・下部タブバーの裏に要素が隠れないように(PCはサイドバーなので不要) */
+@media (max-width: 1023px) {
+  html {
+    scroll-padding-top: calc(var(--app-bar-h) + var(--safe-top) + var(--sp-2));
+    scroll-padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--sp-2));
+  }
 }
+/* 先頭へスクロールしたときの余白(ヘッダー分は上の scroll-padding で確保済み) */
+[data-role="auto-list"], .calc-panel, .quiz-list { scroll-margin-top: var(--sp-3); }
 /* トースト: 上部表示と閉じるボタン */
 .toast.toast-top { bottom: auto; top: calc(var(--app-bar-h) + var(--safe-top) + var(--sp-3)); }
 .toast .toast-close { width: 36px; height: 36px; min-height: 36px; padding: 0; background: transparent; color: inherit; }
@@ -1421,3 +1464,28 @@ a.topic-card { text-decoration: none; color: inherit; }
 /* 今日の復習: カードの下に置く評価ボタン */
 .review-grade-row { max-width: 460px; margin: var(--sp-3) auto 0; padding-top: 0; }
 .review-grade-row[hidden] { display: none; }
+
+/* ---------- 仕上げ: 部品どうしのそろえ ---------- */
+/* アイコンの大きさはボタン・チップの大きさで決める(HTML側の size 指定がばらばらでもそろう)。
+   :where で詳細度を下げ、画面ごとのCSSで個別に上書きできるようにする */
+:where(.btn:not(.btn-icon)) > .icon { width: 18px; height: 18px; }
+:where(.btn-sm:not(.btn-icon), .chip, .link-btn) > .icon { width: 16px; height: 16px; }
+:where(.btn-lg:not(.btn-icon)) > .icon { width: 20px; height: 20px; }
+:where(.chip-small) > .icon { width: 14px; height: 14px; }
+
+/* アイコン付きのカード見出しは、アイコンと文字の間を設定画面の見出しと同じ8pxに */
+.card-title:has(> .icon) { display: flex; align-items: center; gap: var(--sp-2); }
+/* カード見出し横のリンクは .section-head のリンクと同じ大きさ */
+.recommend-head .link-btn { font-size: var(--fs-sm); }
+
+/* 説明文の最後の行に1〜2文字だけ残る改行を避ける(対応ブラウザのみ) */
+.todo-title, .todo-sub, .view-desc, .calc-note, .empty-state-body, .tile-desc, .quiz-explanation { text-wrap: pretty; }
+
+/* タップの手応え(iPhoneでは app.js の touchstart 登録で :active が効く)。
+   どの塗りの上にも重ねられるよう、半透明の影を背景画像として重ねる */
+:is(.btn, .chip, .segmented-item, .subnav-item, .todo-item, .tile):active:not(:disabled) { background-image: linear-gradient(var(--color-press), var(--color-press)); }
+.bottom-nav-item:active .bottom-nav-icon { background-image: linear-gradient(var(--color-press), var(--color-press)); }
+@media (prefers-reduced-motion: no-preference) {
+  :is(.chip, .todo-item, .tile):active:not(:disabled) { transform: scale(.98); }
+  .bottom-nav-item:active .bottom-nav-icon { transform: scale(.94); }
+}

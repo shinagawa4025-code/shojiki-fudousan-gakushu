@@ -74,9 +74,9 @@ window.Views.review = (function () {
     wrap.className = `view review-view`;
     wrap.innerHTML = `
       <h2>今日の復習</h2>
-      <p class="view-desc">忘れかけたころに出題する「間隔反復学習」です。カードをめくって意味を思い出せたかを4段階で評価すると、次に出題する日が自動で決まります。期限が来た復習を先に出し、そのあと新しい用語を1日${newLimit()}語まで出します(<a href="#settings" class="link-inline">設定</a>で変更可)。</p>
+      <p class="view-desc">忘れかけたころに出題する「間隔反復学習」です。カードをめくって意味を思い出せたかを4段階で評価すると、次に出題する日が自動で決まります。期限が来た復習を先に出し、${newLimit() ? `そのあと新しい用語を1日${newLimit()}語まで出します` : `新しい用語は出さない設定です`}(<a href="#settings/limit" class="link-inline">設定</a>で変更可)。</p>
       <div class="review-meta" data-role="meta"></div>
-      <div class="progress-bar review-progress" data-role="bar" aria-hidden="true"><span class="progress-bar-fill"></span></div>
+      <div class="progress-bar review-progress" data-role="bar" aria-hidden="true"><div class="progress-bar-fill"></div></div>
       <div class="card-grid single-col" data-role="review-area"></div>
       <p class="review-keys" data-role="keys">キーボード: Space でめくる / 1〜4 で評価 / U で元に戻す</p>
     `;
@@ -112,13 +112,25 @@ window.Views.review = (function () {
           body: `${session.done}件を評価しました(うち「もう一度」${session.again}件)。${nextText}`,
           cta: { label: `クイズで力試し`, nav: `#quiz/auto` },
         });
+        // 今日の学習量と連続日数(クイズ・○×の結果と同じ表示)
+        const streak = Views.quiz && Views.quiz.streakLineHtml ? Views.quiz.streakLineHtml() : ``;
+        const bodyEl = el.querySelector(`.empty-state-body`);
+        if (streak && bodyEl) bodyEl.insertAdjacentHTML(`afterend`, streak);
       } else if (!Object.keys(Srs.getAllCards()).length && !candidates.length) {
         el = UI.emptyState({ icon: `layers`, title: `出題できる用語がありません`, cta: { label: `用語集を見る`, nav: `#glossary` } });
+      } else if (!moreNew) {
+        // 新しい用語の候補が残っていない(すべての用語のカードがある)
+        el = UI.emptyState({
+          icon: `trophy`,
+          title: `今日の復習はありません`,
+          body: `${nextText}すべての用語を学習済みです。`,
+          cta: { label: `○×一問一答で演習`, nav: `#ox` },
+        });
       } else {
         el = UI.emptyState({
           icon: `check-circle`,
           title: `今日の復習はありません`,
-          body: `${nextText}新しい用語の上限(1日${newLimit()}語)にも達しています。`,
+          body: `${nextText}${newLimit() ? `新しい用語の上限(1日${newLimit()}語)にも達しています。` : `新しい用語は出さない設定です。`}`,
           cta: { label: `用語集を見る`, nav: `#glossary` },
         });
       }
@@ -201,10 +213,20 @@ window.Views.review = (function () {
       undoStack.push({ term, prevCard, prevKnown, item, g, isNew });
       if (undoStack.length > 20) undoStack.shift();
       renderQueue();
+      showCardTop();
       const shortName = term.name.length > 14 ? `${term.name.slice(0, 13)}…` : term.name;
       // 前のトーストは閉じる(古いトーストの「元に戻す」で別の評価が取り消されないように)
       if (lastToast) lastToast.dismiss();
-      lastToast = UI.toast(`「${shortName}」は${Srs.intervalLabel(Srs.getCard(term.id).interval)}に出題`, `default`, { action: { label: `元に戻す`, onClick: undo }, duration: 3200 });
+      const when = g === 1 ? `このあともう一度出題します` : `${Srs.intervalLabel(Srs.getCard(term.id).interval)}に出題します`;
+      lastToast = UI.toast(`「${shortName}」は${when}`, `default`, { action: { label: `元に戻す`, onClick: undo }, duration: 3200 });
+    }
+
+    // 裏面の長いカードを下まで読んでから評価した場合、次のカードの先頭が見える位置に戻す
+    // (固定ヘッダーの高さは html の scroll-padding-top、余白は CSS の scroll-margin-top で持つ)
+    function showCardTop() {
+      const pad = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
+      const margin = parseFloat(getComputedStyle(area).scrollMarginTop) || 0;
+      if (area.getBoundingClientRect().top < pad + margin - 1) area.scrollIntoView({ block: `start` });
     }
 
     function undo() {
@@ -226,6 +248,7 @@ window.Views.review = (function () {
       }
       queue.unshift(last.item);
       renderQueue();
+      showCardTop();
     }
 
     function onKey(e) {
@@ -247,6 +270,28 @@ window.Views.review = (function () {
       }
     }
     document.addEventListener(`keydown`, onKey);
+
+    // iPhone のホーム画面アプリは翌日に開いても前日の画面のまま戻ることがある。
+    // 日付が変わっていたら、その日の期限・新規の上限で出題し直す(シート・確認を開いている間は待つ)
+    const renderDay = Srs.todayStr();
+    function onWake() {
+      if (!document.body.contains(wrap)) { detachWake(); return; }
+      if (document.visibilityState === `hidden` || Srs.todayStr() === renderDay) return;
+      if (document.querySelector(`.modal-overlay, .sheet-backdrop, .onb-overlay`)) return;
+      detachWake();
+      Router.navigate(location.hash || `#review`);
+    }
+    function detachWake() {
+      document.removeEventListener(`visibilitychange`, onWake);
+      window.removeEventListener(`pageshow`, onWake);
+      window.removeEventListener(`focus`, onWake);
+      window.removeEventListener(`hashchange`, onWakeHash);
+    }
+    function onWakeHash() { if (!document.body.contains(wrap)) detachWake(); }
+    document.addEventListener(`visibilitychange`, onWake);
+    window.addEventListener(`pageshow`, onWake);
+    window.addEventListener(`focus`, onWake);
+    window.addEventListener(`hashchange`, onWakeHash);
 
     renderQueue();
   }

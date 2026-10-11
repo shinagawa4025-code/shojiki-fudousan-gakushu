@@ -3,10 +3,15 @@ window.Views = window.Views || {};
 window.Views.figures = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 18 });
 
+  // 学習内容ではなくアプリの使い方を説明する図(一覧の最後に別の見出しで並べる)
+  const APP_HELP_IDS = [`srs-cycle`];
+
+  // 学習内容の図 → アプリの使い方の図 の順(詳細画面の前後移動も同じ順)
   function diagramIds() {
     const D = window.Diagrams;
     if (!D || !D.defs) return [];
-    return Object.keys(D.defs).filter((id) => D.defs[id] && typeof D.defs[id].render === `function`);
+    const ids = Object.keys(D.defs).filter((id) => D.defs[id] && typeof D.defs[id].render === `function`);
+    return ids.filter((id) => !APP_HELP_IDS.includes(id)).concat(ids.filter((id) => APP_HELP_IDS.includes(id)));
   }
 
   // byTerm の逆引き: 図解ID → [用語]
@@ -64,9 +69,7 @@ window.Views.figures = (function () {
 
     const rel = termsByDiagram();
     const D = window.Diagrams;
-    const grid = document.createElement(`div`);
-    grid.className = `fig-grid`;
-    grid.innerHTML = ids.map((id) => {
+    const cardHtml = (id) => {
       const def = D.defs[id];
       const terms = rel[id] || [];
       const shown = terms.slice(0, 3);
@@ -78,9 +81,22 @@ window.Views.figures = (function () {
             ${terms.length ? `<div class="fig-card-terms">${shown.map((t) => `<span class="chip chip-small chip-muted">${t.name}</span>`).join(``)}${terms.length > shown.length ? `<span class="fig-more">ほか${terms.length - shown.length}語</span>` : ``}</div>` : ``}
           </div>
         </a>`;
-    }).join(``);
-    wrap.appendChild(grid);
-    wrap.insertAdjacentHTML(`beforeend`, `<p class="fig-count">全${ids.length}点</p>`);
+    };
+    const contentIds = ids.filter((id) => !APP_HELP_IDS.includes(id));
+    const helpIds = ids.filter((id) => APP_HELP_IDS.includes(id));
+    if (contentIds.length) {
+      const grid = document.createElement(`div`);
+      grid.className = `fig-grid`;
+      grid.innerHTML = contentIds.map(cardHtml).join(``);
+      wrap.appendChild(grid);
+      wrap.insertAdjacentHTML(`beforeend`, `<p class="fig-count">全${contentIds.length}点</p>`);
+    }
+    if (helpIds.length) {
+      const sec = document.createElement(`section`);
+      sec.className = `fig-help`;
+      sec.innerHTML = `<div class="section-head"><h3>アプリの使い方</h3></div><div class="fig-grid">${helpIds.map(cardHtml).join(``)}</div>`;
+      wrap.appendChild(sec);
+    }
   }
 
   function renderDetail(root, id, ids) {

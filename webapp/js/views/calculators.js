@@ -98,7 +98,12 @@ window.Views.calculators = (function () {
     { id: `s29`, label: `昭和29年7月1日〜昭和38年12月31日(耐震証明が必要)`, ded: 1000000 },
   ];
 
-  const INHERIT_LIMITS = { residence: { limit: 330, reduction: 0.8 }, business: { limit: 400, reduction: 0.8 }, rental: { limit: 200, reduction: 0.5 } };
+  // 名前で引く表は Object.create(null) にする(「constructor」などの名前で Object の組み込みが引けてしまわないように)
+  function dict(obj) {
+    return Object.assign(Object.create(null), obj);
+  }
+
+  const INHERIT_LIMITS = dict({ residence: { limit: 330, reduction: 0.8 }, business: { limit: 400, reduction: 0.8 }, rental: { limit: 200, reduction: 0.5 } });
 
   // ===== 計算(純粋関数。DOMに触れない) =====
 
@@ -194,7 +199,7 @@ window.Views.calculators = (function () {
   }
 
   // 登録免許税
-  const REG_STD = { 'land-sale': `regLandSaleStd`, 'bldg-sale': `regTransferStd`, 'bldg-new': `regPreserveStd`, mortgage: `regMortgageStd` };
+  const REG_STD = dict({ 'land-sale': `regLandSaleStd`, 'bldg-sale': `regTransferStd`, 'bldg-new': `regPreserveStd`, mortgage: `regMortgageStd` });
   function registration(s) {
     const kind = REG_STD[s.kind] ? s.kind : `land-sale`;
     const baseYen = kind === `mortgage` ? manToYen(s.debtMan) : manToYen(s.valueMan);
@@ -464,10 +469,48 @@ window.Views.calculators = (function () {
       { label: `その他(火災保険料など)`, amount: manToYen(s.otherMan) },
     ].filter((x) => x.amount > 0);
 
+    // 「—」や0円になった理由(表示用。金額の計算には使わない)
+    const why = [
+      fee ? `` : `仲介なし`,
+      st.nonTaxable ? `契約金額1万円未満は非課税` : ``,
+      stLoan ? `` : `借入なし`,
+      num(s.landMan) > 0 ? `` : `土地の評価額が未入力`,
+      type === `none` ? `建物なし` : (num(s.bldgMan) > 0 ? `` : `建物の評価額が未入力`),
+      regMort ? `` : `借入なし`,
+      acqLandWhy(acq),
+      acqBldgWhy(acq),
+    ];
+    items.forEach((it, i) => { it.why = why[i] || ``; });
+
     const taxesAndFees = items.reduce((a, b) => a + (b.skipped ? 0 : b.amount), 0);
     const extrasTotal = extras.reduce((a, b) => a + b.amount, 0);
     const total = taxesAndFees + extrasTotal;
     return { priceYen, items, extras, taxesAndFees, extrasTotal, total, ratio: priceYen > 0 ? total / priceYen : 0, fee, st, stLoan, regLand, regBldg, regMort, acq, type, isHouse, houseType, loanMan, houseRegOk, houseRegFloorNg: isHouse && !!s.houseReg && !houseRegOk };
+  }
+
+  function manLabel(yenValue) {
+    return `${(yenValue / 10000).toLocaleString(`ja-JP`, { maximumFractionDigits: 4 })}万円`;
+  }
+  // 不動産取得税が0円になった理由
+  function acqLandWhy(acq) {
+    const L = acq.land;
+    if (!(L.value > 0)) return `土地の評価額が未入力`;
+    if (L.tax > 0) return ``;
+    if (L.exempt) return `免税点(${manLabel(acq.exempt.land)})未満`;
+    if (L.reductionApplied && L.reduction >= L.taxRaw) return `住宅用土地の減額で0円`;
+    return L.taxRaw > 0 ? `100円未満切捨てで0円` : ``;
+  }
+  function acqBldgWhy(acq) {
+    const B = acq.bldg;
+    if (B.type === `none`) return `建物なし`;
+    if (!(B.value > 0)) return `建物の評価額が未入力`;
+    if (B.tax > 0) return ``;
+    if (B.exempt) return `免税点(${manLabel(B.exemptLimit)})未満`;
+    if (B.deduction > 0 && B.taxable === 0) {
+      const name = B.dedKey === `acqUsedHouseDed` ? `中古住宅` : B.dedKey === `acqLongLifeDed` ? `認定長期優良住宅` : `新築住宅`;
+      return `${name}の控除(${manLabel(B.deduction)})で0円`;
+    }
+    return B.taxable > 0 ? `100円未満切捨てで0円` : ``;
   }
 
   const calc = { loan, inherit, transfer, registration, acquisition, stamp, brokerage, propertyTax, purchaseCosts, saleFeeTiers, floorTo };
@@ -535,30 +578,57 @@ window.Views.calculators = (function () {
 
   function alertHtml(kind, html) {
     const icon = kind === `warning` ? `alert` : `info`;
-    return `<div class="calc-alert calc-alert-${kind}" role="${kind === `warning` ? `alert` : `note`}">${UI.icon(icon, { size: 18 })}<div>${html}</div></div>`;
+    return `<div class="calc-alert calc-alert-${kind}" role="note">${UI.icon(icon, { size: 18 })}<div>${html}</div></div>`;
   }
 
-  function expiryWarnings(keys, today) {
-    return keys.filter((k) => isExpired(k, today)).map((k) => alertHtml(`warning`, `<strong>${RATES[k].label}</strong>の適用期限(${wareki(RATES[k].validUntil)})を過ぎています。延長されていなければ本則の税率等になるため、この結果は実際より低い可能性があります。最新の法令を確認してください。`)).join(``);
+  // 期限切れで延長されなかったときに、結果が一方向(高くなる)とは限らない特例
+  const EXPIRY_CHANGE_NOTE = dict({
+    acqLandReduction: `税率の特例(3%)が延長されなければ税率は4%に戻り、減額の最低額は60,000円になります`,
+    ptCommercialCap: `令和9年度以降の負担調整措置の内容を確認してください`,
+  });
+
+  // 期限切れの特例をまとめた1つの注意書き(主要な結果のすぐ下に置く)
+  function expiryBlockHtml(keys) {
+    if (!keys.length) return ``;
+    const mixed = keys.some((k) => EXPIRY_CHANGE_NOTE[k]);
+    // 期限がすべて同じ日なら見出しに1回だけ書く(同じ日付を並べて長くしない)
+    const sameDay = keys.every((k) => RATES[k].validUntil === RATES[keys[0]].validUntil);
+    const items = keys.map((k) => `<li>${RATES[k].label}${sameDay ? `` : `(${wareki(RATES[k].validUntil)}まで)`}${EXPIRY_CHANGE_NOTE[k] ? `: ${EXPIRY_CHANGE_NOTE[k]}` : ``}</li>`).join(``);
+    return `<div class="calc-alert calc-alert-warning calc-expiry" role="note" data-role="expiry">${UI.icon(`alert`, { size: 18 })}<div>
+      <strong>適用期限${sameDay ? `(${wareki(RATES[keys[0]].validUntil)})` : ``}を過ぎた特例を使って計算しています</strong>
+      <ul>${items}</ul>
+      <p>延長されていなければ本則となり、${mixed ? `結果が変わる可能性があります` : `この結果より高くなる可能性があります`}。最新の法令を確認してください。</p>
+    </div></div>`;
   }
 
-  function basisHtml(keys, today) {
+  function chevronHtml() {
+    return UI.icon(`chevron-down`, { size: 18, className: `chevron` });
+  }
+
+  // 根拠と適用期限(折りたたみ。出典は同じものを1回だけ示す)
+  function basisHtml(keys) {
     const uniq = keys.filter((k, i) => k && RATES[k] && keys.indexOf(k) === i);
     if (!uniq.length) return ``;
-    return `${expiryWarnings(uniq, today)}<div class="calc-basis">
-      <p class="calc-basis-title">${UI.icon(`scale`, { size: 14 })}根拠と適用期限</p>
+    const sources = [];
+    uniq.forEach((k) => {
+      const link = sourceLinkHtml(RATES[k]);
+      if (!sources.includes(link)) sources.push(link);
+    });
+    const wide = typeof window.matchMedia === `function` && window.matchMedia(`(min-width: 1024px)`).matches;
+    return `<details class="calc-basis" data-keep="basis"${wide ? ` open` : ``}>
+      <summary>${UI.icon(`scale`, { size: 14 })}<span>根拠と適用期限(${uniq.length}件・2026年10月時点で確認)</span>${chevronHtml()}</summary>
       <ul>${uniq.map((k) => {
         const rt = RATES[k];
         const disp = rateDisplay(k);
         const until = rt.validUntil ? `${wareki(rt.validUntil)}まで` : `期限なし(本則)`;
-        return `<li>
+        return `<li data-rate-key="${k}">
           <span class="calc-basis-name">${rt.label}${disp ? `: <strong>${disp}</strong>` : ``}</span>
-          <span>根拠: ${rt.lawRef} / 適用期限: ${until}(2026年10月時点で確認)</span>
+          <span>根拠: ${rt.lawRef} / 適用期限: ${until}</span>
           ${rt.note ? `<span class="calc-basis-note">${rt.note}</span>` : ``}
-          <span>出典: ${sourceLinkHtml(rt)}</span>
         </li>`;
       }).join(``)}</ul>
-    </div>`;
+      <p class="calc-basis-sources">出典: ${sources.join(`<span aria-hidden="true"> / </span>`)}</p>
+    </details>`;
   }
 
   function cardHtml(title, body, extraCls) {
@@ -571,8 +641,65 @@ window.Views.calculators = (function () {
 
   const DISCLAIMER = `この計算結果は概算です。実際の金額は固定資産税評価額・自治体の条例(税率等)・特例の要件の判定・端数処理により異なります。申告・登記・契約にあたっては税理士・司法書士・宅建業者などの専門家や、都道府県税事務所・市区町村・法務局に確認してください。`;
 
+  // 計算式に実際の数字を入れるための表示
+  function manOrYen(yenValue) {
+    return yenValue % 10000 === 0 ? manLabel(yenValue) : `${yen(yenValue)}円`;
+  }
+  function sqm(n) {
+    return `${parseFloat(Number(n).toFixed(2)).toLocaleString(`ja-JP`)}㎡`;
+  }
+  // 媒介報酬の速算式に売買価格を入れた形
+  function quickWithNumbers(v) {
+    const p = manOrYen(v.price);
+    if (v.price > 4000000) return `${p} × 3% + 6万円`;
+    if (v.price > 2000000) return `${p} × 4% + 2万円`;
+    return `${p} × 5%`;
+  }
+  // 固定資産税・都市計画税(土地)の計算式に実際の数字を入れる
+  function landFormulaLines(v) {
+    const L = v.land;
+    const lines = [];
+    const tail = (base, rate, tax, name) => `${name} = ${yen(base)}円 × ${pct(rate)} = ${yen(base * rate)}円 → 100円未満切捨て = ${yen(tax)}円`;
+    if (L.residential && L.area > 0) {
+      const unit = L.value / L.area;
+      const parts = (r1, r2) => `${sqm(L.smallArea)} × ${r1}${L.generalArea > 0 ? ` + ${sqm(L.generalArea)} × ${r2}` : ``}`;
+      const fixedRaw = unit * L.smallArea * RATES.ptSmallFixed.value + unit * L.generalArea * RATES.ptGeneralFixed.value;
+      lines.push(`固定資産税の課税標準 = 1㎡当たり評価額 × (200㎡以下の部分 × 1/6 + 超える部分 × 1/3)`);
+      lines.push(`= ${yen(L.value)}円 ÷ ${sqm(L.area)} × (${parts(`1/6`, `1/3`)}) = ${yen(fixedRaw)}円 → 千円未満切捨て = ${yen(L.fixedBase)}円`);
+      lines.push(tail(L.fixedBase, v.fixedRate, L.fixedTax, `固定資産税`));
+      if (v.cityPlan) {
+        const cityRaw = unit * L.smallArea * RATES.ptSmallCity.value + unit * L.generalArea * RATES.ptGeneralCity.value;
+        lines.push(`都市計画税の課税標準 = 1㎡当たり評価額 × (200㎡以下の部分 × 1/3 + 超える部分 × 2/3)`);
+        lines.push(`= ${yen(L.value)}円 ÷ ${sqm(L.area)} × (${parts(`1/3`, `2/3`)}) = ${yen(cityRaw)}円 → 千円未満切捨て = ${yen(L.cityBase)}円`);
+        lines.push(tail(L.cityBase, v.cityRate, L.cityTax, `都市計画税`));
+      }
+      return lines;
+    }
+    if (L.residential) lines.push(`課税標準 = 評価額 ${yen(L.value)}円(面積が未入力のため特例なし)→ 千円未満切捨て = ${yen(L.fixedBase)}円`);
+    else lines.push(`課税標準 = 評価額 × 70% = ${yen(L.value)}円 × 70% → 千円未満切捨て = ${yen(L.fixedBase)}円(商業地等の負担水準の上限。実際は負担水準により異なる)`);
+    lines.push(tail(L.fixedBase, v.fixedRate, L.fixedTax, `固定資産税`));
+    if (v.cityPlan) lines.push(tail(L.cityBase, v.cityRate, L.cityTax, `都市計画税`));
+    return lines;
+  }
+  // 計算式の途中の値: 1円未満があれば小数第2位まで(四捨五入)示す
+  function yen2(n) {
+    const r = Math.round(n * 100) / 100;
+    return r.toLocaleString(`ja-JP`, { maximumFractionDigits: 2 });
+  }
+  function allFinite(list) {
+    return list.every((n) => typeof n === `number` && isFinite(n));
+  }
+  // 結果のどこかに NaN / Infinity があれば計算できない扱いにする
+  function hasNonFinite(v, depth) {
+    if (typeof v === `number`) return !isFinite(v);
+    if (!v || typeof v !== `object` || depth > 4) return false;
+    return Object.keys(v).some((k) => hasNonFinite(v[k], depth + 1));
+  }
+
   // ===== 計算機の定義 =====
   const ERA_OPTIONS = USED_ERAS.map((e) => [e.id, `${e.label}: ${(e.ded / 10000).toLocaleString(`ja-JP`)}万円`]);
+  const HINT_VALUE = `固定資産税の課税明細書の「価格」欄`;
+  const HINT_TAKUCHI = `住宅・マンションの敷地なら通常該当`;
 
   const CALCS = [
     {
@@ -584,18 +711,37 @@ window.Views.calculators = (function () {
         { key: `ratePct`, label: `年利`, unit: `%`, value: `1.0`, mode: `decimal` },
         { key: `years`, label: `返済期間`, unit: `年`, value: `35` },
       ],
+      terms: [`basicC02`, `basicC07`],
+      disclaimer: `この計算結果は概算です。実際の返済額は金融機関の金利(変動・固定)・返済条件・端数処理により異なります。借入れにあたっては金融機関に確認してください。`,
       compute: (s) => loan(s),
+      // 年利・期間が極端だと (1+月利)^回数 が Infinity になり NaN が出る
+      isBad: (v) => v.valid && !allFinite([v.equalPayment, v.equalTotal, v.equalInterest, v.firstPayment, v.lastPayment, v.decliningTotal, v.decliningInterestTotal]),
+      badMessage: `年利・返済期間が大きすぎて計算できません。値を確認してください。`,
       summary: (v) => v.valid ? `元利均等の毎月返済額 ${yen(v.equalPayment)}円` : ``,
       render: (v) => {
         if (!v.valid) return promptHtml(`借入金額と返済期間を入力してください。`);
+        // 月利は丸めずに「年利 ÷ 12」のまま示す(丸めた月利で検算すると数円ずれるため)
+        const annual = `${parseFloat((v.rr * 1200).toFixed(6))}%`;
+        const rate = `(${annual}÷12)`;
+        const cnt = parseFloat(v.n.toFixed(4));
+        const yrs = parseFloat((v.n / 12).toFixed(4));
         return cardHtml(`元利均等返済`, `
           <div class="calc-stats">${statHtml(`毎月の返済額`, v.equalPayment, { primary: true })}</div>
           ${tableHtml([{ label: `総返済額`, value: `${yen(v.equalTotal)}円` }, { label: `うち利息`, value: `${yen(v.equalInterest)}円` }])}
-          ${formulaHtml([`毎月返済額 = 借入額 × 月利 × (1+月利)<sup>回数</sup> ÷ {(1+月利)<sup>回数</sup> − 1}`, `月利 = 年利 ÷ 12 = ${parseFloat((v.rr * 100).toFixed(6))}% / 回数 = ${v.n}回`])}
+          ${formulaHtml([
+            `毎月返済額 = 借入額 × 月利 × (1+月利)<sup>回数</sup> ÷ {(1+月利)<sup>回数</sup> − 1}`,
+            `月利 = 年利 ÷ 12 = ${annual} ÷ 12、回数 = ${yrs}年 × 12 = ${cnt}回`,
+            v.rr === 0 ? `金利0%のため ${yen(v.P)}円 ÷ ${cnt}回 = ${yen2(v.equalPayment)}円` : `= ${yen(v.P)}円 × ${rate} × (1+${rate})<sup>${cnt}</sup> ÷ {(1+${rate})<sup>${cnt}</sup> − 1} = ${yen2(v.equalPayment)}円`,
+            `総返済額 = 毎月返済額 × ${cnt}回 = ${yen(v.equalTotal)}円(毎月返済額の1円未満も含めて計算。結果の表示は1円未満を四捨五入)`,
+          ])}
         `) + cardHtml(`元金均等返済`, `
           <div class="calc-stats">${statHtml(`初回の返済額`, v.firstPayment, { primary: true })}${statHtml(`最終回の返済額`, v.lastPayment)}</div>
           ${tableHtml([{ label: `総返済額`, value: `${yen(v.decliningTotal)}円` }, { label: `うち利息`, value: `${yen(v.decliningInterestTotal)}円` }, { label: `元利均等との利息の差`, value: `${yen(v.equalInterest - v.decliningInterestTotal)}円` }])}
-          ${formulaHtml([`毎月の元金 = 借入額 ÷ 回数、利息 = 残高 × 月利`, `総利息 = 月利 × 借入額 × (回数+1) ÷ 2`])}
+          ${formulaHtml([
+            `毎月の元金 = 借入額 ÷ 回数 = ${yen(v.P)}円 ÷ ${cnt}回 = ${yen2(v.P / v.n)}円、利息 = 残高 × 月利`,
+            `初回 = ${yen2(v.P / v.n)}円 + ${yen(v.P)}円 × ${annual} ÷ 12 = ${yen2(v.P / v.n)}円 + ${yen2(v.P * v.rr)}円 = ${yen2(v.firstPayment)}円`,
+            `総利息 = 借入額 × 月利 × (回数+1) ÷ 2 = ${yen(v.P)}円 × ${annual} ÷ 12 × ${parseFloat((v.n + 1).toFixed(4))} ÷ 2 = ${yen2(v.decliningInterestTotal)}円`,
+          ])}
         `);
       },
     },
@@ -605,11 +751,13 @@ window.Views.calculators = (function () {
       extraNote: `新築建物で評価額がまだ無い場合は、法務局が定める新築建物課税標準価格認定基準表の価額が課税標準になります。`,
       fields: [
         { key: `kind`, label: `登記の種類`, type: `select`, value: `land-sale`, options: [[`land-sale`, `土地の売買(所有権移転)`], [`bldg-sale`, `建物の売買(所有権移転)`], [`bldg-new`, `新築建物の所有権保存`], [`mortgage`, `抵当権の設定(住宅ローン等)`]] },
-        { key: `valueMan`, label: `固定資産税評価額(課税標準)`, unit: `万円`, value: `2000`, mode: `decimal`, showIf: (s) => s.kind !== `mortgage` },
+        { key: `valueMan`, label: `固定資産税評価額(課税標準)`, unit: `万円`, value: `2000`, mode: `decimal`, hint: HINT_VALUE, showIf: (s) => s.kind !== `mortgage` },
         { key: `debtMan`, label: `債権額(借入額)`, unit: `万円`, value: `3000`, mode: `decimal`, showIf: (s) => s.kind === `mortgage` },
         { key: `useHouse`, label: `住宅用家屋の軽減を使う(自己居住用・床面積50㎡以上などの要件を満たす)`, type: `check`, value: true, showIf: (s) => s.kind !== `land-sale` },
         { key: `houseType`, label: `住宅の種類`, type: `select`, value: `general`, options: [[`general`, `一般の住宅`], [`longlife-apt`, `認定長期優良住宅(マンション等)`], [`longlife-detached`, `認定長期優良住宅(一戸建て)`], [`lowcarbon`, `認定低炭素住宅`]], showIf: (s) => s.useHouse && (s.kind === `bldg-sale` || s.kind === `bldg-new`) },
       ],
+      terms: [`basicH22`, `basicB06`],
+      disclaimer: `この計算結果は概算です。実際の税額は課税標準(固定資産税評価額など)・特例の要件の判定・端数処理により異なります。登記にあたっては司法書士や法務局に確認してください。`,
       compute: (s) => registration(s),
       summary: (v) => `登録免許税 ${yen(v.tax)}円`,
       render: (v, s, today) => {
@@ -621,7 +769,7 @@ window.Views.calculators = (function () {
           reduced ? { label: `本則税率の場合`, value: `${yen(v.stdTax)}円` } : null,
           reduced ? { label: `軽減による差額`, value: `▲${yen(v.saving)}円`, cls: `is-good` } : null,
         ];
-        const req = v.useHouse ? `<details class="calc-details"><summary>住宅用家屋の軽減の主な要件(概要)</summary><ul>
+        const req = v.useHouse ? `<details class="calc-details"><summary><span>住宅用家屋の軽減の主な要件(概要)</span>${chevronHtml()}</summary><ul>
             <li>個人が自分の住まいとして使う家屋であること</li>
             <li>登記上の床面積が50㎡以上であること(マンションは専有部分の面積)</li>
             <li>新築または取得後1年以内に登記すること</li>
@@ -634,7 +782,7 @@ window.Views.calculators = (function () {
         return cardHtml(`登録免許税の額`, `
           <div class="calc-stats">${statHtml(`納める税額`, v.tax, { primary: true, sub: reduced ? `軽減なしなら ${yen(v.stdTax)}円` : `` })}</div>
           ${tableHtml(rows)}
-          ${formulaHtml([`税額 = 課税標準 × 税率 = ${yen(v.base)}円 × ${pct(v.rate)} = ${yen(v.base * v.rate)}円 → 100円未満切捨て${v.minApplied ? `(1,000円未満のため最低税額1,000円)` : ``}`])}
+          ${formulaHtml([`税額 = 課税標準 × 税率 = ${yen(v.base)}円 × ${pct(v.rate)} = ${yen(v.base * v.rate)}円 → 100円未満切捨て${v.minApplied ? `(1,000円未満のため最低税額1,000円)` : ``} = ${yen(v.tax)}円`])}
           ${v.kind === `land-sale` ? notesHtml([`土地の売買の軽減税率(1.5%)は、住宅用かどうかに関係なく売買による所有権移転に適用されます。相続(0.4%)・贈与(2%)は別の税率です。`]) : ``}
           ${!v.useHouse && v.kind !== `land-sale` ? notesHtml([`住宅用家屋の軽減を使わない場合(店舗・事務所、要件を満たさない住宅など)は本則税率です。`]) : ``}
           ${req}
@@ -648,10 +796,10 @@ window.Views.calculators = (function () {
       extraNote: `課税標準は購入価格ではなく固定資産税評価額です。取得後に都道府県税事務所への申告が必要な場合があり、納税通知書は取得の数か月後に届くのが一般的です。`,
       fields: [
         { key: `acqDate`, label: `取得した日`, type: `select`, value: `after`, options: [[`after`, `令和8年4月1日以後`], [`before`, `令和8年3月31日以前`]] },
-        { key: `landMan`, label: `土地の固定資産税評価額`, unit: `万円`, value: `2000`, mode: `decimal`, hint: `土地を取得しない場合は0` },
-        { key: `takuchi`, label: `宅地評価土地(宅地・宅地比準土地)である`, type: `check`, value: true, showIf: (s) => num(s.landMan) > 0 },
+        { key: `landMan`, label: `土地の固定資産税評価額`, unit: `万円`, value: `2000`, mode: `decimal`, hint: `${HINT_VALUE}。土地を取得しない場合は0` },
+        { key: `takuchi`, label: `宅地評価土地(宅地・宅地比準土地)である`, type: `check`, value: true, hint: HINT_TAKUCHI, showIf: (s) => num(s.landMan) > 0 },
         { key: `bldgType`, label: `建物の種類`, type: `select`, value: `new-house`, options: [[`new-house`, `新築住宅`], [`used-house`, `中古住宅(自己居住用)`], [`non-house`, `住宅以外(店舗・事務所など)`], [`none`, `建物なし(土地のみ)`]] },
-        { key: `bldgMan`, label: `建物の固定資産税評価額`, unit: `万円`, value: `1500`, mode: `decimal`, showIf: (s) => s.bldgType !== `none` },
+        { key: `bldgMan`, label: `建物の固定資産税評価額`, unit: `万円`, value: `1500`, mode: `decimal`, hint: HINT_VALUE, showIf: (s) => s.bldgType !== `none` },
         { key: `how`, label: `建物の取得方法`, type: `select`, value: `buy`, options: [[`buy`, `購入(売買など)`], [`build`, `自分で建築(新築・増改築)`]], showIf: (s) => s.bldgType !== `none` },
         { key: `longLife`, label: `認定長期優良住宅である`, type: `check`, value: false, showIf: (s) => s.bldgType === `new-house` },
         { key: `usedEra`, label: `中古住宅の新築時期`, type: `select`, value: `h9`, options: ERA_OPTIONS, showIf: (s) => s.bldgType === `used-house` },
@@ -660,6 +808,7 @@ window.Views.calculators = (function () {
         { key: `landReduction`, label: `住宅用土地の減額を計算に入れる(住宅の敷地で要件を満たす)`, type: `check`, value: false, showIf: (s) => num(s.landMan) > 0 && (s.bldgType === `new-house` || s.bldgType === `used-house`) },
         { key: `landArea`, label: `土地の面積`, unit: `㎡`, value: `150`, mode: `decimal`, showIf: (s) => s.landReduction && num(s.landMan) > 0 && (s.bldgType === `new-house` || s.bldgType === `used-house`) },
       ],
+      terms: [`basicB05`, `basicH15`, `basicH16`, `basicH17`],
       compute: (s) => acquisition(s),
       summary: (v) => `不動産取得税 合計 ${yen(v.total)}円`,
       render: (v, s, today) => {
@@ -678,7 +827,9 @@ window.Views.calculators = (function () {
             L.reductionApplied ? { label: `住宅用土地の減額`, value: `▲${yen(L.reduction)}円`, cls: `is-good` } : null,
             { label: `土地の税額`, value: L.exempt ? `0円(免税点未満)` : `${yen(L.tax)}円`, cls: `is-total` },
           ], `土地の内訳`) + formulaHtml([
-            `課税標準 × 税率 = ${yen(L.base)}円 × ${pct(v.rate)}`,
+            `課税標準 = ${yen(L.value)}円${s.takuchi ? ` × 1/2` : ``} → 千円未満切捨て = ${yen(L.base)}円`,
+            `課税標準 × 税率 = ${yen(L.base)}円 × ${pct(v.rate)} = ${yen(L.taxRaw)}円`,
+            L.reductionApplied ? `税額 = ${yen(L.taxRaw)}円 − 減額 ${yen(L.reduction)}円 → 100円未満切捨て = ${L.exempt ? `0円(免税点未満)` : `${yen(L.tax)}円`}` : `税額 = ${yen(L.taxRaw)}円 → 100円未満切捨て = ${L.exempt ? `0円(免税点未満)` : `${yen(L.tax)}円`}`,
             L.reductionApplied ? `減額 = 次の多い方: 150万円×${pct(v.rate)} = ${yen(L.reductionMin)}円 / 1㎡当たり価格${s.takuchi ? `(1/2後)` : ``} ${yen(L.unit)}円 × ${parseFloat(L.reductionArea.toFixed(2))}㎡(床面積×2・200㎡限度) × ${pct(v.rate)} = ${yen(L.reductionCalc)}円` : ``,
             L.reductionApplied && !(num(s.landArea) > 0) ? `土地の面積が未入力のため150万円×税率(${yen(L.reductionMin)}円)で計算しています。` : ``,
           ]);
@@ -693,7 +844,10 @@ window.Views.calculators = (function () {
             { label: `課税標準(千円未満切捨て)`, value: `${yen(B.taxable)}円` },
             { label: `税率`, value: `${pct(B.rate)}${B.type === `non-house` ? `(住宅以外は本則)` : ``}`, cls: `is-wrap` },
             { label: `建物の税額`, value: B.exempt ? `0円(免税点未満)` : `${yen(B.tax)}円`, cls: `is-total` },
-          ], `建物の内訳`) + formulaHtml([`(評価額 − 控除額) × 税率 = (${yen(B.value)}円 − ${yen(B.deduction)}円) × ${pct(B.rate)} → 100円未満切捨て`]);
+          ], `建物の内訳`) + formulaHtml([
+            `課税標準 = 評価額 − 控除額 = ${yen(B.value)}円 − ${yen(B.deduction)}円 → 千円未満切捨て = ${yen(B.taxable)}円`,
+            `税額 = ${yen(B.taxable)}円 × ${pct(B.rate)} = ${yen(B.taxable * B.rate)}円 → 100円未満切捨て = ${B.exempt ? `0円(免税点未満)` : `${yen(B.tax)}円`}`,
+          ]);
         }
         keys.push(`acqExempt`);
         return cardHtml(`不動産取得税の額`, `
@@ -720,6 +874,8 @@ window.Views.calculators = (function () {
         { key: `noAmount`, label: `契約金額の記載がない`, type: `check`, value: false },
         { key: `copies`, label: `作成する通数`, unit: `通`, value: `1` },
       ],
+      terms: [`basicB08`, `basicH23`, `basicH24`],
+      disclaimer: `この計算結果は概算です。課税文書に当たるかどうか・記載金額の判定は契約書の内容により異なります。判断に迷うときは税務署に確認してください。`,
       compute: (s) => stamp(s),
       summary: (v) => `印紙税 ${yen(v.total)}円`,
       render: (v, s, today) => {
@@ -756,6 +912,8 @@ window.Views.calculators = (function () {
         { key: `consent`, label: `依頼者の承諾を得ている(居住用で一方から1か月分を受ける場合)`, type: `check`, value: false, showIf: (s) => s.mode === `lease` && s.residential },
         { key: `longVacant`, label: `長期の空家等の特例(貸主から上乗せ)を使う`, type: `check`, value: false, showIf: (s) => s.mode === `lease` },
       ],
+      terms: [`term02`, `basicO09`],
+      disclaimer: `この計算結果は法令上の上限額の概算です。実際の手数料は宅建業者との合意で決まり、端数処理により異なることがあります。契約にあたっては宅建業者に確認してください。`,
       compute: (s) => brokerage(s),
       summary: (v) => v.mode === `lease` ? `仲介手数料の上限 合計${yen(v.totalIncl)}円` : `仲介手数料の上限 ${yen(v.capIncl)}円`,
       render: (v, s, today) => {
@@ -791,7 +949,11 @@ window.Views.calculators = (function () {
             { label: `原則の上限(税込 ×1.1)`, value: `${yen(v.incl)}円`, cls: v.lowCostApplied ? `` : `is-total` },
             v.lowCostApplied ? { label: `低廉な空家等の特例の上限`, value: `${yen(v.lowCostIncl)}円`, cls: `is-total` } : null,
           ])}
-          ${formulaHtml([`速算式: ${v.quick}(税抜)→ ×1.1 で税込`])}
+          ${formulaHtml([
+            `速算式: ${v.quick}(税抜)→ ×1.1 で税込`,
+            `${quickWithNumbers(v)} = ${yen(v.excl)}円(税抜)→ ×1.1 = ${yen(v.incl)}円(税込・1円未満切捨て)`,
+            v.lowCostApplied ? `低廉な空家等の特例: 30万円 × 1.1 = ${yen(v.lowCostIncl)}円 → 原則の${yen(v.incl)}円と比べて多い方 = ${yen(v.capIncl)}円` : ``,
+          ])}
           ${notesHtml([
             v.lowCostRequested && !v.lowCostEligible ? `売買価格が800万円を超えるため、低廉な空家等の特例は使えません。` : ``,
             v.lowCostApplied ? `低廉な空家等の特例: 800万円以下の宅地建物(使用の状態は問わない)は、媒介に要する費用を勘案して30万円×1.1=33万円まで受けられます。媒介契約の締結時に、あらかじめ報酬額を説明し合意することが必要です(令和6年7月1日施行)。` : ``,
@@ -807,12 +969,12 @@ window.Views.calculators = (function () {
       extraNote: `固定資産税・都市計画税の日割り精算金、管理費等の精算、引っ越し費用は含みません。評価額の目安: 土地は公示価格の7割程度とされますが、実際は固定資産税の課税明細書や評価証明書で確認してください。`,
       fields: [
         { key: `priceMan`, label: `物件価格(税込)`, unit: `万円`, value: `4000`, mode: `decimal` },
-        { key: `priceTaxMan`, label: `うち建物の消費税(個人売主の中古は0)`, unit: `万円`, value: `0`, mode: `decimal` },
+        { key: `priceTaxMan`, label: `うち建物の消費税(個人売主の中古は0)`, unit: `万円`, value: `0`, mode: `decimal`, hint: `新築・業者売主は契約書に記載`, helper: `taxSplit` },
         { key: `brokered`, label: `仲介会社を通して買う(仲介手数料がかかる)`, type: `check`, value: true },
-        { key: `landMan`, label: `土地の固定資産税評価額(目安)`, unit: `万円`, value: `2000`, mode: `decimal` },
-        { key: `takuchi`, label: `宅地評価土地である`, type: `check`, value: true, showIf: (s) => num(s.landMan) > 0 },
+        { key: `landMan`, label: `土地の固定資産税評価額(目安)`, unit: `万円`, value: `2000`, mode: `decimal`, hint: HINT_VALUE },
+        { key: `takuchi`, label: `宅地評価土地である`, type: `check`, value: true, hint: HINT_TAKUCHI, showIf: (s) => num(s.landMan) > 0 },
         { key: `bldgType`, label: `建物の種類`, type: `select`, value: `used-house`, options: [[`used-house`, `中古住宅(自己居住用)`], [`new-house`, `新築住宅`], [`non-house`, `住宅以外`], [`none`, `建物なし(土地のみ)`]] },
-        { key: `bldgMan`, label: `建物の固定資産税評価額(目安)`, unit: `万円`, value: `800`, mode: `decimal`, showIf: (s) => s.bldgType !== `none` },
+        { key: `bldgMan`, label: `建物の固定資産税評価額(目安)`, unit: `万円`, value: `800`, mode: `decimal`, hint: HINT_VALUE, showIf: (s) => s.bldgType !== `none` },
         { key: `usedEra`, label: `中古住宅の新築時期`, type: `select`, value: `h9`, options: ERA_OPTIONS, showIf: (s) => s.bldgType === `used-house` },
         { key: `longLife`, label: `認定長期優良住宅である`, type: `check`, value: false, showIf: (s) => s.bldgType === `new-house` },
         { key: `floorArea`, label: `住宅の床面積`, unit: `㎡`, value: `80`, mode: `decimal`, showIf: (s) => s.bldgType === `new-house` || s.bldgType === `used-house` },
@@ -825,27 +987,34 @@ window.Views.calculators = (function () {
         { key: `otherMan`, label: `その他の費用(任意)`, unit: `万円`, value: ``, mode: `decimal` },
       ],
       compute: (s) => purchaseCosts(s),
-      summary: (v) => `諸費用の合計 ${yen(v.total)}円`,
+      summary: (v) => v.priceYen > 0 ? `諸費用の合計 ${yen(v.total)}円` : ``,
       render: (v, s, today) => {
         if (!(v.priceYen > 0)) return promptHtml(`物件価格を入力してください。`);
-        const rows = v.items.map((it, i) => ({
-          label: `${it.label}<button type="button" class="calc-link" data-goto="${it.id}" data-item="${i}">${UI.icon(`chevron-right`, { size: 14 })}<span class="sr-only">${it.label}の</span>詳しく</button>`,
-          value: it.skipped ? `—` : `${yen(it.amount)}円`,
-          cls: it.skipped ? `is-muted` : ``,
-        }));
+        const rows = v.items.map((it, i) => {
+          const why = it.why && (it.skipped || it.amount === 0) ? `<small class="calc-row-why">${it.why}</small>` : ``;
+          // 「—」(対象外)の行は計算機へのリンクにしない(関係のない金額が開くため)
+          const label = it.skipped ? `<span class="calc-row-label">${it.label}</span>` : `<button type="button" class="calc-row-link" data-goto="${it.id}" data-item="${i}">${it.label}${UI.icon(`chevron-right`, { size: 16 })}<span class="sr-only">(計算機で開く)</span></button>`;
+          return { label: `${label}${why}`, value: it.skipped ? `—` : `${yen(it.amount)}円`, cls: `${it.skipped ? `is-muted ` : ``}has-row-link` };
+        });
         v.extras.forEach((x) => rows.push({ label: x.label, value: `${yen(x.amount)}円` }));
         rows.push({ label: `合計`, value: `${yen(v.total)}円`, cls: `is-total` });
-        const keys = [`regLandSale`];
+        const keys = [];
+        if (v.fee) keys.push(`feeSale`);
+        if (v.st.reduced !== null) keys.push(`stampReduced`);
+        keys.push(`regLandSale`);
         if (v.regBldg) keys.push(v.regBldg.key);
         if (v.regMort) keys.push(v.regMort.key);
         keys.push(`acqReduced`);
-        if (s.takuchi) keys.push(`acqLandHalf`);
-        if (v.st.reduced !== null) keys.push(`stampReduced`);
+        if (s.takuchi && v.acq.land.value > 0) keys.push(`acqLandHalf`);
+        if (v.acq.land.reductionApplied) keys.push(`acqLandReduction`);
+        if (v.acq.bldg.dedKey) keys.push(v.acq.bldg.dedKey);
+        if (v.acq.bldg.type === `non-house`) keys.push(`acqStd`);
+        keys.push(`acqExempt`);
         return cardHtml(`諸費用の概算`, `
           <div class="calc-stats">${statHtml(`諸費用の合計`, v.total, { primary: true, sub: `物件価格の約${(v.ratio * 100).toFixed(1)}%` })}${statHtml(`物件価格+諸費用`, v.priceYen + v.total)}</div>
           ${tableHtml(rows, `諸費用の内訳`)}
           ${notesHtml([
-            `「詳しく」を押すと、この条件を入れた各計算機を開きます。`,
+            `項目名を押すと、この条件を入れた計算機を開きます。`,
             `不動産取得税は取得日が令和8年4月1日以後として計算しています。`,
             v.houseRegFloorNg ? `床面積が50㎡未満のため、登録免許税の住宅用家屋の軽減(床面積50㎡以上が要件)は使わず本則税率で計算しています。` : ``,
             `印紙税は物件価格(税込)で判定しています。契約書に消費税額が区分記載されていれば税抜金額で判定します。`,
@@ -872,11 +1041,11 @@ window.Views.calculators = (function () {
       desc: `毎年1月1日の所有者に課される市町村税です。住宅用地の特例(200㎡まで1/6など)と新築住宅の減額(1/2)を反映して1年度分を概算します。`,
       extraNote: `税率は市町村の条例で決まります(固定資産税は1.4%が標準、都市計画税は0.3%が上限で、課税しない市町村もあります)。住宅用地の負担調整措置、住宅用地の上限(家屋の床面積の10倍)、併用住宅の住宅用地の割合は計算に入れていません。`,
       fields: [
-        { key: `landMan`, label: `土地の固定資産税評価額`, unit: `万円`, value: `3000`, mode: `decimal` },
+        { key: `landMan`, label: `土地の固定資産税評価額`, unit: `万円`, value: `3000`, mode: `decimal`, hint: HINT_VALUE },
         { key: `landArea`, label: `土地の面積`, unit: `㎡`, value: `150`, mode: `decimal` },
         { key: `landUse`, label: `土地の用途`, type: `select`, value: `res`, options: [[`res`, `住宅用地(住宅の敷地)`], [`nonres`, `住宅用地以外(店舗・駐車場・更地など)`]] },
         { key: `units`, label: `住宅の戸数(200㎡×戸数までが小規模住宅用地)`, unit: `戸`, value: `1`, showIf: (s) => s.landUse !== `nonres` },
-        { key: `bldgMan`, label: `建物の固定資産税評価額`, unit: `万円`, value: `1200`, mode: `decimal` },
+        { key: `bldgMan`, label: `建物の固定資産税評価額`, unit: `万円`, value: `1200`, mode: `decimal`, hint: HINT_VALUE },
         { key: `cityPlan`, label: `都市計画税がかかる区域(市街化区域など)`, type: `check`, value: true },
         { key: `fixedRatePct`, label: `固定資産税の税率`, unit: `%`, value: `1.4`, mode: `decimal` },
         { key: `cityRatePct`, label: `都市計画税の税率(市町村により異なる)`, unit: `%`, value: `0.3`, mode: `decimal`, showIf: (s) => s.cityPlan },
@@ -888,6 +1057,7 @@ window.Views.calculators = (function () {
         { key: `rentalApt`, label: `戸建以外の貸家住宅`, type: `check`, value: false, showIf: (s) => s.newHouse && s.builtDate === `before` && num(s.bldgMan) > 0 },
         { key: `yearIndex`, label: `新築後 何年度目か`, unit: `年度目`, value: `1`, showIf: (s) => s.newHouse && num(s.bldgMan) > 0 },
       ],
+      terms: [`basicB04`, `basicH18`, `basicH19`, `basicH20`],
       compute: (s) => propertyTax(s),
       summary: (v) => `固定資産税・都市計画税 年額 ${yen(v.total)}円`,
       render: (v, s, today) => {
@@ -906,10 +1076,7 @@ window.Views.calculators = (function () {
             { label: `固定資産税(${pct(v.fixedRate)})`, value: `${yen(L.fixedTax)}円`, cls: `is-total` },
             v.cityPlan ? { label: `都市計画税の課税標準`, value: `${yen(L.cityBase)}円` } : null,
             v.cityPlan ? { label: `都市計画税(${pct(v.cityRate)})`, value: `${yen(L.cityTax)}円`, cls: `is-total` } : null,
-          ], `土地の内訳`) + formulaHtml(L.residential ? [
-            `固定資産税の課税標準 = 1㎡当たり評価額 × (200㎡以下の部分 × 1/6 + 超える部分 × 1/3)`,
-            v.cityPlan ? `都市計画税の課税標準 = 1㎡当たり評価額 × (200㎡以下の部分 × 1/3 + 超える部分 × 2/3)` : ``,
-          ] : [`課税標準 = 評価額 × 70%(商業地等の負担水準の上限。実際は負担水準により異なる)`]);
+          ], `土地の内訳`) + formulaHtml(landFormulaLines(v));
         }
         let bldgBody = ``;
         if (B.value > 0) {
@@ -921,7 +1088,10 @@ window.Views.calculators = (function () {
             { label: `建物の固定資産税`, value: `${yen(B.fixedTax)}円`, cls: `is-total` },
             v.cityPlan ? { label: `建物の都市計画税(減額なし)`, value: `${yen(B.cityTax)}円`, cls: `is-total` } : null,
           ], `建物の内訳`) + formulaHtml([
-            B.reductionApplied ? `減額 = 固定資産税額 × min(1, 120㎡ ÷ 床面積) × 1/2 = ${yen(B.fixedRaw)}円 × ${parseFloat(B.ratio.toFixed(4))} × 1/2` : ``,
+            `固定資産税 = 課税標準 × 税率 = ${yen(B.base)}円 × ${pct(v.fixedRate)} = ${yen(B.fixedRaw)}円`,
+            B.reductionApplied ? `減額 = 固定資産税額 × min(1, 120㎡ ÷ 床面積) × 1/2 = ${yen(B.fixedRaw)}円 × ${parseFloat(B.ratio.toFixed(4))} × 1/2 = ${yen(B.reduction)}円` : ``,
+            `建物の固定資産税 = ${yen(B.fixedRaw)}円${B.reductionApplied ? ` − ${yen(B.reduction)}円` : ``} → 100円未満切捨て = ${yen(B.fixedTax)}円`,
+            v.cityPlan ? `都市計画税 = ${yen(B.base)}円 × ${pct(v.cityRate)} = ${yen(B.base * v.cityRate)}円 → 100円未満切捨て = ${yen(B.cityTax)}円` : ``,
             s.newHouse ? `減額期間: ${B.period}年度分(${s.structure === `fireproof` ? `3階建以上の耐火・準耐火` : `一般の住宅`}${s.longLife ? `・認定長期優良住宅` : ``})` : ``,
           ]);
         }
@@ -948,9 +1118,11 @@ window.Views.calculators = (function () {
         { key: `priceMan`, label: `譲渡価額(売った金額)`, unit: `万円`, value: `4000`, mode: `decimal` },
         { key: `acqMan`, label: `取得費(0なら概算取得費5%で計算)`, unit: `万円`, value: `0`, mode: `decimal` },
         { key: `expenseMan`, label: `譲渡費用(仲介手数料など)`, unit: `万円`, value: `100`, mode: `decimal` },
-        { key: `period`, label: `所有期間`, type: `select`, value: `long`, options: [[`long`, `長期譲渡(5年超)`], [`short`, `短期譲渡(5年以下)`]] },
+        { key: `period`, label: `所有期間`, type: `select`, value: `long`, options: [[`long`, `長期譲渡(5年超)`], [`short`, `短期譲渡(5年以下)`]], hint: `売った年の1月1日時点で5年超か` },
         { key: `special3000`, label: `居住用財産の3,000万円特別控除を適用する`, type: `check`, value: false },
       ],
+      terms: [`basicH01`, `basicH02`, `basicH25`],
+      disclaimer: `この計算結果は概算です。実際の税額は所得税・住民税それぞれの端数処理、取得費・譲渡費用の範囲、特例の要件の判定により異なります。申告にあたっては税理士や税務署に確認してください。`,
       compute: (s) => transfer(s),
       summary: (v) => `譲渡所得税(住民税込み) ${yen(v.tax)}円`,
       render: (v, s, today) => {
@@ -969,7 +1141,11 @@ window.Views.calculators = (function () {
             { label: `税率`, value: v.isLong ? `20.315%(長期)` : `39.63%(短期)` },
             { label: `税額`, value: `${yen(v.tax)}円`, cls: `is-total` },
           ])}
-          ${formulaHtml([`課税譲渡所得 = 譲渡価額 − 取得費 − 譲渡費用${v.useSpecial ? ` − 3,000万円` : ``}`, `税額 = 課税譲渡所得 × ${v.isLong ? `20.315%` : `39.63%`}`])}
+          ${formulaHtml([
+            `課税譲渡所得 = 譲渡価額 − 取得費 − 譲渡費用${v.useSpecial ? ` − 特別控除(3,000万円まで)` : ``}`,
+            `= ${yen(v.transferPrice)}円 − ${yen(v.acquisition)}円 − ${yen(v.expense)}円${v.useSpecial ? ` − ${yen(Math.min(Math.max(0, v.grossGain), 30000000))}円` : ``} = ${yen(v.gain)}円${v.grossGain < 0 ? `(マイナスのため0円)` : ``}`,
+            `税額 = 課税譲渡所得 × ${v.isLong ? `20.315%` : `39.63%`} = ${yen(v.gain)}円 × ${v.isLong ? `20.315%` : `39.63%`} = ${yen(v.tax)}円`,
+          ])}
           ${basisHtml(keys, today)}
         `);
       },
@@ -979,13 +1155,15 @@ window.Views.calculators = (function () {
       desc: `路線価方式による土地の相続税評価額と、小規模宅地等の特例を使った場合の減額後の評価額を概算します(各種補正率は考慮しない単純計算)。`,
       extraNote: `実際の評価では奥行価格補正・側方路線影響加算などの画地補正や、特例の併用(限度面積の調整)、取得者・継続保有の要件の判定が必要です。`,
       fields: [
-        { key: `roadPrice`, label: `路線価(1㎡あたり)`, unit: `円`, value: `200000` },
+        { key: `roadPrice`, label: `路線価(1㎡あたり)`, unit: `円`, value: `200000`, hint: `路線価図の数字は千円単位(例: 200D → 200,000円)` },
         { key: `area`, label: `土地の面積`, unit: `㎡`, value: `200`, mode: `decimal` },
         { key: `kind`, label: `特例の種類`, type: `select`, value: `residence`, options: [[`residence`, `特定居住用宅地等(330㎡まで80%減額)`], [`business`, `特定事業用宅地等(400㎡まで80%減額)`], [`rental`, `貸付事業用宅地等(200㎡まで50%減額)`], [`none`, `特例を適用しない`]] },
       ],
+      terms: [`basicH06`, `basicH07`],
+      disclaimer: `この計算結果は概算です。実際の評価額は画地補正・特例の要件や限度面積の調整の判定により異なります。申告にあたっては税理士や税務署に確認してください。`,
       compute: (s) => inherit(s),
       summary: (v) => `特例適用後の評価額 ${yen(v.afterValue)}円`,
-      render: (v, s, today) => cardHtml(`土地の評価額`, `
+      render: (v, s, today) => !(v.baseValue > 0) ? promptHtml(`路線価と土地の面積を入力してください。`) : cardHtml(`土地の評価額`, `
         <div class="calc-stats">${statHtml(v.kind !== `none` ? `特例適用後の評価額` : `評価額`, v.afterValue, { primary: true })}${v.kind !== `none` ? statHtml(`特例による減額`, v.reductionAmount) : ``}</div>
         ${tableHtml([
           { label: `評価額(特例適用前)`, value: `${yen(v.baseValue)}円` },
@@ -993,14 +1171,23 @@ window.Views.calculators = (function () {
           v.limit ? { label: `減額(${Math.round(v.limit.reduction * 100)}%)`, value: `▲${yen(v.reductionAmount)}円`, cls: `is-good` } : null,
           { label: `評価額(特例適用後)`, value: `${yen(v.afterValue)}円`, cls: `is-total` },
         ])}
-        ${formulaHtml([`評価額 = 路線価 × 面積`, v.limit ? `減額 = 評価額 × (対象面積 ÷ 面積) × ${Math.round(v.limit.reduction * 100)}%` : ``])}
+        ${formulaHtml([
+          `評価額 = 路線価 × 面積 = ${yen(Number(s.roadPrice))}円 × ${sqm(s.area)} = ${yen(v.baseValue)}円`,
+          v.limit ? `減額 = 評価額 × (対象面積 ÷ 面積) × ${Math.round(v.limit.reduction * 100)}% = ${yen(v.baseValue)}円 × (${sqm(v.appliedArea)} ÷ ${sqm(s.area)}) × ${Math.round(v.limit.reduction * 100)}% = ${yen(v.reductionAmount)}円` : ``,
+          v.limit ? `特例適用後 = ${yen(v.baseValue)}円 − ${yen(v.reductionAmount)}円 = ${yen(v.afterValue)}円` : ``,
+        ])}
         ${basisHtml([`inhSmallLand`], today)}
       `),
     },
   ];
 
-  const CALC_BY_ID = {};
+  const CALC_BY_ID = Object.create(null);
   CALCS.forEach((c) => { CALC_BY_ID[c.id] = c; });
+
+  // 用語カードなどから「計算機で試す」を出すための逆引き: 用語ID → [{id, label, icon, nav}]
+  function forTerm(termId) {
+    return CALCS.filter((c) => Array.isArray(c.terms) && c.terms.includes(termId)).map((c) => ({ id: c.id, label: c.label, icon: c.icon, nav: `#calculators/${c.id}` }));
+  }
 
   const GROUPS = [
     { id: `loan`, label: `ローン`, icon: `yen`, calcs: [`loan`] },
@@ -1022,9 +1209,15 @@ window.Views.calculators = (function () {
   }
 
   // ===== 入力の保存(端末内) =====
+  const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
   function loadAllInputs() {
     const all = typeof Storage !== `undefined` && Storage.get ? Storage.get(`calcInputs`, {}) : {};
     return all && typeof all === `object` && !Array.isArray(all) ? all : {};
+  }
+  function savedFor(id) {
+    const all = loadAllInputs();
+    const sv = hasOwn(all, id) ? all[id] : undefined;
+    return sv && typeof sv === `object` && !Array.isArray(sv) ? sv : undefined;
   }
   function saveInputs(id, values) {
     if (typeof Storage === `undefined` || !Storage.set) return;
@@ -1033,47 +1226,134 @@ window.Views.calculators = (function () {
     Storage.set(`calcInputs`, all);
   }
   function initialValues(def) {
-    const saved = loadAllInputs()[def.id];
+    const saved = savedFor(def.id);
     const out = {};
     def.fields.forEach((f) => {
-      const sv = saved && typeof saved === `object` ? saved[f.key] : undefined;
+      const sv = saved && hasOwn(saved, f.key) ? saved[f.key] : undefined;
       if (f.type === `check`) out[f.key] = typeof sv === `boolean` ? sv : !!f.value;
       else if (f.type === `select`) out[f.key] = typeof sv === `string` && f.options.some((o) => o[0] === sv) ? sv : f.value;
       else out[f.key] = typeof sv === `string` || typeof sv === `number` ? String(sv) : f.value;
     });
     return out;
   }
+  // 「自分で計算してから答え合わせ」は計算機ごとに calcInputs[id]._check に保存する
+  function readCheckMode(id) {
+    const saved = savedFor(id);
+    return !!(saved && saved._check === true);
+  }
 
-  // 全角数字・カンマを許容して数値化
-  function parseInput(v) {
-    const s = String(v === undefined || v === null ? `` : v)
-      .replace(/[０-９．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
-      .replace(/[,，\s]/g, ``);
-    if (s === ``) return 0;
+  // 入力欄の単位ごとに、数字のあとに付けてもよい単位(NFKC 後は ㎡ が m2、％ が % になる)
+  const UNIT_SUFFIX = dict({
+    万円: /(万円|万)$/,
+    円: /円$/,
+    '%': /%$/,
+    '㎡': /(㎡|m2)$/,
+    年: /年$/,
+    年度目: /年度目$/,
+    通: /通$/,
+    戸: /戸$/,
+  });
+  const ANY_UNIT = /(万円|万|円|%|㎡|m2|年度目|年|通|戸)$/;
+
+  // 入力値を数値にする: 全角・カンマ・空白・末尾の「。」と単位を許容し、それ以外(1e2・-5・3千 など)は invalid
+  function checkInput(v, unit) {
+    let s = String(v === undefined || v === null ? `` : v);
+    if (typeof s.normalize === `function`) s = s.normalize(`NFKC`);
+    s = s.replace(/[０-９．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+      .replace(/[,，\s]/g, ``)
+      .replace(/。$/, ``);
+    if (s === ``) return { value: 0, empty: true, invalid: false };
+    const re = unit ? UNIT_SUFFIX[unit] : ANY_UNIT;
+    if (re) s = s.replace(re, ``);
+    // 入力途中の「5.」は 5 として扱う
+    if (!/^(\d+\.?\d*|\.\d+)$/.test(s)) return { value: 0, empty: false, invalid: true };
     const n = Number(s);
-    return isFinite(n) && n > 0 ? n : 0;
+    if (!isFinite(n)) return { value: 0, empty: false, invalid: true };
+    return { value: n, empty: false, invalid: false };
+  }
+  function parseInput(v, unit) {
+    return checkInput(v, unit).value;
+  }
+
+  function taxSplitHtml() {
+    return `<span class="calc-helper">
+      <button type="button" class="btn btn-ghost btn-sm calc-helper-btn" data-helper="taxSplit">${UI.icon(`calculator`, { size: 16 })}評価額の比で按分して入れる</button>
+      <span class="calc-helper-note" data-role="helper-note" aria-live="polite"></span>
+    </span>`;
   }
 
   function fieldHtml(f, val) {
     const fid = `calc-f-${f.key}`;
+    const hintId = f.hint ? `calc-h-${f.key}` : ``;
+    const hint = f.hint ? `<span class="calc-hint" id="${hintId}">${f.hint}</span>` : ``;
     if (f.type === `check`) {
-      return `<label class="calc-check" data-field="${f.key}"><input type="checkbox" data-key="${f.key}"${val ? ` checked` : ``}><span>${f.label}</span></label>`;
+      return `<div class="calc-check-field" data-field="${f.key}"><label class="calc-check"><input type="checkbox" data-key="${f.key}"${val ? ` checked` : ``}${hintId ? ` aria-describedby="${hintId}"` : ``}><span>${f.label}</span></label>${hint}</div>`;
     }
     if (f.type === `select`) {
-      return `<label class="calc-field" data-field="${f.key}"><span class="calc-field-label">${f.label}</span>
-        <select id="${fid}" data-key="${f.key}">${f.options.map((o) => `<option value="${o[0]}"${o[0] === val ? ` selected` : ``}>${o[1]}</option>`).join(``)}</select></label>`;
+      return `<div class="calc-field" data-field="${f.key}"><label class="calc-field-label" for="${fid}">${f.label}</label>
+        <select id="${fid}" data-key="${f.key}"${hintId ? ` aria-describedby="${hintId}"` : ``}>${f.options.map((o) => `<option value="${o[0]}"${o[0] === val ? ` selected` : ``}>${o[1]}</option>`).join(``)}</select>${hint}</div>`;
     }
-    return `<label class="calc-field" data-field="${f.key}"><span class="calc-field-label">${f.label}<span class="calc-field-unit">(${f.unit})</span></span>
-      <span class="calc-input-wrap"><input id="${fid}" type="text" inputmode="${f.mode || `numeric`}" autocomplete="off" data-key="${f.key}" value="${UI.escapeHtml(String(val))}"${f.value === `` ? ` placeholder="0"` : ``}><span class="calc-unit" aria-hidden="true">${f.unit}</span></span>
-      ${f.hint ? `<span class="calc-hint">${f.hint}</span>` : ``}
-      ${f.unit === `万円` ? `<span class="calc-conv" data-conv="${f.key}"></span>` : ``}
-    </label>`;
+    const convId = f.unit === `万円` ? `calc-c-${f.key}` : ``;
+    const desc = [hintId, convId].filter(Boolean).join(` `);
+    return `<div class="calc-field" data-field="${f.key}"><label class="calc-field-label" for="${fid}">${f.label}<span class="calc-field-unit">(${f.unit})</span></label>
+      <span class="calc-input-wrap"><input id="${fid}" type="text" inputmode="${f.mode || `numeric`}" autocomplete="off" data-key="${f.key}" data-desc="${desc}" value="${UI.escapeHtml(String(val))}"${f.value === `` ? ` placeholder="0"` : ``}${desc ? ` aria-describedby="${desc}"` : ``}><span class="calc-unit" aria-hidden="true">${f.unit}</span></span>
+      <span class="calc-err" id="calc-e-${f.key}" hidden>${UI.icon(`alert`, { size: 14 })}数字だけで入力してください</span>
+      ${hint}
+      ${convId ? `<span class="calc-conv" id="${convId}" data-conv="${f.key}"></span>` : ``}
+      ${f.helper === `taxSplit` ? taxSplitHtml() : ``}
+    </div>`;
+  }
+
+  // 関連する用語(用語集へのチップ)。データにない用語IDは出さない
+  function shortTermName(name) {
+    const s = String(name).replace(/[(（].*$/, ``).trim();
+    return s || String(name);
+  }
+  function termsHtml(def) {
+    const idx = window.AppIndex && AppIndex.termsById;
+    const list = (def.terms || []).map((id) => (idx && hasOwn(idx, id) ? idx[id] : null)).filter(Boolean);
+    if (!list.length) return ``;
+    return `<section class="calc-terms" aria-labelledby="calc-terms-title">
+      <h4 class="calc-terms-title" id="calc-terms-title">${UI.icon(`book-open`, { size: 16 })}関連する用語</h4>
+      <div class="chip-row">${list.map((t) => `<a class="chip chip-small calc-term-chip" href="#glossary/${encodeURIComponent(t.id)}" title="${UI.escapeHtml(t.name)}">${UI.escapeHtml(shortTermName(t.name))}</a>`).join(``)}</div>
+    </section>`;
+  }
+
+  // 答え合わせモード: 主要な結果・合計・控除額・計算式を「?」や非表示にする
+  function maskResults(el) {
+    // 隠す数字と同じ値が内訳表の別の行(例: 譲渡所得税の「課税譲渡所得」)に出ていれば、その行も隠す(税額表は参照用なので除く)
+    const hiddenValues = new Set();
+    el.querySelectorAll(`.calc-stat .stat-value`).forEach((v) => { hiddenValues.add(v.textContent.trim()); v.innerHTML = `?<span class="sr-only">(答えは非表示)</span>`; });
+    el.querySelectorAll(`.calc-table:not(.calc-table-3) td`).forEach((td) => { if (hiddenValues.has(td.textContent.trim())) td.textContent = `?`; });
+    el.querySelectorAll(`.calc-stat-sub, .calc-formula`).forEach((v) => { v.hidden = true; });
+    el.querySelectorAll(`tr.is-total td, tr.is-good td`).forEach((td) => { td.textContent = `?`; });
+    el.querySelectorAll(`tr.is-hit`).forEach((tr) => tr.classList.remove(`is-hit`));
+    el.insertAdjacentHTML(`afterbegin`, `<div class="card calc-check-bar" data-role="check-bar">
+      <p>${UI.icon(`pencil-check`, { size: 18 })}<span>答え合わせモード: 自分で計算してから「答えを見る」を押してください(合計・控除額・計算式を隠しています)。</span></p>
+      <button type="button" class="btn btn-sm" data-role="reveal">${UI.icon(`eye`, { size: 16 })}答えを見る</button>
+    </div>`);
+  }
+
+  // 履歴の操作(Safari の回数制限で例外になっても画面の切替は続ける。ルーターが保存したスクロール位置 y は残す)
+  function historyState() {
+    const st = window.history.state;
+    return st && typeof st === `object` ? Object.assign({}, st) : {};
+  }
+  function replaceHistory(state, url) {
+    try {
+      if (url) window.history.replaceState(state, ``, url);
+      else window.history.replaceState(state, ``);
+    } catch (e) { /* 無視 */ }
+  }
+  function pushHistory(state, url) {
+    try { window.history.pushState(state, ``, url); } catch (e) { /* 無視 */ }
   }
 
   function render(root, param) {
     const first = String(param || ``).split(`/`)[0];
     let currentId = CALC_BY_ID[first] ? first : `loan`;
-    const lastInGroup = {};
+    const lastInGroup = Object.create(null);
+    let lastExpiredSig = ``;
 
     const wrap = document.createElement(`div`);
     wrap.className = `view calculators-view`;
@@ -1124,32 +1404,182 @@ window.Views.calculators = (function () {
       }
     }
 
+    // opts.detail: 購入諸費用まとめの項目名から開いた(履歴を積み、戻るボタンを出し、結果のカードを表示する)
     function switchCalc(id, opts) {
       if (!CALC_BY_ID[id]) return;
+      const o = opts || {};
+      const chipHadFocus = !o.detail && chipsEl.contains(document.activeElement);
+      const fromId = currentId;
       currentId = id;
       lastInGroup[CALC_BY_ID[id].group] = id;
-      // 「詳しく」から開いたときは履歴を積み、戻るでまとめ画面へ戻れるようにする(チップでの切替は履歴を増やさない)
-      if (opts && opts.scroll) history.pushState(null, ``, `#calculators/${id}`);
-      else history.replaceState(null, ``, `#calculators/${id}`);
+      if (o.detail) {
+        // 戻ったときに同じ位置・同じ行へ戻れるよう、今の履歴に位置と行番号を残してから新しい履歴を積む
+        replaceHistory(Object.assign(historyState(), { y: window.scrollY, calcReturnItem: o.item }));
+        pushHistory({ calcFrom: fromId }, `#calculators/${id}`);
+      } else {
+        const st = historyState();
+        delete st.calcReturnItem;
+        if (st.calcFrom === id) delete st.calcFrom;
+        replaceHistory(st, `#calculators/${id}`);
+      }
       renderNav();
-      mount();
-      if (opts && opts.scroll) UI.scrollIntoView(panel, `start`);
+      mount(o.detail ? { landOnResult: true } : null);
+      if (chipHadFocus) {
+        const chip = chipsEl.querySelector(`[data-calc="${id}"]`);
+        if (chip) chip.focus({ preventScroll: true });
+      }
     }
 
     let timer = null;
     let lastVm = null;
     let lastState = null;
+    let checkMode = false;
+    let revealed = false;
 
-    function mount() {
+    // ===== スマホの結果サマリー(主要な結果が画面外のときだけ上部に出す) =====
+    const mqPhone = typeof window.matchMedia === `function` ? window.matchMedia(`(max-width: 1023px)`) : null;
+    let stickyText = ``;
+    let sentinelIO = null;
+    let primaryIO = null;
+    let observedPrimary = null;
+    function appBarBottom() {
+      const h = document.getElementById(`app-header`);
+      if (!h) return 0;
+      const b = h.getBoundingClientRect().bottom;
+      // PC では左のサイドバーになる(上部に重ならない)
+      return b > 0 && b < window.innerHeight / 2 ? b : 0;
+    }
+    function teardownSticky() {
+      if (sentinelIO) sentinelIO.disconnect();
+      if (primaryIO) primaryIO.disconnect();
+      sentinelIO = null;
+      primaryIO = null;
+      observedPrimary = null;
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener(`resize`, refreshSticky);
+        window.visualViewport.removeEventListener(`scroll`, refreshSticky);
+      }
+      if (mqPhone && mqPhone.removeEventListener) mqPhone.removeEventListener(`change`, refreshSticky);
+    }
+    function refreshSticky() {
+      if (!panel.isConnected) { teardownSticky(); return; }
+      const sticky = panel.querySelector(`[data-role="sticky"]`);
+      if (!sticky) return;
+      const sentinel = panel.querySelector(`[data-role="sentinel"]`);
+      const prim = panel.querySelector(`[data-role="results"] .calc-stat.is-primary`);
+      let show = false;
+      if (stickyText && prim && sentinel && (!mqPhone || mqPhone.matches)) {
+        const top = appBarBottom();
+        const vv = window.visualViewport;
+        // iOS でキーボードが出ているときは、見えている範囲(visualViewport)の下端で判定する。下部タブバーの裏も見えない扱い
+        let bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+        const nav = document.querySelector(`.bottom-nav`);
+        const navRect = nav ? nav.getBoundingClientRect() : null;
+        if (navRect && navRect.height > 0 && navRect.top < bottom) bottom = navRect.top;
+        const bar = sticky.firstElementChild;
+        const barH = bar ? bar.offsetHeight : 48;
+        // 主要な結果が(数字まで)全部見えているときは出さない
+        const p = prim.getBoundingClientRect();
+        const primaryVisible = p.top >= top + barH - 4 && p.bottom <= bottom + 4;
+        // 計算機の先頭がアプリバーの下に隠れたとき、または入力中(キーボードで結果が見えないとき)に出す
+        const stuck = sentinel.getBoundingClientRect().top < top + 1;
+        const form = panel.querySelector(`[data-role="form"]`);
+        const ae = document.activeElement;
+        const inForm = !!(ae && form && form.contains(ae));
+        const typing = inForm || !!(ae && sticky.contains(ae));
+        show = (stuck || typing) && !primaryVisible;
+        // 入力中の欄がサマリーの下に重なるときは出さない(iPhone では欄が見えていればキーボードを出してもスクロールされず、入力欄が隠れるため)
+        if (show && inForm) {
+          const barTop = sticky.getBoundingClientRect().top;
+          const a = ae.getBoundingClientRect();
+          if (a.height > 0 && a.top < barTop + barH && a.bottom > barTop) show = false;
+        }
+      }
+      sticky.classList.toggle(`is-shown`, show);
+    }
+    function setupSticky() {
+      teardownSticky();
+      const sentinel = panel.querySelector(`[data-role="sentinel"]`);
+      if (!sentinel || typeof IntersectionObserver !== `function`) return;
+      const top = Math.round(appBarBottom());
+      sentinelIO = new IntersectionObserver(refreshSticky, { rootMargin: `-${top}px 0px 0px 0px`, threshold: [0, 1] });
+      sentinelIO.observe(sentinel);
+      const nav = document.querySelector(`.bottom-nav`);
+      const navRect = nav ? nav.getBoundingClientRect() : null;
+      const navH = navRect && navRect.height > 0 ? Math.max(0, Math.round(window.innerHeight - navRect.top)) : 0;
+      primaryIO = new IntersectionObserver(refreshSticky, { rootMargin: `-${top + 48}px 0px -${navH}px 0px`, threshold: [0, 0.5, 1] });
+      observePrimary();
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener(`resize`, refreshSticky);
+        window.visualViewport.addEventListener(`scroll`, refreshSticky);
+      }
+      if (mqPhone && mqPhone.addEventListener) mqPhone.addEventListener(`change`, refreshSticky);
+    }
+    function observePrimary() {
+      if (!primaryIO) return;
+      if (observedPrimary) primaryIO.unobserve(observedPrimary);
+      observedPrimary = panel.querySelector(`[data-role="results"] .calc-stat.is-primary`);
+      if (observedPrimary) primaryIO.observe(observedPrimary);
+      refreshSticky();
+    }
+
+    function focusResultTitle() {
+      const t = panel.querySelector(`[data-role="results"] .calc-result-card .calc-result-title`);
+      if (!t) return;
+      t.setAttribute(`tabindex`, `-1`);
+      t.focus({ preventScroll: true });
+    }
+    function focusReset() {
+      const r = panel.querySelector(`[data-role="reset"]`);
+      if (r) r.focus({ preventScroll: true });
+    }
+
+    // 消費税の按分(固定資産税評価額の比): 建物税込 = 総額 × 建物評価額×1.1 ÷ (土地評価額 + 建物評価額×1.1)
+    function applyTaxSplit(def) {
+      const note = panel.querySelector(`[data-role="helper-note"]`);
+      const input = panel.querySelector(`[data-key="priceTaxMan"]`);
+      if (!note || !input) return;
+      const s = readState(def).parsed;
+      const P = manToYen(s.priceMan);
+      const L = manToYen(s.landMan);
+      const B = s.bldgType === `none` ? 0 : manToYen(s.bldgMan);
+      if (!(P > 0) || !(B > 0)) {
+        note.textContent = `物件価格と、下の「建物の固定資産税評価額」を入力すると按分できます。`;
+        return;
+      }
+      const bldgIncl = Math.floor(clean(P * B * 11 / (L * 10 + B * 11)));
+      const taxYen = Math.floor(clean(P * B / (L * 10 + B * 11)));
+      input.value = String(taxYen / 10000);
+      input.dispatchEvent(new Event(`input`, { bubbles: true }));
+      note.innerHTML = `建物(税込) = ${yen(P)}円 × ${yen(B)}円×1.1 ÷ (${yen(L)}円 + ${yen(B)}円×1.1) = ${yen(bldgIncl)}円、消費税 = 建物(税込) × 10/110 = ${yen(taxYen)}円(1円未満切捨て)。
+        固定資産税評価額の比で分けるのは合理的な区分の一例です(<a href="https://laws.e-gov.go.jp/law/363CO0000000360" target="_blank" rel="noopener">消費税法施行令45条3項</a>・<a href="https://www.nta.go.jp/law/tsutatsu/kihon/shohi/10/01.htm" target="_blank" rel="noopener">消費税法基本通達10-1-5</a>)。契約書に建物の消費税額の記載があれば、その額を使ってください。評価額の比が時価と大きく違う物件(リフォーム済みなど)では認められないことがあります。`;
+    }
+
+    function mount(opts) {
+      const o = opts || {};
       const def = CALC_BY_ID[currentId];
       const values = initialValues(def);
+      checkMode = readCheckMode(def.id);
+      revealed = false;
+      teardownSticky();
+      const st = historyState();
+      const from = typeof st.calcFrom === `string` && st.calcFrom !== def.id && CALC_BY_ID[st.calcFrom] ? CALC_BY_ID[st.calcFrom] : null;
       panel.innerHTML = `
         <section class="calc-panel" aria-labelledby="calc-title">
+          <div class="calc-sticky-sentinel" data-role="sentinel" aria-hidden="true"></div>
+          <div class="calc-sticky" data-role="sticky">
+            <div class="calc-sticky-bar">
+              <span class="calc-sticky-text" data-role="sticky-text"></span>
+              <button type="button" class="btn btn-sm calc-sticky-btn" data-role="to-result">結果へ${UI.icon(`chevron-down`, { size: 16 })}</button>
+            </div>
+          </div>
+          ${from ? `<button type="button" class="btn back-btn calc-back" data-role="back">${UI.icon(`chevron-left`, { size: 18 })}${from.label}に戻る</button>` : ``}
           <header class="calc-head">
             <span class="calc-head-icon">${UI.icon(def.icon, { size: 22 })}</span>
             <div class="calc-head-text">
-              <h3 id="calc-title" class="calc-title">${def.title}</h3>
-              <p class="calc-desc">${def.desc}</p>
+              <h3 id="calc-title" class="calc-title" tabindex="-1">${def.title}</h3>
+              <p class="calc-desc" id="calc-desc">${def.desc}</p>
+              <button type="button" class="link-btn calc-desc-more" data-role="desc-more" aria-expanded="false" aria-controls="calc-desc" hidden>続きを読む</button>
             </div>
           </header>
           <div class="calc-layout">
@@ -1159,59 +1589,163 @@ window.Views.calculators = (function () {
               </form>
               <div class="calc-form-actions">
                 <span class="calc-live-hint">${UI.icon(`refresh`, { size: 14 })}入力するとすぐに再計算します</span>
+                <label class="calc-check calc-check-mode"><input type="checkbox" data-role="checkmode"${checkMode ? ` checked` : ``}><span>自分で計算してから答え合わせ</span></label>
                 <button type="button" class="btn btn-ghost btn-sm" data-role="reset">初期値に戻す</button>
               </div>
             </div>
             <div class="calc-results" data-role="results"></div>
           </div>
-          <p class="calc-disclaimer">${UI.icon(`info`, { size: 14 })}<span>※ ${DISCLAIMER}${def.extraNote ? ` ${def.extraNote}` : ``}</span></p>
+          ${termsHtml(def)}
+          <p class="calc-disclaimer">${UI.icon(`info`, { size: 14 })}<span>※ ${def.disclaimer || DISCLAIMER}${def.extraNote ? ` ${def.extraNote}` : ``}</span></p>
           <p class="sr-only" aria-live="polite" data-role="live"></p>
         </section>
       `;
       const form = panel.querySelector(`[data-role="form"]`);
       form.addEventListener(`submit`, (e) => e.preventDefault());
       const schedule = () => {
+        revealed = false;
         clearTimeout(timer);
         timer = setTimeout(update, 120);
       };
       form.addEventListener(`input`, schedule);
       form.addEventListener(`change`, schedule);
-      panel.querySelector(`[data-role="reset"]`).addEventListener(`click`, () => {
-        saveInputs(def.id, undefined);
-        mount();
+      // 入力欄にフォーカスしている間は結果サマリーを出す(外れたときは「結果へ」のタップを妨げないよう少し待つ)
+      form.addEventListener(`focusin`, refreshSticky);
+      form.addEventListener(`focusout`, () => setTimeout(refreshSticky, 250));
+      form.addEventListener(`click`, (e) => {
+        if (e.target.closest(`[data-helper="taxSplit"]`)) applyTaxSplit(def);
       });
+
+      const backBtn = panel.querySelector(`[data-role="back"]`);
+      if (backBtn) backBtn.addEventListener(`click`, () => window.history.back());
+
+      const desc = panel.querySelector(`.calc-desc`);
+      const more = panel.querySelector(`[data-role="desc-more"]`);
+      more.addEventListener(`click`, () => {
+        const open = !desc.classList.contains(`is-expanded`);
+        desc.classList.toggle(`is-expanded`, open);
+        more.setAttribute(`aria-expanded`, String(open));
+        more.textContent = open ? `閉じる` : `続きを読む`;
+      });
+      // スマホでは説明を2行に縮める(収まっているときはボタンを出さない)
+      requestAnimationFrame(() => {
+        if (desc.isConnected && !desc.classList.contains(`is-expanded`)) more.hidden = !(desc.scrollHeight > desc.clientHeight + 1);
+      });
+
+      panel.querySelector(`[data-role="checkmode"]`).addEventListener(`change`, (e) => {
+        checkMode = e.target.checked;
+        revealed = false;
+        clearTimeout(timer);
+        update();
+      });
+
+      panel.querySelector(`[data-role="reset"]`).addEventListener(`click`, () => {
+        const id = def.id;
+        const prev = savedFor(id);
+        saveInputs(id, checkMode ? { _check: true } : undefined);
+        clearTimeout(timer);
+        mount();
+        focusReset();
+        UI.toast(`初期値に戻しました`, `default`, {
+          duration: 6000,
+          action: {
+            label: `元に戻す`,
+            onClick: () => {
+              saveInputs(id, prev);
+              if (currentId === id && panel.isConnected) {
+                mount();
+                focusReset();
+              }
+            },
+          },
+        });
+      });
+
+      panel.querySelector(`[data-role="to-result"]`).addEventListener(`click`, () => {
+        const card = panel.querySelector(`[data-role="results"] .calc-result-card`);
+        if (!card) return;
+        UI.scrollIntoView(card, `start`);
+        focusResultTitle();
+      });
+
       panel.querySelector(`[data-role="results"]`).addEventListener(`click`, (e) => {
+        if (e.target.closest(`[data-role="reveal"]`)) {
+          revealed = true;
+          update(false, { reveal: true });
+          focusResultTitle();
+          return;
+        }
         const btn = e.target.closest(`[data-goto]`);
         if (!btn || !lastVm || !def.links) return;
         const target = btn.dataset.goto;
+        if (!CALC_BY_ID[target]) return;
         const itemLinks = def.itemLinks ? def.itemLinks(lastVm, lastState) : [];
-        const specific = itemLinks[Number(btn.dataset.item)];
+        const item = Number(btn.dataset.item);
+        const specific = itemLinks[item];
         const prefill = (specific && specific[target]) || def.links(lastVm, lastState)[target];
         if (prefill) {
           const base = initialValues(CALC_BY_ID[target]);
-          saveInputs(target, Object.assign(base, prefill));
+          saveInputs(target, Object.assign(base, prefill, readCheckMode(target) ? { _check: true } : {}));
         }
-        switchCalc(target, { scroll: true });
+        switchCalc(target, { detail: true, item });
       });
+
       update(true);
+      setupSticky();
+
+      if (o.landOnResult) {
+        const title = panel.querySelector(`#calc-title`);
+        if (title) title.focus({ preventScroll: true });
+        const card = panel.querySelector(`[data-role="results"] .calc-result-card`);
+        if (card) card.classList.add(`highlighted`);
+        // 2列表示(768px以上)では結果がフォームの横に見えるので計算機の先頭へ、スマホでは結果のカードへ
+        const twoCol = typeof window.matchMedia === `function` && window.matchMedia(`(min-width: 768px)`).matches;
+        UI.scrollIntoView(twoCol || !card ? panel.querySelector(`.calc-panel`) : card, `start`);
+      }
     }
 
     function readState(def) {
       const raw = {};
       const parsed = {};
+      const invalid = [];
       def.fields.forEach((f) => {
         const el = panel.querySelector(`[data-key="${f.key}"]`);
         if (!el) return;
         if (f.type === `check`) { raw[f.key] = el.checked; parsed[f.key] = el.checked; }
         else if (f.type === `select`) { raw[f.key] = el.value; parsed[f.key] = el.value; }
-        else { raw[f.key] = el.value; parsed[f.key] = parseInput(el.value); }
+        else {
+          raw[f.key] = el.value;
+          const r = checkInput(el.value, f.unit);
+          parsed[f.key] = r.value;
+          if (r.invalid) invalid.push(f.key);
+        }
       });
-      return { raw, parsed };
+      return { raw, parsed, invalid };
     }
 
-    function update(initial) {
+    function markInvalid(key, bad) {
+      const input = panel.querySelector(`[data-key="${key}"]`);
+      const err = panel.querySelector(`#calc-e-${key}`);
+      if (!input || !err) return;
+      if (bad) input.setAttribute(`aria-invalid`, `true`);
+      else input.removeAttribute(`aria-invalid`);
+      err.hidden = !bad;
+      const desc = [bad ? err.id : ``, input.dataset.desc].filter(Boolean).join(` `);
+      if (desc) input.setAttribute(`aria-describedby`, desc);
+      else input.removeAttribute(`aria-describedby`);
+    }
+
+    function detailsKey(d) {
+      if (d.dataset.keep) return `k:${d.dataset.keep}`;
+      const s = d.querySelector(`summary`);
+      return `t:${s ? s.textContent.trim() : ``}`;
+    }
+
+    function update(initial, opts) {
+      const o = opts || {};
       const def = CALC_BY_ID[currentId];
-      const { raw, parsed } = readState(def);
+      const { raw, parsed, invalid } = readState(def);
+      const invalidFields = [];
       def.fields.forEach((f) => {
         const holder = panel.querySelector(`[data-field="${f.key}"]`);
         if (holder && f.showIf) holder.hidden = !f.showIf(parsed);
@@ -1219,27 +1753,102 @@ window.Views.calculators = (function () {
           const conv = panel.querySelector(`[data-conv="${f.key}"]`);
           if (conv) conv.textContent = parsed[f.key] > 0 ? `= ${yen(manToYen(parsed[f.key]))}円` : ``;
         }
+        if (f.type !== `check` && f.type !== `select`) {
+          // 数字として読めない入力は 0 扱いにせず、欄に注意を出して結果も出さない
+          const bad = invalid.includes(f.key) && !(holder && holder.hidden);
+          if (bad) invalidFields.push(f);
+          markInvalid(f.key, bad);
+        }
       });
-      // 監査済みの3計算機は元の入力処理(Number(値))と同じ値を渡す
-      const vm = def.compute(parsed);
+
+      const today = todayStr();
+      let vm = null;
+      let html;
+      let summary = ``;
+      if (invalidFields.length) {
+        html = promptHtml(`${invalidFields.map((f) => `「${f.label}」`).join(`・`)}は数字だけで入力してください。`);
+        summary = `入力を確認してください`;
+      } else {
+        // 監査済みの3計算機は元の入力処理(Number(値))と同じ値を渡す
+        vm = def.compute(parsed);
+        if (def.isBad ? def.isBad(vm) : hasNonFinite(vm, 0)) {
+          html = promptHtml(def.badMessage || `入力した値が大きすぎて計算できません。値を確認してください。`);
+          vm = null;
+        } else {
+          html = def.render(vm, parsed, today);
+          summary = def.summary(vm) || ``;
+        }
+      }
       lastVm = vm;
       lastState = parsed;
-      const today = todayStr();
-      // 入力のたびに結果を作り直すので、開いていた「要件」などの折りたたみの状態を引き継ぐ
+
+      // 入力のたびに結果を作り直すので、折りたたみ(要件・根拠)の開閉を引き継ぐ
       const resultsEl = panel.querySelector(`[data-role="results"]`);
-      const openSummaries = new Set(Array.from(resultsEl.querySelectorAll(`details[open] > summary`)).map((el) => el.textContent.trim()));
-      resultsEl.innerHTML = def.render(vm, parsed, today);
-      if (openSummaries.size) resultsEl.querySelectorAll(`details > summary`).forEach((el) => { if (openSummaries.has(el.textContent.trim())) el.parentElement.open = true; });
-      if (!initial) {
-        panel.querySelector(`[data-role="live"]`).textContent = def.summary(vm);
-        saveInputs(def.id, raw);
+      const keep = Object.create(null);
+      resultsEl.querySelectorAll(`details`).forEach((d) => { keep[detailsKey(d)] = d.open; });
+      resultsEl.innerHTML = html;
+      resultsEl.querySelectorAll(`details`).forEach((d) => {
+        const k = detailsKey(d);
+        if (k in keep) d.open = keep[k];
+      });
+
+      // 適用期限を過ぎた特例: 1つの注意書きにまとめて主要な結果のすぐ下へ(読み上げは対象が変わったときだけ)
+      const usedKeys = Array.from(resultsEl.querySelectorAll(`[data-rate-key]`)).map((li) => li.dataset.rateKey);
+      const expired = usedKeys.filter((k, i) => usedKeys.indexOf(k) === i && isExpired(k, today));
+      if (expired.length) {
+        const stats = resultsEl.querySelector(`.calc-stats`);
+        if (stats) stats.insertAdjacentHTML(`afterend`, expiryBlockHtml(expired));
+        else resultsEl.insertAdjacentHTML(`afterbegin`, expiryBlockHtml(expired));
       }
+      const sig = expired.join(`,`);
+      let expiryNews = ``;
+      if (sig !== lastExpiredSig) {
+        if (sig) expiryNews = `適用期限を過ぎた特例を使って計算しています(${expired.length}件)。結果の下の注意書きを確認してください。`;
+        lastExpiredSig = sig;
+      }
+
+      const hasResult = !!resultsEl.querySelector(`.calc-stat.is-primary`);
+      const masked = checkMode && !revealed && hasResult;
+      if (masked) maskResults(resultsEl);
+
+      stickyText = masked || !hasResult ? `` : summary;
+      const stickyTextEl = panel.querySelector(`[data-role="sticky-text"]`);
+      if (stickyTextEl) stickyTextEl.textContent = stickyText;
+      observePrimary();
+
+      const live = panel.querySelector(`[data-role="live"]`);
+      const spoken = masked ? `入力を反映しました(答えは非表示です)` : summary;
+      if (!initial) {
+        live.textContent = [spoken, expiryNews].filter(Boolean).join(` `);
+        saveInputs(def.id, Object.assign(raw, checkMode ? { _check: true } : {}));
+        // 入力を変えたら項目の並びが変わることがあるので、「戻る」でフォーカスを戻す行番号は消す
+        const hs = historyState();
+        if (panel.isConnected && `calcReturnItem` in hs) {
+          delete hs.calcReturnItem;
+          replaceHistory(hs);
+        }
+      } else if (expiryNews) {
+        // 画面を開いた直後は、読み上げ領域ができてから少し待って伝える
+        setTimeout(() => { if (live.isConnected && !live.textContent) live.textContent = expiryNews; }, 600);
+      }
+      if (o.reveal) live.textContent = summary;
     }
 
     lastInGroup[CALC_BY_ID[currentId].group] = currentId;
     renderNav();
     mount();
+
+    // 「戻る」で購入諸費用まとめに戻ったときは、開いた項目へフォーカスを戻す(ルーターの見出しフォーカスより後)。
+    // 戻る→進む→戻るでも同じ項目に戻れるよう、行番号は入力を変えるまで履歴に残す(update で消す)
+    const st = historyState();
+    if (typeof st.calcReturnItem === `number` && isFinite(st.calcReturnItem)) {
+      const idx = st.calcReturnItem;
+      setTimeout(() => {
+        const btn = panel.querySelector(`[data-goto][data-item="${idx}"]`);
+        if (btn && btn.isConnected) btn.focus({ preventScroll: true });
+      }, 120);
+    }
   }
 
-  return { render, _calc: calc, RATES, _internal: { STAMP_STD, STAMP_REDUCED, USED_ERAS, parseInput, CALCS, GROUPS } };
+  return { render, forTerm, _calc: calc, RATES, _internal: { STAMP_STD, STAMP_REDUCED, USED_ERAS, parseInput, checkInput, CALCS, GROUPS, CALC_BY_ID } };
 })();

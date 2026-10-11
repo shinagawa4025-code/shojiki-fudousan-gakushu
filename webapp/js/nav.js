@@ -73,20 +73,51 @@ window.Nav = (function () {
     const bottomNav = document.getElementById(`bottom-nav`);
     if (bottomNav) {
       bottomNav.innerHTML = TABS.map((t) => `
-        <a class="bottom-nav-item" href="${t.nav}" data-tab="${t.id}">
+        <a class="bottom-nav-item" href="${tabHref(t)}" data-tab="${t.id}">
           <span class="bottom-nav-icon">${ic(t.icon, 22)}</span>
           <span class="bottom-nav-label">${t.label}</span>
           ${t.badge ? `<span class="badge-count" data-role="review-badge" hidden></span>` : ``}
         </a>`).join(``);
+      // 表示中のタブをもう一度押したら先頭へ戻る(同じURLへの移動は何も起きないため)
+      bottomNav.addEventListener(`click`, (e) => {
+        const a = e.target.closest(`.bottom-nav-item`);
+        if (!a || a.getAttribute(`aria-current`) !== `page` || location.hash !== a.getAttribute(`href`)) return;
+        e.preventDefault();
+        const smooth = !(window.UI && UI.prefersReducedMotion());
+        window.scrollTo({ top: 0, behavior: smooth ? `smooth` : `auto` });
+      });
     }
 
     window.addEventListener(`srs:change`, refreshBadge);
     refreshBadge();
   }
 
+  // タブ内で最後に開いたサブ画面(学習→用語集、演習→○×など)。このタブ(セッション)の間だけ覚える
+  function lastSubview(tabId) {
+    const list = SUBNAVS[tabId];
+    if (!list) return null;
+    try {
+      const v = sessionStorage.getItem(`navLast.${tabId}`);
+      return list.includes(v) ? v : null;
+    } catch (e) { return null; }
+  }
+
+  function rememberSubview(view) {
+    const it = itemOf(view);
+    const list = it ? SUBNAVS[it.mobile] : null;
+    if (!list || !list.includes(view)) return;
+    try { sessionStorage.setItem(`navLast.${it.mobile}`, view); } catch (e) { /* 保存できなくても既定の画面を開く */ }
+  }
+
+  function tabHref(t) {
+    const last = lastSubview(t.id);
+    return last ? `#${last}` : t.nav;
+  }
+
   function update(activeView) {
     const it = itemOf(activeView);
     const tab = it ? it.mobile : null;
+    rememberSubview(activeView);
     document.querySelectorAll(`.side-nav-item[data-view]`).forEach((el) => {
       if (el.dataset.view === activeView) el.setAttribute(`aria-current`, `page`);
       else el.removeAttribute(`aria-current`);
@@ -94,6 +125,8 @@ window.Nav = (function () {
     document.querySelectorAll(`.bottom-nav-item`).forEach((el) => {
       if (el.dataset.tab === tab) el.setAttribute(`aria-current`, `page`);
       else el.removeAttribute(`aria-current`);
+      const t = TABS.find((x) => x.id === el.dataset.tab);
+      if (t) el.setAttribute(`href`, tabHref(t));
     });
   }
 
@@ -122,8 +155,12 @@ window.Nav = (function () {
   function refreshBadge() {
     const n = dueCount();
     document.querySelectorAll(`[data-role="review-badge"]`).forEach((el) => {
+      const prev = Number(el.dataset.count || 0);
+      el.dataset.count = String(n);
       el.hidden = n <= 0;
       el.textContent = n > 99 ? `99+` : String(n);
+      // 増えたときだけ弾ませる(0→1 は表示されるときに CSS のアニメーションが動く)
+      if (n > prev && prev > 0 && !UI.prefersReducedMotion()) { el.style.animation = `none`; void el.offsetWidth; el.style.animation = ``; }
       const link = el.closest(`a`);
       if (link) link.setAttribute(`aria-label`, n > 0 ? `今日の復習(${n}件)` : `今日の復習`);
     });

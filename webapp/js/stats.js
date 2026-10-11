@@ -262,19 +262,47 @@ window.Stats = (function () {
     saveTargets(list);
   }
 
-  // 主目標: primary 指定 > 直近の未来の試験 > 最後の過去の試験
+  // 登録済みの目標を書き換える(設定画面の編集)。primary と id・作成日時は変えない
+  function updateTarget(id, patch) {
+    const list = listTargets();
+    const t = list.find((x) => x.id === id);
+    if (!t || !patch) return null;
+    if (typeof patch.name === `string`) t.name = patch.name.trim() || `試験`;
+    if (patch.examTypeId != null) t.examTypeId = examType(patch.examTypeId) ? patch.examTypeId : `other`;
+    if (DateUtil.isValid(patch.date)) t.date = patch.date;
+    saveTargets(list);
+    return t;
+  }
+
+  // 主目標: ホームに表示する(★)指定が終わっていなければそれ > 直近の未来の試験 > ★の試験 > 最後の過去の試験
+  // (★の試験が終わったあとも、次の試験があればそちらを表示する。設定画面の行は「終了」と表示される)
   function primaryTarget() {
     const list = listTargets();
     if (!list.length) return null;
-    const flagged = list.find((t) => t.primary);
-    if (flagged) return flagged;
     const today = DateUtil.today();
     const upcoming = list.filter((t) => t.date >= today).sort((a, b) => (a.date < b.date ? -1 : 1));
+    const flagged = list.find((t) => t.primary);
+    if (flagged && (flagged.date >= today || !upcoming.length)) return flagged;
     if (upcoming.length) return upcoming[0];
     return list.slice().sort((a, b) => (a.date < b.date ? 1 : -1))[0];
   }
 
+  // 「今日の復習」で1日に出す新しい用語の上限(review.js と同じ解釈。壊れた値は標準の10語)
+  function newLimit() {
+    const def = (window.Views && Views.review && Views.review.DEFAULT_NEW_LIMIT) || 10;
+    const n = Number(Storage.get(`reviewNewLimit`, def));
+    return Number.isFinite(n) && n >= 0 ? Math.min(100, Math.floor(n)) : def;
+  }
+
+  // 今日の復習で、これから出せる新しい用語の数(1日の上限 − 今日すでに出した数、未学習の数まで)
+  function newAvailableToday() {
+    const nt = Storage.get(`reviewNewToday`, {});
+    const usedToday = nt && nt.date === DateUtil.today() && Array.isArray(nt.ids) ? nt.ids.length : 0;
+    return Math.min(Math.max(0, newLimit() - usedToday), newCount());
+  }
+
   // 学習ペース: 残り日数から最終復習用の予備日を引き、1日あたりに必要な新規学習数を出す
+  // overLimit: 1日に必要な数が「今日の復習」の新しい用語の上限を超えている(今の設定では間に合わない)
   function pace(target) {
     const today = DateUtil.today();
     const daysLeft = DateUtil.diffDays(today, target.date);
@@ -287,6 +315,7 @@ window.Stats = (function () {
     const buffer = Math.min(14, Math.floor(Math.max(daysLeft, 0) * 0.2));
     const studyDays = Math.max(1, daysLeft - buffer);
     const perDay = daysLeft > 0 ? Math.ceil(remaining / studyDays) : 0;
+    const limit = newLimit();
     return {
       daysLeft,
       remaining,
@@ -294,6 +323,8 @@ window.Stats = (function () {
       perDay,
       buffer,
       dueToday: dueReviewCount(),
+      newLimit: limit,
+      overLimit: daysLeft > 0 && perDay > limit,
       suggestMock: daysLeft > 0 && daysLeft <= 60 && !!(type && type.mockExam),
     };
   }
@@ -301,6 +332,6 @@ window.Stats = (function () {
   return {
     examTypes, examType, dueReviewCount, newCount, srsBuckets, termStatus, categoryOf, termsInCategory,
     byCategory, byTopic, overall, heatmap, levelOf, weakTerms, examHistory,
-    listTargets, addTarget, removeTarget, setPrimary, primaryTarget, pace,
+    listTargets, addTarget, updateTarget, removeTarget, setPrimary, primaryTarget, pace, newLimit, newAvailableToday,
   };
 })();

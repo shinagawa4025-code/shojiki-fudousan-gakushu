@@ -392,10 +392,6 @@ window.APP_DATA.basics = [
     simpleExplanation: `転入届・運転免許証やマイナンバーカードの住所変更、郵便物の転送届など、引っ越し後に必要な行政・生活手続きをまとめて行う`,
     deepDive: `転入届は引っ越し後14日以内が期限とされており、放置すると過料の対象になりうるため早めに済ませておきたい`,
     relatedEpisodes: [] },
-  { id: `basicI12`, name: `退去予告と退去立会いとは`, aliases: [], level: `超入門`, source: `general`, topicIds: [`topicI`], sources: [`src12`], lawRef: `民法617条・621条`,
-    simpleExplanation: `退去予告は契約書の特約で引っ越しの1〜2ヶ月前までの通知を求められることが多く、退去立会いは実際に引っ越した後、部屋の状態を貸主側と一緒に確認する手続き`,
-    deepDive: `退去予告の期間は契約書の特約で定められるのが通常(民法617条の法定期間は建物で3ヶ月)。立会いの場で原状回復の範囲(民法621条)について口頭合意した内容は、後々の敷金精算トラブルを避けるためにもメモや写真で記録しておくと安心`,
-    relatedEpisodes: [] },
 
   // topicA 判例追補
   { id: `basicA21`, name: `敷引特約の有効性に関する判例`, aliases: [], level: `上級`, source: `general`, topicIds: [`topicA`], sources: [`src10`], lawRef: `最高裁判所平成23年3月24日判決`,

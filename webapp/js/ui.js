@@ -30,9 +30,11 @@ window.UI = (function () {
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     }
     document.addEventListener(`keydown`, onKeydown);
-    return function release() {
+    // restoreFocus=false: 画面遷移で閉じるときは、新しい画面の見出しに移したフォーカスを奪わない
+    return function release(restoreFocus) {
       document.removeEventListener(`keydown`, onKeydown);
-      if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus({ preventScroll: true });
+      if (restoreFocus === false) return;
+      if (previouslyFocused && previouslyFocused.focus && previouslyFocused.isConnected !== false) previouslyFocused.focus({ preventScroll: true });
     };
   }
 
@@ -41,9 +43,10 @@ window.UI = (function () {
     return new Promise((resolve) => {
       const overlay = document.createElement(`div`);
       overlay.className = `modal-overlay`;
+      const msgId = `modal-msg-${++confirmSeq}`;
       overlay.innerHTML = `
-        <div class="modal-box" role="alertdialog" aria-modal="true" aria-label="確認">
-          <p class="modal-message">${message}</p>
+        <div class="modal-box" role="alertdialog" aria-modal="true" aria-label="確認" aria-describedby="${msgId}">
+          <p class="modal-message" id="${msgId}">${message}</p>
           <div class="modal-actions">
             <button type="button" class="btn btn-secondary" data-role="cancel">${opts.cancelLabel || `キャンセル`}</button>
             <button type="button" class="btn ${opts.danger ? `btn-danger` : ``}" data-role="confirm">${opts.confirmLabel || `OK`}</button>
@@ -52,26 +55,64 @@ window.UI = (function () {
       `;
       document.body.appendChild(overlay);
       const release = trapFocus(overlay, () => close(false));
+      let closed = false;
 
-      function close(result) {
-        release();
+      function close(result, restoreFocus) {
+        if (closed) return;
+        closed = true;
+        window.removeEventListener(`hashchange`, onHashChange);
+        release(restoreFocus);
         overlay.remove();
         resolve(result);
       }
+      // 画面が切り替わったら(時間切れの自動提出・戻る操作など)、元の画面の確認は取り消し扱いで閉じる
+      function onHashChange() { close(false, false); }
+      window.addEventListener(`hashchange`, onHashChange);
 
       overlay.addEventListener(`click`, (e) => { if (e.target === overlay) close(false); });
       overlay.querySelector(`[data-role="cancel"]`).addEventListener(`click`, () => close(false));
       overlay.querySelector(`[data-role="confirm"]`).addEventListener(`click`, () => close(true));
-      overlay.querySelector(`[data-role="confirm"]`).focus();
+      // 削除・上書きなど取り消せない操作は、Enter の押し間違いで実行しないよう「キャンセル」を先に選んでおく
+      overlay.querySelector(opts.danger ? `[data-role="cancel"]` : `[data-role="confirm"]`).focus();
+    });
+  }
+  let confirmSeq = 0;
+
+  // 読み上げ用の領域は1つだけ置き、トーストの文言をそこで知らせる(トーストごとに role=status を作らない)
+  let liveRegion = null;
+  function announce(text) {
+    if (!liveRegion || !liveRegion.isConnected) {
+      liveRegion = document.createElement(`div`);
+      liveRegion.className = `sr-only`;
+      liveRegion.setAttribute(`role`, `status`);
+      liveRegion.setAttribute(`aria-live`, `polite`);
+      document.body.appendChild(liveRegion);
+    }
+    // 同じ文言が続いても読み上げられるよう、いったん空にしてから入れる
+    liveRegion.textContent = ``;
+    setTimeout(() => { liveRegion.textContent = text; }, 50);
+  }
+
+  // 表示中のトースト。複数出たときは重ならないよう、新しいものを基準位置に、古いものを順に外側へずらす
+  const activeToasts = [];
+  const TOAST_GAP = 8;
+  function layoutToasts() {
+    [false, true].forEach((top) => {
+      let offset = 0;
+      activeToasts.filter((el) => el.classList.contains(`toast-top`) === top).reverse().forEach((el) => {
+        // 下に出るものは上へ、上に出るものは下へずらす
+        el.style.setProperty(`--toast-shift`, `${top ? offset : -offset}px`);
+        offset += el.offsetHeight + TOAST_GAP;
+      });
     });
   }
 
-  // opts: { action: { label, onClick }, duration }
+  // opts: { action: { label, onClick }, duration, position: 'top', dismissible }
   function toast(message, type, opts) {
     opts = opts || {};
     const el = document.createElement(`div`);
     el.className = `toast toast-${type || `default`}${opts.position === `top` ? ` toast-top` : ``}`;
-    el.setAttribute(`role`, `status`);
+    announce(message);
     const icon = type === `success` ? ic(`check-circle`, { size: 18 }) : type === `error` ? ic(`alert`, { size: 18 }) : ``;
     el.innerHTML = `${icon}<span>${escapeHtml(message)}</span>`;
     if (opts.action) {
@@ -92,11 +133,19 @@ window.UI = (function () {
       el.appendChild(x);
     }
     document.body.appendChild(el);
+    activeToasts.push(el);
+    layoutToasts();
     requestAnimationFrame(() => el.classList.add(`toast-show`));
     let timer = null;
+    let gone = false;
     function dismiss() {
+      if (gone) return;
+      gone = true;
       clearTimeout(timer);
       el.classList.remove(`toast-show`);
+      const i = activeToasts.indexOf(el);
+      if (i >= 0) activeToasts.splice(i, 1);
+      layoutToasts();
       setTimeout(() => el.remove(), 300);
     }
     if (opts.duration !== 0) timer = setTimeout(dismiss, opts.duration || 2600);
@@ -127,19 +176,20 @@ window.UI = (function () {
     let closed = false;
     const release = trapFocus(backdrop, () => close());
 
-    function close() {
+    function close(restoreFocus) {
       if (closed) return;
       closed = true;
-      release();
+      release(restoreFocus === false ? false : undefined);
       document.body.style.overflow = ``;
       backdrop.remove();
-      window.removeEventListener(`hashchange`, close);
+      window.removeEventListener(`hashchange`, onHashChange);
       if (opts.onClose) opts.onClose();
     }
+    function onHashChange() { close(false); }
 
     backdrop.addEventListener(`click`, (e) => { if (e.target === backdrop) close(); });
-    backdrop.querySelector(`[data-role="sheet-close"]`).addEventListener(`click`, close);
-    window.addEventListener(`hashchange`, close);
+    backdrop.querySelector(`[data-role="sheet-close"]`).addEventListener(`click`, () => close());
+    window.addEventListener(`hashchange`, onHashChange);
     // 最初のフォーカスは閉じるボタンへ(本文末尾のリンクにフォーカスするとシートが下までスクロールしてしまうため)
     const firstFocusable = backdrop.querySelector(`[data-role="sheet-close"]`) || body.querySelector(FOCUSABLE);
     if (firstFocusable) firstFocusable.focus({ preventScroll: true });

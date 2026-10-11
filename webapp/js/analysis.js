@@ -5,12 +5,14 @@
 // ■ 習熟度(0〜100)
 //   習熟度 = 100 ×(0.7 × 重み付き正答率 × 回答量係数 + 0.3 × 学習カバー率)
 //   ・回答量係数 = min(1, 回答数 ÷ 10)。回答が10問に満たないうちは正答率の点を割り引く
-//   ・学習カバー率 = 分野の用語・基礎知識のうち一度でも学習したものの割合
+//   ・学習カバー率(着手率) = 分野の用語・基礎知識のうち一度でも学習したもの(着手)の割合
 //     (記憶済み・学習済み・復習カードあり・クイズや○×で出題済み)。分野に用語がないときは正答率だけで計算する
+//   ※「学習済み」は記憶済み(★)・学習済み(✓)にしたものだけ(着手とは別の数)
 //   ・重み: 4択 1 / 記述(自己採点) 0.5 / 自動生成クイズ 1 / ○× 1(直近の1回をもう1回分) /
 //           模擬試験 直近×2・その前×1.5・それ以前×1
 // ■ 優先度 = (分野の例年出題数 ÷ その試験で最大の出題数)×(100 − 習熟度)÷ 100
 // 画面に出す「正答率」は重みなしの単純な正答率(正解数 ÷ 回答数)
+// ■ 模擬試験の推移 = その分野が4問以上出た回のうち、同じ形式(フル/ショート)の直近2回の正答率の差
 window.Analysis = (function () {
   const MIN_CONFIDENT = 10; // これ未満は「データ不足」
   const MID_CONFIDENT = 30;
@@ -19,6 +21,7 @@ window.Analysis = (function () {
   const EXAM_WEIGHTS = [2, 1.5]; // 直近・その前(それ以前は1)
   const OX_RECENT_BONUS = 1;
   const TREND_STEP = 5; // ±5ポイント以上で上昇・下降
+  const TREND_MIN_TOTAL = 4; // 分野の出題がこれ未満の回は推移に使わない(1〜3問の正答率は振れが大きい)
   const WEAK_EXAM_WINDOW = 3; // 苦手判定に使う直近の模擬試験の回数
   const GOOD_ACC = 70;
   const SOURCE_DEFS = [
@@ -147,7 +150,9 @@ window.Analysis = (function () {
     const ts = [e.finishedAt, e.startedAt].find(validTs) || 0;
     const total = count(e.total);
     const score = Math.min(count(e.score), total);
-    return { examTypeId: typeof e.examTypeId === `string` ? e.examTypeId : null, byCategory, wrong, t: ts, i, score, total };
+    // 形式(フル/ショート)。推移は同じ形式どうしでだけ比べる
+    const mode = e.mode === `full` || e.mode === `short` ? e.mode : null;
+    return { examTypeId: typeof e.examTypeId === `string` ? e.examTypeId : null, mode, byCategory, wrong, t: ts, i, score, total };
   }
 
   function loadAuto() {
@@ -221,7 +226,8 @@ window.Analysis = (function () {
   function newBucket() {
     const sources = {};
     SOURCE_DEFS.forEach((s) => { sources[s.id] = { correct: 0, total: 0, wCorrect: 0, wTotal: 0 }; });
-    return { sources, total: 0, studied: 0, trend: null };
+    // studied = 着手(一度でも学習・出題した)、learned = 学習済み(記憶済み★・学習済み✓にしたもの)
+    return { sources, total: 0, studied: 0, learned: 0, trend: null };
   }
 
   function addTo(bucket, src, correct, total, weight) {
@@ -272,6 +278,7 @@ window.Analysis = (function () {
     return {
       total: b.total,
       studied: b.studied,
+      learned: b.learned,
       coverage,
       coveragePct: coverage == null ? null : Math.round(coverage * 100),
       attempts: total,
@@ -286,7 +293,12 @@ window.Analysis = (function () {
     };
   }
 
-  // 学習した用語(カバー率の分子): 記憶済み・学習済み・復習カード・自動クイズ・確認問題・○×
+  // 学習済み(進捗画面・ホームの「学習済み」と同じ): 記憶済み(★)か、基礎知識で学習済み(✓)にしたもの
+  function isLearned(d, id) {
+    return !!d.known[id] || (isObj(d.bp[id]) && !!d.bp[id].learned);
+  }
+
+  // 着手した用語(カバー率の分子): 記憶済み・学習済み・復習カード・自動クイズ・確認問題・○×
   function studiedSet(d, quizById) {
     const set = dict();
     const mark = (id) => { if (termById(id)) set[id] = true; };
@@ -361,6 +373,7 @@ window.Analysis = (function () {
       if (!cid || !buckets[cid]) return;
       buckets[cid].total += 1;
       if (studied[t.id]) buckets[cid].studied += 1;
+      if (isLearned(d, t.id)) buckets[cid].learned += 1;
     });
     accumulate(d, quizById, buckets, (tid) => { const c = catOfTerm(tid); return c ? [c] : []; }, (q) => { const c = catOfQuiz(q); return c ? [c] : []; });
 
@@ -373,13 +386,22 @@ window.Analysis = (function () {
         if (buckets[cid]) addTo(buckets[cid], `exam`, v.correct, v.total, weight);
       });
     });
+    // 推移: その分野が4問以上出た回のうち、同じ形式(フル/ショート)の直近2回を比べる
+    // (直近がショートでも、ショートが1回しかなければフルどうしの直近2回を使う)
     cats.forEach((c) => {
-      const withCat = typeExams.filter((e) => e.byCategory[c.id]);
-      if (withCat.length >= 2) {
-        const a = withCat[0].byCategory[c.id];
-        const b = withCat[1].byCategory[c.id];
-        buckets[c.id].trend = trendOf(pct(a.correct, a.total), pct(b.correct, b.total));
+      const usable = typeExams.filter((e) => e.mode && e.byCategory[c.id] && e.byCategory[c.id].total >= TREND_MIN_TOTAL);
+      let last = null;
+      let prev = null;
+      for (let k = 0; k < usable.length && !prev; k++) {
+        const p = usable.slice(k + 1).find((e) => e.mode === usable[k].mode);
+        if (p) { last = usable[k]; prev = p; }
       }
+      if (!prev) return;
+      const a = last.byCategory[c.id];
+      const b = prev.byCategory[c.id];
+      const tr = trendOf(pct(a.correct, a.total), pct(b.correct, b.total));
+      if (tr) tr.mode = last.mode;
+      buckets[c.id].trend = tr;
     });
 
     const qs = cats.map((c) => (typeof c.questions === `number` && c.questions > 0 ? c.questions : 0));
@@ -412,6 +434,7 @@ window.Analysis = (function () {
       (own(AppIndex.topicTermIndex, t.id) || []).forEach((id) => {
         buckets[t.id].total += 1;
         if (studied[id]) buckets[t.id].studied += 1;
+        if (isLearned(d, id)) buckets[t.id].learned += 1;
       });
     });
     const topicsOf = (ids) => (Array.isArray(ids) ? ids.filter((id) => typeof id === `string` && buckets[id]) : []);
@@ -506,10 +529,10 @@ window.Analysis = (function () {
       items.push({ kind: `term`, id, title: t.name, reasons, nav: termNav(t), icon: `layers`, score, termId: id, category: catInfo(t) });
     });
 
-    // 選んだ試験の分野に入るものを先に、その中は苦手度順(同点なら出題数の多い分野を先に)
+    // 分野の区分がある試験では、その試験の分野に入るものだけを出す(税理士を選んだのに宅建の権利関係の用語が並ばないように)
+    // 並びは苦手度順(同点なら出題数の多い分野を先に)
     items.forEach((it) => { it.sub = join([it.category ? it.category.name : ``].concat(it.reasons)); });
-    const inCat = (it) => (hasCats && it.category ? 1 : 0);
-    return items.sort((a, b) => (inCat(b) - inCat(a)) || (b.score - a.score)
+    return items.filter((it) => !hasCats || it.category).sort((a, b) => (b.score - a.score)
       || (((b.category && b.category.questions) || 0) - ((a.category && a.category.questions) || 0)));
   }
 
@@ -566,20 +589,21 @@ window.Analysis = (function () {
     });
     let a = null;
     if (r.attempts < MIN_CONFIDENT && (r.coverage == null || r.coverage < 0.3) && readTopic) {
-      // studied は「一度でも学習・出題したもの」(カバー率の分子)。進捗画面の「学習済み」(記憶済み・学習済みのチェック)とは別の数
-      a = readAction(`取り組んだ項目 ${r.studied}/${r.total}`);
+      // studied は「着手」(一度でも学習・出題したもの。カバー率の分子)。「学習済み」(記憶済み★・学習済み✓)とは別の数
+      a = readAction(`着手 ${r.studied}/${r.total}`);
     } else if (r.attempts < MIN_CONFIDENT) {
       a = practice();
       if (a) a.detail = join([r.attempts ? `まだ${r.attempts}問しか解いていません` : `まだ問題を解いていません`, `まず実力を確認`, q]);
     } else if (r.accuracy < GOOD_ACC) {
       if ((ctx.weakTermsByCat[r.id] || 0) >= 3 && quizTopic) {
-        a = { kind: `quiz`, title: `${r.name}の苦手な用語クイズ`, nav: `#quiz/auto/${quizTopic.id}`, icon: `target` };
+        // 末尾の /weak: そのトピックの苦手な用語を優先して出題する
+        a = { kind: `quiz`, title: `${r.name}の苦手な用語クイズ`, nav: `#quiz/auto/${quizTopic.id}/weak`, icon: `target` };
       } else {
         a = practice();
       }
       if (a) a.detail = join([`正答率${r.accuracy}%`, q]);
     } else if (r.coverage != null && r.coverage < 0.6 && readTopic) {
-      a = readAction(`正答率${r.accuracy}%・まだ取り組んでいない項目が${r.total - r.studied}`);
+      a = readAction(`正答率${r.accuracy}%・未着手の項目が${r.total - r.studied}`);
     } else {
       a = practice();
       if (a) {
@@ -605,25 +629,28 @@ window.Analysis = (function () {
       const a = categoryAction(r, snap.ctx);
       if (a) cands.push(a);
     });
+    // ○×の苦手・自動クイズの苦手は全分野が対象(分野で絞れない)。宅建士以外を選んでいるときは「(全分野)」と明示する
+    const allScope = snap.examTypeId !== `takken` ? `(全分野)` : ``;
     // 出すかどうかは直近の回答が×の文の数で決め、件数はリンク先(#ox/weak = 間違えたことがある文)の数を示す
     if (snap.ctx.oxLastWrong >= 3) {
-      cands.push({ kind: `ox-weak`, title: `○×で間違えた文を解き直す`, detail: `間違えたことがある文が${snap.ctx.oxEverWrong}問あります。間違えた回数の多い順に出題します`, nav: `#ox/weak`, icon: `o-x`, priority: 0.5 });
+      cands.push({ kind: `ox-weak`, title: `○×で間違えた文を解き直す${allScope}`, detail: `間違えたことがある文が${snap.ctx.oxEverWrong}問あります。間違えた回数の多い順に出題します`, nav: `#ox/weak`, icon: `o-x`, priority: 0.5 });
     }
     // 分野別の「苦手な用語クイズ」が出ているときは、全体の苦手クイズは重ねて出さない
     const hasCatWeakQuiz = cands.some((c) => c.kind === `quiz` && c.icon === `target`);
     if (snap.ctx.autoWeak >= 3 && !hasCatWeakQuiz) {
-      cands.push({ kind: `auto-weak`, title: `苦手な用語を優先してクイズ`, detail: `自動生成クイズで間違いが多い用語が${snap.ctx.autoWeak}語あります`, nav: `#quiz/auto/weak`, icon: `target`, priority: 0.45 });
+      cands.push({ kind: `auto-weak`, title: `苦手な用語を優先してクイズ${allScope}`, detail: `自動生成クイズで間違いが多い用語が${snap.ctx.autoWeak}語あります`, nav: `#quiz/auto/weak`, icon: `target`, priority: 0.45 });
     }
     const type = snap.type;
     if (type && type.mockExam) {
       const last = snap.typeExams[0];
+      // #exam/short: 模擬試験のメニューをショートを選んだ状態で開く
       if (!last) {
-        cands.push({ kind: `exam`, title: `模擬試験(ショート)で実力を確認`, detail: `まだ受けていません。分野ごとの正答率がまとめてわかります`, nav: `#exam`, icon: `timer`, priority: snap.totalAttempts >= MID_CONFIDENT ? 0.5 : 0.2 });
+        cands.push({ kind: `exam`, title: `模擬試験(ショート)で実力を確認`, detail: `まだ受けていません。分野ごとの正答率がまとめてわかります`, nav: `#exam/short`, icon: `timer`, priority: snap.totalAttempts >= MID_CONFIDENT ? 0.5 : 0.2 });
       } else {
         const lastDate = dateOfTs(last.t);
         const days = lastDate ? DateUtil.diffDays(lastDate, DateUtil.today()) : null;
         if (days == null || days >= 14) {
-          cands.push({ kind: `exam`, title: `模擬試験(ショート)で確認`, detail: join([days != null ? `前回から${days}日` : ``, last.total ? `前回${pct(last.score, last.total)}%` : ``, `分野ごとの伸びを確認`]), nav: `#exam`, icon: `timer`, priority: 0.35 });
+          cands.push({ kind: `exam`, title: `模擬試験(ショート)で確認`, detail: join([days != null ? `前回から${days}日` : ``, last.total ? `前回${pct(last.score, last.total)}%` : ``, `分野ごとの伸びを確認`]), nav: `#exam/short`, icon: `timer`, priority: 0.35 });
         }
       }
     }
@@ -725,6 +752,20 @@ window.Analysis = (function () {
     return snap;
   }
 
+  // 「いま伸ばすと効果が大きい分野」に選んだ理由(並び順 = 出題数 × 習熟度の低さ の中身を言葉にする)
+  function focusReasons(r, rows) {
+    const out = [];
+    const maxQ = Math.max(0, ...rows.map((x) => x.questions || 0));
+    if (r.questions && r.questions === maxQ && rows.length > 1) out.push(`例年${r.questions}問と出題が最も多い`);
+    else if (r.questions && maxQ && r.questions * 2 >= maxQ) out.push(`例年${r.questions}問と出題が多い`);
+    if (r.attempts === 0) out.push(`まだ問題を解いていない`);
+    else if (r.attempts < MIN_CONFIDENT) out.push(`回答がまだ${r.attempts}問と少ない`);
+    else if (r.accuracy != null && r.accuracy < GOOD_ACC) out.push(`正答率が${r.accuracy}%と7割未満`);
+    if (r.total > 0 && r.coverage != null && r.coverage < 0.6) out.push(`未着手の項目が${r.total - r.studied}件ある`);
+    if (!out.length) out.push(`習熟度${r.mastery}/100で、まだ伸びしろがある`);
+    return out;
+  }
+
   function summarize(snap) {
     const rows = snap.categories.filter((r) => r.available);
     let mastery = null;
@@ -741,6 +782,11 @@ window.Analysis = (function () {
     const focus = rows.length ? rows.find((r) => r.rank === 1) || null : null;
     const attempts = rows.reduce((s, r) => s + r.attempts, 0);
     const pick = (r) => (r ? { id: r.id, name: r.name, mastery: r.mastery, accuracy: r.accuracy, attempts: r.attempts, confidence: r.confidence, questions: r.questions } : null);
+    const focusPick = pick(focus);
+    if (focusPick) {
+      focusPick.reasons = focusReasons(focus, rows);
+      focusPick.reason = focusPick.reasons.join(`・`);
+    }
     return {
       examTypeId: snap.examTypeId,
       examName: snap.type ? (snap.type.shortName || snap.type.name) : ``,
@@ -749,7 +795,7 @@ window.Analysis = (function () {
       confidence: confidenceOf(attempts),
       mastery,
       weakest: pick(weakest),
-      focus: pick(focus),
+      focus: focusPick,
       topAction: snap.actions[0] || null,
       // ホームの「今日やること」と重ならないよう、復習以外で最上位のもの
       topStudyAction: snap.actions.find((a) => a.kind !== `review`) || null,
@@ -794,6 +840,6 @@ window.Analysis = (function () {
   return {
     analyze, byCategory, byTopic, weakPoints, nextActions, summary, weakTermIds, weakTermCount,
     SOURCE_DEFS, CONFIDENCE_LABELS, MIN_CONFIDENT,
-    _internal: { load, normalizeExam, masteryScore, confidenceOf, trendOf, pickTopic, categoryAction, buildActions, resolveType, count, validTs, termNav, isMc, constants: { MIN_CONFIDENT, MID_CONFIDENT, ACC_WEIGHT, COVER_WEIGHT, EXAM_WEIGHTS, OX_RECENT_BONUS, TREND_STEP, WEAK_EXAM_WINDOW, GOOD_ACC } },
+    _internal: { load, normalizeExam, masteryScore, confidenceOf, trendOf, pickTopic, categoryAction, buildActions, focusReasons, resolveType, count, validTs, termNav, isMc, constants: { MIN_CONFIDENT, MID_CONFIDENT, ACC_WEIGHT, COVER_WEIGHT, EXAM_WEIGHTS, OX_RECENT_BONUS, TREND_STEP, TREND_MIN_TOTAL, WEAK_EXAM_WINDOW, GOOD_ACC } },
   };
 })();

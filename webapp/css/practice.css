@@ -1,0 +1,217 @@
+/* 演習(クイズ・今日の復習)の追加スタイル */
+/* style.css より後に読み込み、必要なところだけ上書きする。色はすべてトークン(ライト・ダーク共通) */
+
+/* ---------- 共通 ---------- */
+/* タップしてすぐ反応するように(ダブルタップによる拡大の待ち時間をなくす) */
+.choice-btn, .grade-btn, .ox-btn, .ox-next, .quiz-next { touch-action: manipulation; }
+
+/* 「「〇〇」を今日の復習に追加しました」(4択・自動生成クイズ・○×で共通) */
+.review-added {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  color: var(--color-text-muted);
+}
+.review-added .icon { flex-shrink: 0; margin-top: 2px; }
+.review-added a { color: var(--color-primary); font-weight: 700; text-underline-offset: 2px; }
+
+/* セッションの終わりの「今日 n問・連続 n日目」 */
+.streak-line {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-warning-bg);
+  color: var(--color-text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+.streak-line .icon { flex-shrink: 0; color: var(--color-warning); }
+.streak-line strong { font-weight: 700; }
+.empty-state .streak-line { margin: 0; }
+
+/* ---------- クイズ ---------- */
+.quiz-mode { margin-bottom: var(--sp-4); }
+
+.quiz-keys { margin: calc(var(--sp-2) * -1) 0 var(--sp-3); font-size: var(--fs-xs); color: var(--color-text-muted); line-height: 2; }
+.quiz-keys kbd {
+  font-family: var(--font-sans);
+  font-size: var(--fs-2xs);
+  padding: 0 5px;
+  border: 1px solid var(--color-border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+@media (hover: none), (pointer: coarse) { .quiz-keys { display: none; } }
+
+/* 「次の問題へ」で上端に合わせたときの余白(スマホの固定ヘッダーの分は style.css の html の scroll-padding-top で確保済み) */
+.quiz-card, .quiz-summary { scroll-margin-top: var(--sp-2); }
+.quiz-question:focus, .quiz-summary:focus { outline: none; }
+.quiz-card-tools { margin-left: auto; }
+
+/* 絞り込み条件から外れた回答済みのカード(薄くせずに印だけ付ける) */
+.stale-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* 選択肢: 回答後は、選択肢ごとの○×の理由をボタンの中に出す */
+.choice-body { display: flex; flex-direction: column; gap: var(--sp-1); flex: 1 1 auto; min-width: 0; }
+.choice-btn.is-done { align-items: flex-start; cursor: default; }
+.choice-btn.is-done:disabled { opacity: 1; }
+.choice-btn.is-done:not(.correct):not(.incorrect) .choice-text { color: var(--color-text-muted); }
+.choice-tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.choice-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sp-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  line-height: 1.6;
+}
+.choice-tag.is-answer { background: var(--color-success-fill); color: var(--color-on-primary); }
+.choice-tag.is-mine { background: var(--color-surface); border-color: var(--color-border-strong); color: var(--color-text); }
+.choice-btn.incorrect .choice-tag.is-mine { background: var(--color-danger-fill); border-color: transparent; color: var(--color-on-primary); }
+.choice-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  padding-top: var(--sp-1);
+  border-top: 1px dashed var(--color-border-strong);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  line-height: var(--lh-snug);
+  color: var(--color-text);
+}
+/* 戻るで再表示したカードは、正解・不正解の動きを付けない */
+.quiz-card.is-restored .choice-btn { animation: none; }
+
+/* 判定(選択肢のすぐ下) */
+.quiz-feedback:not(:empty) { margin-top: var(--sp-3); }
+.quiz-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin: 0; font-size: var(--fs-lg); line-height: var(--lh-tight); }
+.quiz-verdict.is-ok { color: var(--color-success); }
+.quiz-verdict.is-ng { color: var(--color-danger); }
+.quiz-verdict-detail { font-size: var(--fs-sm); font-weight: 500; color: var(--color-text); }
+
+/* 全体の解説・用語・次の問題へ */
+.quiz-explain { margin-top: var(--sp-3); padding: var(--sp-3); border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.quiz-explain-title { margin: 0 0 var(--sp-1); font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); letter-spacing: .04em; }
+.quiz-explain-text { margin: 0; font-size: var(--fs-md); line-height: var(--lh-body); }
+.quiz-meaning { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); }
+.quiz-meaning strong { color: var(--color-text); }
+.quiz-after-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-top: var(--sp-3); }
+.quiz-after-links:empty { display: none; }
+.quiz-after-links .link-btn { min-height: 40px; font-size: var(--fs-sm); }
+.quiz-next { margin-top: var(--sp-3); gap: var(--sp-1); }
+.quiz-self-ask { margin: var(--sp-2) 0 var(--sp-1); font-size: var(--fs-sm); color: var(--color-text-muted); }
+
+/* 自動生成クイズ: 条件は1行にたたむ */
+.auto-top { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.auto-cond { border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.auto-cond-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-md);
+  border-radius: var(--radius-md);
+}
+.auto-cond-summary::-webkit-details-marker { display: none; }
+.auto-cond-key { flex-shrink: 0; font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); }
+.auto-cond-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--color-text); }
+.auto-cond-summary > .icon, .weak-terms-summary > .icon:last-child { flex-shrink: 0; color: var(--color-text-muted); transition: transform var(--dur-2) var(--ease-std); }
+.auto-cond[open] > .auto-cond-summary > .icon, .weak-terms-panel[open] > .weak-terms-summary > .icon:last-child { transform: rotate(180deg); }
+.auto-cond-body { padding: 0 var(--sp-3) var(--sp-3); border-top: 1px solid var(--color-border); }
+.auto-cond-label { margin: var(--sp-3) 0 var(--sp-2); font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); line-height: var(--lh-tight); }
+.auto-cond-body .chip-row-scroll { margin-inline: calc(var(--sp-3) * -1); padding-inline: var(--sp-3); scroll-padding-inline: var(--sp-3); }
+.auto-cond-body .memorize-toggle { margin-top: var(--sp-2); }
+@media (min-width: 768px) {
+  .auto-cond-body .chip-row-scroll { margin-inline: 0; padding-inline: 0; }
+}
+
+.quiz-view .weak-terms-panel { display: block; margin: 0; border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.quiz-view .weak-terms-panel[hidden] { display: none; }
+.weak-terms-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 40px;
+  padding: var(--sp-1) var(--sp-3);
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-md);
+}
+.weak-terms-summary::-webkit-details-marker { display: none; }
+.weak-terms-summary > .icon:first-child { flex-shrink: 0; }
+.weak-terms-summary .weak-terms-label { flex: 0 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weak-terms-count { flex-shrink: 0; font-weight: 700; color: var(--color-text); }
+.weak-terms-summary > .icon:last-child { margin-left: auto; }
+.weak-terms-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-3) var(--sp-3); }
+.weak-terms-chips .chip-muted { background: var(--color-surface); }
+.weak-terms-rest { display: contents; }
+.weak-terms-rest[hidden] { display: none; }
+
+.auto-score-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.auto-score-row .progress-text { margin: 0; }
+.auto-score-row .btn { flex-shrink: 0; }
+
+/* 結果 */
+.quiz-summary .card-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0; }
+.quiz-summary-bar { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
+.quiz-summary-pct { flex-shrink: 0; font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); }
+.quiz-summary-label { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text); line-height: var(--lh-snug); }
+.quiz-summary-note { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
+
+/* 用語のシート(クイズ・○×から開く) */
+.term-sheet-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); margin-bottom: var(--sp-3); }
+.term-sheet .term-deep { margin-bottom: var(--sp-1); }
+.term-sheet-figure { margin-top: var(--sp-3); }
+.term-sheet-figure .figure { margin: var(--sp-3) 0 0; }
+.term-sheet-links { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--color-border); }
+
+/* ---------- 今日の復習 ---------- */
+/* 裏面は全文を表示する(固定の高さ 272px に収まらない用語が多いため)。表面と、めくる動きは従来どおり */
+.review-view [data-role="review-area"] { display: block; scroll-margin-top: var(--sp-2); }
+.review-view .flip-card { height: auto; }
+.review-view .flip-card-inner { min-height: 272px; }
+.review-view .flip-card.flipped .flip-card-back { position: relative; overflow: visible; min-height: 272px; }
+/* 長い裏面を読んでいる間も、評価ボタンを画面の下(スマホでは下部タブの上)に出しておく
+   (下部タブとの隙間とカードの影は、背景色の影で塗ってカードが透けないように) */
+.review-view .review-grade-row {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  width: 100%;
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-2) 0;
+  background: var(--color-bg);
+  box-shadow: 0 var(--sp-2) 0 var(--sp-1) var(--color-bg);
+}
+@media (max-width: 1023px) {
+  .review-view .review-grade-row { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--sp-2)); }
+}
+
+@media (min-width: 1024px) {
+  .quiz-card, .quiz-summary, .review-view [data-role="review-area"] { scroll-margin-top: var(--sp-4); }
+}

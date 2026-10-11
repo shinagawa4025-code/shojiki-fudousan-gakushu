@@ -1,7 +1,41 @@
 // 用語集・フラッシュカードビュー(作中用語+基礎知識を統合)
 window.Views = window.Views || {};
 window.Views.glossary = (function () {
+  // `全て` は「すべて」を表す内部の値(履歴に保存した絞り込みと合わせるため値は変えない。表示は「すべて」)
   const LEVELS = [`全て`, `超入門`, `初級`, `中級`, `上級`];
+  const levelLabel = (lvl) => (lvl === `全て` ? `すべて` : lvl);
+
+  // 全角半角・カタカナひらがなの違いを無視して検索(検索用の文字列は用語ごとに一度だけ作る)
+  const norm = (s) => ((window.GlobalSearch && GlobalSearch.norm) ? GlobalSearch.norm(s) : String(s || ``).toLowerCase());
+  const normCache = new Map();
+  function normFields(term) {
+    let f = normCache.get(term.id);
+    if (!f) {
+      f = {
+        name: norm(term.name),
+        aliases: (term.aliases || []).map(norm),
+        simple: norm(term.simpleExplanation),
+        law: norm(term.lawRef || ``),
+        deep: norm(term.deepDive || ``),
+      };
+      normCache.set(term.id, f);
+    }
+    return f;
+  }
+
+  // 検索の関連度(小さいほど上): 名前の一致・前方一致 > 名前の部分一致 > 別名 > 説明文 > 根拠条文 > 深掘り。-1 は不一致
+  function rankOf(term, q) {
+    const f = normFields(term);
+    if (f.name === q) return 0;
+    if (f.name.startsWith(q)) return 1;
+    if (f.name.includes(q)) return 2;
+    if (f.aliases.some((a) => a === q || a.startsWith(q))) return 3;
+    if (f.aliases.some((a) => a.includes(q))) return 4;
+    if (f.simple.includes(q)) return 5;
+    if (f.law.includes(q)) return 6;
+    if (f.deep.includes(q)) return 7;
+    return -1;
+  }
 
   function render(root, param) {
     const known = Storage.get(`flashcards`, {});
@@ -9,28 +43,46 @@ window.Views.glossary = (function () {
     let scrollTermId = null;
     if (param) {
       if (param.startsWith(`topic/`)) topicParam = param.slice(`topic/`.length);
-      else scrollTermId = param;
+      // 統合した古い用語ID(保存済みのリンク)は引き継ぎ先の用語を開く
+      else scrollTermId = AppIndex.retiredTermId ? AppIndex.retiredTermId(param) : param;
     }
+    if (topicParam && !AppIndex.topicsById[topicParam]) topicParam = null;
     const STATUSES = [
-      { id: `all`, label: `全て` },
+      { id: `all`, label: `すべて` },
       { id: `untouched`, label: `未着手` },
       { id: `learning`, label: `学習中` },
       { id: `known`, label: `記憶済み` },
       { id: `bookmark`, label: `保存` },
     ];
-    let state = { search: ``, level: `全て`, topic: topicParam || `全て`, status: `all` };
+    const DEFAULTS = { search: ``, level: `全て`, topic: `全て`, status: `all` };
+    let state = Object.assign({}, DEFAULTS, { topic: topicParam || `全て` });
     const PAGE_SIZE = 60;
     let visibleCount = PAGE_SIZE;
-    // 戻るで帰ってきたときは、絞り込みと表示件数を元に戻す(履歴エントリごとに保存)
-    const savedG = !scrollTermId && history.state && typeof history.state === `object` && history.state.gState ? history.state.gState : null;
+    // 戻るで帰ってきたときは、絞り込み・表示件数・めくったカードを元に戻す(履歴エントリごとに保存)
+    // 直リンク(#glossary/<id>)の履歴へ戻ってきたとき(スクロール位置の記録がある)も、対象へ飛ばずに保存した状態を使う
+    const hs = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
+    const returning = Number(hs.y) > 0;
+    const savedG = hs.gState && typeof hs.gState === `object` && (!scrollTermId || returning) ? hs.gState : null;
+    // めくったカード(裏返したカードは背が伸びるため、戻ったときに表に戻すと位置がずれる)
+    const flippedIds = new Set();
+    let restoringFlips = false;
     if (savedG) {
       [`search`, `level`, `topic`, `status`].forEach((k) => { if (typeof savedG[k] === `string`) state[k] = savedG[k]; });
       if (Number(savedG.visible) > 0) visibleCount = Number(savedG.visible);
+      if (Array.isArray(savedG.flipped)) savedG.flipped.forEach((id) => { if (typeof id === `string` && AppIndex.termsById[id]) flippedIds.add(id); });
+      restoringFlips = true;
+      scrollTermId = null;
     }
+    if (!LEVELS.includes(state.level)) state.level = `全て`;
+    if (!STATUSES.some((s) => s.id === state.status)) state.status = `all`;
+    if (state.topic !== `全て` && !AppIndex.topicsById[state.topic]) state.topic = `全て`;
+    const myHash = location.hash;
     function saveState() {
+      // 別の画面へ移ったあと(検索の入力待ちの後など)に書き込むと、移動先の履歴エントリに混ざるため
+      if (location.hash !== myHash || !wrap.isConnected) return;
       try {
-        const st = history.state && typeof history.state === `object` ? history.state : {};
-        history.replaceState(Object.assign({}, st, { gState: { search: state.search, level: state.level, topic: state.topic, status: state.status, visible: Math.max(visibleCount, shownCount) } }), ``);
+        const st = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
+        window.history.replaceState(Object.assign({}, st, { gState: { search: state.search, level: state.level, topic: state.topic, status: state.status, visible: Math.max(visibleCount, shownCount), flipped: Array.from(flippedIds).slice(-200) } }), ``);
       } catch (e) { /* 履歴の保存に失敗しても表示には影響しない */ }
     }
 
@@ -38,14 +90,14 @@ window.Views.glossary = (function () {
     wrap.className = `view glossary-view`;
     wrap.innerHTML = `
       <h2>用語集・フラッシュカード</h2>
-      <p class="view-desc">タップでカードをめくって意味を確認。右上の星マークで「記憶済み」、しおりマークでブックマークできます。「基礎知識」タグは作中に登場しない一般的な不動産知識です。</p>
+      <p class="view-desc">タップでカードをめくって意味を確認。右上の星マークで「記憶済み」、しおりマークでブックマークできます。「基礎知識」タグは作中に登場しない一般的な不動産知識です。根拠条文(例: 96条、借地借家法)でも検索できます。</p>
       <div class="toolbar">
-        <input type="search" class="search-input" placeholder="用語を検索…" aria-label="用語検索">
-        <div class="chip-row" data-role="level-chips"></div>
-        <div class="chip-row chip-row-scroll" data-role="topic-chips"></div>
+        <input type="search" class="search-input" placeholder="用語・条文を検索…" aria-label="用語検索" enterkeyhint="search">
+        <div class="chip-row" data-role="level-chips" role="group" aria-label="レベルで絞り込み"></div>
+        <div class="chip-row chip-row-scroll" data-role="topic-chips" role="group" aria-label="トピックで絞り込み"></div>
         <div class="segmented glossary-status" data-role="status-seg" role="group" aria-label="学習状況で絞り込み"></div>
       </div>
-      <p class="progress-text" data-role="progress-text"></p>
+      <p class="progress-text" data-role="progress-text" aria-live="polite"></p>
       <div class="card-grid" data-role="card-grid"></div>
     `;
     root.appendChild(wrap);
@@ -58,34 +110,56 @@ window.Views.glossary = (function () {
     const progressText = wrap.querySelector(`[data-role="progress-text"]`);
     const grid = wrap.querySelector(`[data-role="card-grid"]`);
 
+    function paintChips(row, value) {
+      row.querySelectorAll(`.chip`).forEach((c) => {
+        const on = c.dataset.value === value;
+        c.classList.toggle(`active`, on);
+        c.setAttribute(`aria-pressed`, String(on));
+      });
+    }
+
     LEVELS.forEach((lvl) => {
       const chip = document.createElement(`button`);
       chip.type = `button`;
-      chip.className = `chip chip-small` + (lvl === state.level ? ` active` : ``);
-      chip.textContent = lvl;
+      chip.className = `chip chip-small`;
+      chip.dataset.value = lvl;
+      chip.textContent = levelLabel(lvl);
       chip.addEventListener(`click`, () => {
         state.level = lvl;
-        chipRow.querySelectorAll(`.chip`).forEach((c) => c.classList.toggle(`active`, c.textContent === lvl));
+        paintChips(chipRow, lvl);
         visibleCount = PAGE_SIZE;
         renderGrid();
       });
       chipRow.appendChild(chip);
     });
+    paintChips(chipRow, state.level);
 
     const topicOptions = [{ id: `全て`, name: `全トピック` }, ...window.APP_DATA.topics.map((t) => ({ id: t.id, name: t.name }))];
     topicOptions.forEach((opt) => {
       const chip = document.createElement(`button`);
       chip.type = `button`;
-      chip.className = `chip chip-small` + (opt.id === state.topic ? ` active` : ``);
+      chip.className = `chip chip-small`;
+      chip.dataset.value = opt.id;
       chip.textContent = opt.name;
       chip.addEventListener(`click`, () => {
         state.topic = opt.id;
-        topicChipRow.querySelectorAll(`.chip`).forEach((c) => c.classList.toggle(`active`, c.textContent === opt.name));
+        paintChips(topicChipRow, opt.id);
         visibleCount = PAGE_SIZE;
         renderGrid();
       });
       topicChipRow.appendChild(chip);
     });
+    paintChips(topicChipRow, state.topic);
+
+    // 横スクロールのチップ列で、選択中のトピックが画面外にあると絞り込みに気づけないため、見える位置まで送る
+    // (scrollIntoView はページ全体も動かすことがあるので、チップ列だけを横に動かす)
+    function revealActiveTopicChip() {
+      const chip = topicChipRow.querySelector(`.chip.active`);
+      if (!chip || topicChipRow.scrollWidth <= topicChipRow.clientWidth) return;
+      const r = topicChipRow.getBoundingClientRect();
+      const c = chip.getBoundingClientRect();
+      topicChipRow.scrollLeft += (c.left - r.left) - Math.max(0, (r.width - c.width) / 2);
+    }
 
     let searchDebounceTimer = null;
     searchInput.addEventListener(`input`, (e) => {
@@ -112,6 +186,19 @@ window.Views.glossary = (function () {
       });
       statusSeg.appendChild(btn);
     });
+
+    // 絞り込みをすべて解除(空の結果から戻る)
+    function resetFilters() {
+      state = Object.assign({}, DEFAULTS);
+      searchInput.value = ``;
+      clearTimeout(searchDebounceTimer);
+      paintChips(chipRow, state.level);
+      paintChips(topicChipRow, state.topic);
+      statusSeg.querySelectorAll(`.segmented-item`).forEach((b) => b.setAttribute(`aria-pressed`, String(b.dataset.status === `all`)));
+      topicChipRow.scrollLeft = 0;
+      visibleCount = PAGE_SIZE;
+      renderGrid();
+    }
 
     // 用語ごとの学習状況(描画のたびに1回だけ計算)
     let statusMap = {};
@@ -146,26 +233,39 @@ window.Views.glossary = (function () {
       });
     }
 
-    function matchesBase(term) {
-      if (state.level !== `全て` && term.level !== state.level) return false;
-      if (state.topic !== `全て` && !(term.topicIds || []).includes(state.topic)) return false;
-      if (!state.search) return true;
-      // 全角半角・カタカナひらがなの違いを無視して検索
-      const norm = (window.GlobalSearch && GlobalSearch.norm) || ((s) => s.toLowerCase());
-      const q = norm(state.search);
-      const haystack = norm([term.name, ...(term.aliases || []), term.simpleExplanation].join(` `));
-      return haystack.includes(q);
+    // 学習状況以外の条件(レベル・トピック・検索語)で絞り、並べ替えた一覧
+    // 並び順: 検索中は関連度順、トピック選択中はそのトピックの基礎知識の順(小見出し順)→ほかの用語、それ以外はデータ順
+    function baseList() {
+      const q = state.search ? norm(state.search) : ``;
+      const topicOrder = state.topic !== `全て` && AppIndex.topicBasicOrder ? (AppIndex.topicBasicOrder[state.topic] || []) : [];
+      const pos = new Map();
+      topicOrder.forEach((id, i) => pos.set(id, i));
+      const rows = [];
+      AppIndex.allTerms.forEach((term, i) => {
+        if (state.level !== `全て` && term.level !== state.level) return;
+        if (state.topic !== `全て` && !(term.topicIds || []).includes(state.topic)) return;
+        const rank = q ? rankOf(term, q) : 0;
+        if (rank < 0) return;
+        rows.push({ term, rank, order: pos.has(term.id) ? pos.get(term.id) : topicOrder.length + i });
+      });
+      rows.sort((a, b) => (a.rank - b.rank) || (a.order - b.order));
+      return rows.map((r) => r.term);
     }
 
     let currentTerms = [];
     let shownCount = 0;
 
+    function progressLabel() {
+      const knownCount = AppIndex.allTerms.filter((t) => known[t.id]).length;
+      const topic = state.topic !== `全て` ? AppIndex.topicsById[state.topic] : null;
+      return `記憶済み: ${knownCount} / ${AppIndex.allTerms.length} 語(表示中: ${currentTerms.length}件${topic ? `・トピック: ${topic.name}` : ``})`;
+    }
+
     // 件数と記憶済み数だけ更新する(カードは作り直さない)
     function refreshMeta() {
       computeStatuses();
-      updateStatusCounts(AppIndex.allTerms.filter(matchesBase));
-      const knownCount = AppIndex.allTerms.filter((t) => known[t.id]).length;
-      progressText.textContent = `記憶済み: ${knownCount} / ${AppIndex.allTerms.length} 語(表示中: ${currentTerms.length}件)`;
+      updateStatusCounts(baseList());
+      progressText.textContent = progressLabel();
     }
 
     // 絞り込みの条件から外れたカードは、その場では消さずに薄く表示する(消すと一覧がずれて位置が飛ぶため)
@@ -197,14 +297,24 @@ window.Views.glossary = (function () {
       grid.insertAdjacentElement(`afterend`, loadMoreBtn);
     }
 
+    function emptyStateEl() {
+      const onlyBookmark = state.status === `bookmark` && !state.search && state.level === `全て` && state.topic === `全て`;
+      const el = UI.emptyState({
+        icon: onlyBookmark ? `bookmark` : `search`,
+        title: onlyBookmark ? `保存した用語はありません` : `該当する用語がありません`,
+        body: onlyBookmark ? `用語カードの右上にあるしおりマークを押すと、ここに表示されます。` : `検索語や絞り込みを変えてみてください。`,
+        cta: { label: `条件をクリア`, onClick: resetFilters },
+      });
+      el.classList.add(`glossary-empty`);
+      return el;
+    }
+
     function renderGrid() {
-      const allTerms = AppIndex.allTerms;
       computeStatuses();
-      const baseTerms = allTerms.filter(matchesBase);
+      const baseTerms = baseList();
       updateStatusCounts(baseTerms);
       currentTerms = baseTerms.filter(matchesStatus);
-      const knownCount = allTerms.filter((t) => known[t.id]).length;
-      progressText.textContent = `記憶済み: ${knownCount} / ${allTerms.length} 語(表示中: ${currentTerms.length}件)`;
+      progressText.textContent = progressLabel();
 
       const noFilters = !state.search && state.level === `全て` && state.topic === `全て` && state.status === `all`;
       const needsFullRenderForScroll = scrollTermId && noFilters;
@@ -215,11 +325,18 @@ window.Views.glossary = (function () {
         needCount = Math.max(visibleCount, idx + 6);
       }
       shownCount = Math.min(needCount, currentTerms.length);
+      // 作り直したカードはすべて表向き(戻ったときの最初の描画だけ、保存しておいた裏返しを再現する)
+      if (!restoringFlips) flippedIds.clear();
+      restoringFlips = false;
 
       grid.innerHTML = ``;
-      const fragment = document.createDocumentFragment();
-      currentTerms.slice(0, shownCount).forEach((term) => fragment.appendChild(buildCard(term)));
-      grid.appendChild(fragment);
+      if (!currentTerms.length) {
+        grid.appendChild(emptyStateEl());
+      } else {
+        const fragment = document.createDocumentFragment();
+        currentTerms.slice(0, shownCount).forEach((term) => fragment.appendChild(buildCard(term)));
+        grid.appendChild(fragment);
+      }
       renderLoadMore();
       saveState();
 
@@ -229,6 +346,8 @@ window.Views.glossary = (function () {
         scrollTermId = null;
         if (target) {
           target.classList.add(`flipped`);
+          flippedIds.add(target.dataset.termId);
+          saveState();
           requestAnimationFrame(() => UI.scrollIntoView(target));
         }
       }
@@ -244,6 +363,11 @@ window.Views.glossary = (function () {
       const card = CardUi.buildFlipCard(term, {
         known,
         episodeChips,
+        flipped: flippedIds.has(term.id),
+        onFlip: (t, on) => {
+          if (on) flippedIds.add(t.id); else flippedIds.delete(t.id);
+          saveState();
+        },
         onToggleKnown: () => { refreshMeta(); markStale(card, term); },
         onToggleBookmark: () => { refreshMeta(); markStale(card, term); },
       });
@@ -251,6 +375,7 @@ window.Views.glossary = (function () {
     }
 
     renderGrid();
+    revealActiveTopicChip();
   }
 
   return { render };

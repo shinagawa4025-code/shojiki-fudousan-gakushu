@@ -31,16 +31,33 @@ window.Views.summary = (function () {
 
     window.APP_DATA.specials.forEach((sp) => specialsList.appendChild(buildSpecialCard(sp)));
 
+    // 全角半角・カタカナひらがなの違いを無視して検索(用語集・サイト内検索と同じ正規化)
+    const norm = (s) => ((window.GlobalSearch && GlobalSearch.norm) ? GlobalSearch.norm(s) : String(s || ``).toLowerCase());
+    const haystacks = new Map();
     function matches(ep, q) {
       if (!q) return true;
-      const haystack = [ep.theme, ep.summary, ...ep.terms.map((t) => t.term), ep.termsNote || ``].join(` `).toLowerCase();
-      return haystack.includes(q);
+      let h = haystacks.get(ep.id);
+      if (h == null) {
+        // norm は空白を取り除くので、項目どうしは区切り文字(\u0001)でつなぐ(項目をまたいで一致しないように。サイト内検索と同じ)
+        h = [ep.displayLabel, ep.theme, ep.summary, ...(ep.terms || []).map((t) => t.term), ep.termsNote || ``].map(norm).join(`\u0001`);
+        haystacks.set(ep.id, h);
+      }
+      return h.includes(q);
     }
 
     function renderList() {
-      const q = searchInput.value.trim().toLowerCase();
+      const q = norm(searchInput.value.trim());
       list.innerHTML = ``;
-      window.APP_DATA.episodes.filter((ep) => matches(ep, q)).forEach((ep) => list.appendChild(buildEpisodeCard(ep)));
+      const hits = window.APP_DATA.episodes.filter((ep) => matches(ep, q));
+      hits.forEach((ep) => list.appendChild(buildEpisodeCard(ep)));
+      if (!hits.length) {
+        list.appendChild(UI.emptyState({
+          icon: `search`,
+          title: `該当する話がありません`,
+          body: `別の言葉で検索するか、用語集・サイト全体の検索も試してみてください。`,
+          cta: { label: `検索をクリア`, onClick: () => { searchInput.value = ``; list.style.minHeight = ``; renderList(); searchInput.focus({ preventScroll: true }); } },
+        }));
+      }
     }
 
     // 入力中に一覧が短くなっても検索欄の位置が動かないよう、検索中は一覧に画面1枚分の高さを確保し、位置を補正する
@@ -57,10 +74,13 @@ window.Views.summary = (function () {
     });
     renderList();
 
-    if (param) {
+    // 戻る/再読み込みで帰ってきたとき(保存位置あり)は、Router が元の位置へ戻すので該当回へは移動しない
+    const hs = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
+    if (param && !(Number(hs.y) > 0)) {
       const target = list.querySelector(`[data-episode-id="${window.CSS && CSS.escape ? CSS.escape(param) : param}"]`);
       if (target) requestAnimationFrame(() => {
-        target.scrollIntoView({ behavior: `smooth`, block: `center` });
+        // 「視差効果を減らす」設定では瞬時に移動する(UI.scrollIntoView が判定する)
+        UI.scrollIntoView(target, `center`);
         target.classList.add(`highlighted`);
         setTimeout(() => target.classList.remove(`highlighted`), 1500);
       });

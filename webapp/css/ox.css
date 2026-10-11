@@ -10,7 +10,14 @@
 .ox-view .ox-glyph-inline { width: 1.2em; height: 1.2em; }
 
 /* ---------- トップ ---------- */
-.ox-view .ox-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); margin-bottom: var(--sp-4); }
+/* 成績は条件の選択の下(スマホで「開始」が最初の画面に入るように) */
+.ox-view .ox-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); margin: var(--sp-4) 0 0; }
+
+/* 前回の条件で開始(1タップで始める) */
+.ox-view .ox-quick { justify-content: flex-start; gap: var(--sp-3); margin-bottom: var(--sp-4); text-align: left; }
+.ox-quick-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ox-quick-meta { font-size: var(--fs-sm); font-weight: 500; opacity: .9; }
+.ox-view .ox-auto-next { margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--color-text-muted); }
 .ox-view .ox-stats .stat-tile { padding: var(--sp-2) var(--sp-3); }
 .ox-view .ox-stats .stat-value { font-size: var(--fs-xl); }
 
@@ -52,7 +59,9 @@
 
 .ox-setup { padding: var(--sp-4) var(--sp-4) var(--sp-5); }
 .ox-setup-title { margin: 0; font-size: var(--fs-lg); }
-.ox-label { margin: var(--sp-4) 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); line-height: var(--lh-tight); }
+/* スマホで「開始」まで最初の画面に収まるよう、見出しの間隔は詰めめに */
+.ox-label { margin: var(--sp-3) 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); line-height: var(--lh-tight); }
+@media (min-width: 768px) { .ox-label { margin-top: var(--sp-4); } }
 
 .ox-scope-chip { gap: var(--sp-2); padding: 0 var(--sp-2) 0 var(--sp-3); font-size: var(--fs-sm); }
 .ox-chip-count {
@@ -68,7 +77,7 @@
 }
 .ox-scope-chip[aria-pressed="true"] .ox-chip-count { background: var(--color-surface); color: var(--color-primary); }
 .ox-scope-chip:disabled { opacity: .5; cursor: not-allowed; }
-.ox-scope-chip:disabled:hover { border-color: var(--color-border-strong); color: var(--color-text); }
+@media (hover: hover) { .ox-scope-chip:disabled:hover { border-color: var(--color-border-strong); color: var(--color-text); } }
 
 /* 「間違えたことがある」が長いため、件数はラベルの下に */
 .ox-filter .segmented-item {
@@ -108,7 +117,7 @@
 .ox-run-count { font-size: var(--fs-lg); font-weight: 700; color: var(--color-heading); white-space: nowrap; line-height: 1; }
 .ox-run-count small { font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 500; }
 .ox-view .ox-quit { min-height: 40px; padding: 0 var(--sp-2); margin-right: calc(var(--sp-2) * -1); color: var(--color-text-muted); }
-.ox-view .ox-quit:hover { color: var(--color-text); background: var(--color-surface-muted); }
+@media (hover: hover) { .ox-view .ox-quit:hover { color: var(--color-text); background: var(--color-surface-muted); } }
 
 .ox-q-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
 .ox-context { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
@@ -137,8 +146,11 @@
 }
 .ox-btn .ox-glyph { width: 44px; height: 44px; }
 .ox-btn:active:not(:disabled) { transform: translateY(1px); }
-.ox-btn-o:hover:not(:disabled) { border-color: var(--color-success); background: var(--color-success-bg); }
-.ox-btn-x:hover:not(:disabled) { border-color: var(--color-danger); background: var(--color-danger-bg); }
+/* ホバー色はマウス操作のときだけ(タッチ端末では押した後に :hover が残り、次の文で色が付いて見えるため) */
+@media (hover: hover) {
+  .ox-btn-o:hover:not(:disabled) { border-color: var(--color-success); background: var(--color-success-bg); }
+  .ox-btn-x:hover:not(:disabled) { border-color: var(--color-danger); background: var(--color-danger-bg); }
+}
 .ox-btn:disabled { cursor: default; }
 .ox-btn:disabled:not(.is-answer):not(.is-wrong) { opacity: .4; }
 .ox-btn.is-answer { border-color: var(--color-success); background: var(--color-success-bg); box-shadow: inset 0 0 0 1px var(--color-success); }
@@ -156,10 +168,8 @@
 .ox-btn.is-wrong .ox-btn-tag { background: var(--color-danger-fill); }
 
 /* 回答後の判定と解説 */
-.ox-view [data-role="result"] {
-  scroll-margin-top: calc(var(--app-bar-h) + var(--safe-top) + var(--sp-3));
-  scroll-margin-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--sp-3));
-}
+/* 固定ヘッダー・下部タブの分は style.css の html の scroll-padding で確保済み */
+.ox-view [data-role="result"] { scroll-margin-top: var(--sp-2); scroll-margin-bottom: var(--sp-2); }
 .ox-result {
   margin-top: var(--sp-4);
   padding: var(--sp-3) var(--sp-4);
@@ -178,10 +188,16 @@
 .ox-truth-mark { display: inline-flex; align-items: center; gap: 2px; }
 .ox-note { margin: var(--sp-2) 0 0; font-size: var(--fs-md); line-height: var(--lh-body); color: var(--color-text); }
 .ox-note-label { font-weight: 700; }
-.ox-review { display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--color-text-muted); }
+.ox-result .review-added { margin-top: var(--sp-2); color: var(--color-text); }
 .ox-links { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 .ox-links .chip { min-height: 40px; background: var(--color-surface); color: var(--color-text); }
-.ox-next { margin-top: var(--sp-3); }
+.ox-next-wrap { margin-top: var(--sp-3); }
+
+/* 正解したら自動で次へ: 残り時間の細いバー(動きを減らす設定では出さない) */
+.ox-auto-bar { height: 4px; margin-bottom: var(--sp-2); border-radius: var(--radius-pill); background: var(--color-surface-muted); overflow: hidden; }
+.ox-auto-bar span { display: block; height: 100%; background: var(--color-success-fill); transform-origin: left center; animation: ox-countdown 1200ms linear forwards; }
+@keyframes ox-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .ox-auto-bar { display: none; } }
 
 /* 正解・不正解の一瞬の強調(動きを減らす設定では出さない) */
 @media (prefers-reduced-motion: no-preference) {
@@ -204,7 +220,7 @@
 .ox-summary-note { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
 .ox-summary-actions { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-4); }
 
-.ox-section h3 { margin: var(--sp-6) 0 var(--sp-3); font-size: var(--fs-lg); }
+.ox-section h3 { margin: var(--sp-6) 0 var(--sp-3); }
 .ox-view .ox-cat-bars { margin: 0; }
 .ox-wrong-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
 .ox-view .ox-wrong-item { margin: 0; padding: var(--sp-3) var(--sp-4); border-left: 4px solid var(--color-danger); }
@@ -214,7 +230,9 @@
 .ox-wrong-context + .ox-wrong-text { margin-top: var(--sp-1); }
 .ox-wrong-text { margin: var(--sp-2) 0 0; font-size: var(--fs-base); line-height: var(--lh-body); }
 .ox-wrong-note { margin: var(--sp-2) 0 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--color-surface-muted); font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text); }
-.ox-wrong-item .link-btn { margin-top: var(--sp-1); min-height: 40px; font-size: var(--fs-sm); }
+.ox-wrong-links { display: flex; flex-wrap: wrap; gap: 0 var(--sp-4); margin-top: var(--sp-1); }
+.ox-wrong-item .link-btn { min-height: 40px; font-size: var(--fs-sm); }
+.ox-summary .streak-line { margin-top: var(--sp-3); }
 .ox-all-correct { display: flex; align-items: center; gap: var(--sp-2); margin: 0; color: var(--color-success); font-weight: 700; }
 
 /* ---------- タブレット・PC ---------- */

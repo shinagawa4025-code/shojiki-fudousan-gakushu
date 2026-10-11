@@ -2,9 +2,25 @@
 // 「使い方」ボタン(サイドバー・その他)からいつでも再表示できる
 window.Onboarding = (function () {
   const PREFIX = `shojikiLearn.v1.`;
-  // 起動時に自動で書き込まれる・ガイド自身が使うキーは「既存ユーザー」の判定に含めない
-  const IGNORE_KEYS = [`themePreference`, `srsMigrated`, `onboardingDone`, `seenWhatsNew`];
+  // ホームの「サイトが新しくなりました」の版。内容を変えたらここを変えると、既存の利用者に1度だけ表示される
+  const WHATS_NEW = `tier6`;
+  // 起動時に自動で書き込まれる・ガイド自身が使うキー、学習記録ではないキーは「既存ユーザー」の判定に含めない
+  const IGNORE_KEYS = [`themePreference`, `ttsRate`, `oxPrefs`, `quizPrefs`, `srsMigrated`, `onboardingDone`, `seenWhatsNew`, `lastBackupAt`, `backupNoteDismissedAt`];
   const ic = (name, size) => UI.icon(name, { size: size || 20 });
+
+  // ブラウザに保存領域の保護を頼む(Safari などで長期間開かないと記録が消えるのを防ぐ)。対応していなければ何もしない
+  let persistAsked = false;
+  function requestPersist() {
+    if (persistAsked) return;
+    persistAsked = true;
+    try {
+      const s = navigator.storage;
+      if (!s || typeof s.persist !== `function`) return;
+      const ask = () => s.persist().catch(() => false);
+      if (typeof s.persisted === `function`) s.persisted().then((done) => { if (!done) ask(); }).catch(() => {});
+      else ask();
+    } catch (e) { /* 保護できなくても学習は続けられる */ }
+  }
 
   let openState = null;
 
@@ -45,7 +61,8 @@ window.Onboarding = (function () {
 
   function markDone() {
     Storage.set(`onboardingDone`, { v: 1, at: Date.now() });
-    Storage.set(`seenWhatsNew`, `tier5`);
+    Storage.set(`seenWhatsNew`, WHATS_NEW);
+    requestPersist();
   }
 
   // ---- 各ステップの中身 ----
@@ -67,11 +84,12 @@ window.Onboarding = (function () {
       { icon: `book-open`, title: `トピック`, desc: `テーマごとに基礎から読んで全体像をつかむ` },
       { icon: `layers`, title: `用語カード`, desc: `タップで裏返して意味を確認。覚えたら★で記憶済みに` },
       { icon: `pencil-check`, title: `クイズ`, desc: `確認問題と自動生成の4択で理解度をチェック` },
+      { icon: `o-x`, title: `○×一問一答`, desc: `1問数秒。スキマ時間に。間違えた文だけ解き直せる` },
       { icon: `timer`, title: `模擬試験`, desc: `本番と同じ問題数・時間で実力を確認(宅建士)` },
     ];
     return `
       <h2 class="onb-title" id="onb-title" tabindex="-1">学び方</h2>
-      <p class="onb-lead">次の順に進めると、知識が自然とつながります。どこから始めてもかまいません。</p>
+      <p class="onb-lead">毎日まず「今日の復習」から。そのあと次の順に進めると、知識が自然とつながります。どこから始めてもかまいません。</p>
       <ol class="onb-flow">
         ${flow.map((f, i) => `
           <li class="onb-flow-item">
@@ -96,7 +114,7 @@ window.Onboarding = (function () {
           <span class="onb-cycle-step">${ic(`repeat`)}思い出す</span>
         </div>`}
       <ul class="onb-points">
-        <li><span class="onb-point-icon">${ic(`repeat`)}</span><span>用語カードで「もう一度・難しい・普通・簡単」を選ぶと、次に復習する日が自動で決まり、その日になると<strong>「今日の復習」</strong>に並びます。</span></li>
+        <li><span class="onb-point-icon">${ic(`repeat`)}</span><span>毎日まず<strong>「今日の復習」</strong>を開きましょう(ホームの一番上のボタン)。用語カードで「もう一度・難しい・普通・簡単」を選ぶと、次に復習する日が自動で決まり、その日になると今日の復習に並びます。</span></li>
         <li><span class="onb-point-icon">${ic(`x-circle`)}</span><span>クイズで<strong>間違えた用語は自動で</strong>今日の復習に追加されます。</span></li>
         <li><span class="onb-point-icon">${ic(`flame`)}</span><span>1日1問でも続けると<strong>連続学習日数</strong>が伸びます。ホームで記録を確認できます。</span></li>
       </ul>`;
@@ -209,8 +227,11 @@ window.Onboarding = (function () {
 
     openState = { close };
     paint(null);
-    nextBtn.focus();
+    // 開いたときは見出しにフォーカス(スクリーンリーダーが最初から読み上げる。Tabで次へ進める)
+    const title = body.querySelector(`#onb-title`);
+    if (title) title.focus({ preventScroll: true });
+    else nextBtn.focus();
   }
 
-  return { maybeShow, show, reset };
+  return { maybeShow, show, reset, requestPersist, WHATS_NEW };
 })();

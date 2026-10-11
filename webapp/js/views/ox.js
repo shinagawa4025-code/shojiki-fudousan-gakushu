@@ -6,9 +6,11 @@
 // ディープリンク(cat/topic/weak)は条件を選んだ状態ですぐ出題を始め、URLを #ox/run に置き換える
 // 記録: Storage `oxStats` = { [文ID 'quiz-K-01#2']: { c: 正解回数, w: 不正解回数, last: 'YYYY-MM-DD', lastOk: 直近の正誤 } }
 //       (弱点分析でも読むため、この形を変えないこと)
+//       Storage `oxPrefs` = { scope, filter, count, autoNext }(最後に出題を始めた条件と「正解したら自動で次へ」)
 window.Views = window.Views || {};
 window.Views.ox = (function () {
   const STATS_KEY = `oxStats`;
+  const PREFS_KEY = `oxPrefs`;
   const COUNTS = [10, 20, 50];
   const FILTERS = [
     { id: `unanswered`, label: `未回答` },
@@ -16,11 +18,15 @@ window.Views.ox = (function () {
     { id: `all`, label: `すべて` },
   ];
   const SHOHI = `shohi`;
+  const PASS_PCT = 70; // 合格の目安(自動生成クイズと共通)
+  const AUTO_NEXT_MS = 1200;
   const ic = (name, size) => UI.icon(name, { size: size || 18 });
   const esc = (s) => UI.escapeHtml(s);
 
   // 画面の再描画をまたいで保持する条件と、進行中のセッション(ページを再読み込みすると消える)
-  const prefs = { scope: { type: `all`, id: null }, filter: `all`, count: 10 };
+  // 条件は最初の表示のときに oxPrefs から読み込む
+  const prefs = { scope: { type: `all`, id: null }, filter: `all`, count: 10, autoNext: false };
+  let prefsLoaded = false;
   let session = null;
 
   // ===== 分野 =====
@@ -92,6 +98,52 @@ window.Views.ox = (function () {
     return all[statementId];
   }
 
+  // ===== 保存する条件(oxPrefs) =====
+
+  function validScope(sc) {
+    if (!Storage.isPlainObject(sc)) return null;
+    if (sc.type === `all`) return { type: `all`, id: null };
+    if (sc.type === `cat` && scopeCategories().some((c) => c.id === sc.id)) return { type: `cat`, id: sc.id };
+    if (sc.type === `topic` && typeof sc.id === `string` && AppIndex.topicsById[sc.id]) return { type: `topic`, id: sc.id };
+    return null;
+  }
+
+  // 保存した条件(インポートした古い・壊れた値は使わない)
+  function loadSavedPrefs() {
+    const raw = Storage.get(PREFS_KEY, {});
+    return {
+      scope: validScope(raw.scope),
+      filter: FILTERS.some((f) => f.id === raw.filter) ? raw.filter : null,
+      count: COUNTS.includes(raw.count) ? raw.count : null,
+      autoNext: raw.autoNext === true,
+    };
+  }
+
+  function ensurePrefs() {
+    if (prefsLoaded) return;
+    prefsLoaded = true;
+    const s = loadSavedPrefs();
+    if (s.scope) prefs.scope = s.scope;
+    if (s.filter) prefs.filter = s.filter;
+    if (s.count) prefs.count = s.count;
+    prefs.autoNext = s.autoNext;
+  }
+
+  // 前回出題を始めた条件(「前回の条件で開始」用)。なければ null
+  function lastStarted() {
+    const s = loadSavedPrefs();
+    return s.scope && s.filter && s.count ? s : null;
+  }
+
+  function saveStartedPrefs() {
+    Storage.set(PREFS_KEY, { scope: Object.assign({}, prefs.scope), filter: prefs.filter, count: prefs.count, autoNext: prefs.autoNext });
+  }
+
+  function saveAutoNext(on) {
+    prefs.autoNext = !!on;
+    Storage.set(PREFS_KEY, Object.assign({}, Storage.get(PREFS_KEY, {}), { autoNext: prefs.autoNext }));
+  }
+
   // ===== 出題の組み立て =====
 
   function inScope(s, scope) {
@@ -112,14 +164,14 @@ window.Views.ox = (function () {
     return statements.filter((s) => inScope(s, scope) && matchesFilter(s, filter, stats));
   }
 
-  // 間違えた回数が多い順(同数なら直近で間違えたもの → ランダム)
+  // 「間違えたことがある」の出題順: 前回まちがえた文 → (不正解 − 正解)の多い順 → ランダム
   function weakOrder(list, stats) {
     return list
       .map((s) => {
         const e = stats[s.id];
-        return { s, w: e ? e.w : 0, ng: e && !e.lastOk ? 1 : 0, r: Math.random() };
+        return { s, ng: e && !e.lastOk ? 1 : 0, d: e ? e.w - e.c : 0, r: Math.random() };
       })
-      .sort((a, b) => (b.w - a.w) || (b.ng - a.ng) || (a.r - b.r))
+      .sort((a, b) => (b.ng - a.ng) || (b.d - a.d) || (a.r - b.r))
       .map((x) => x.s);
   }
 
@@ -242,7 +294,8 @@ window.Views.ox = (function () {
     const termOk = !!(s.termId && AppIndex.termsById[s.termId]);
     if (!ok && termOk && !sess.graded[s.termId]) {
       sess.graded[s.termId] = true;
-      Srs.grade(s.termId, 1);
+      // 学習記録(ストリーク)は上で付けているので、ここでは数えない
+      Srs.grade(s.termId, 1, { silent: true });
     }
     return { ok, review: !ok && termOk };
   }
@@ -300,7 +353,23 @@ window.Views.ox = (function () {
     if (!term) return null;
     const has = (t) => !!t && Array.isArray(t.basicIds) && t.basicIds.includes(term.id);
     const topic = (topicIds || []).map((id) => AppIndex.topicsById[id]).find(has) || (window.APP_DATA.topics || []).find(has);
-    return { href: topic ? `#topics/${topic.id}/${term.id}` : `#glossary/${term.id}`, name: term.name };
+    return { href: topic ? `#topics/${topic.id}/${term.id}` : `#glossary/${term.id}`, name: term.name, id: term.id };
+  }
+
+  // 用語のリンクは出題画面を離れずにシートで開く(href は長押し・新しいタブ用に残す)
+  function onTermLinkClick(e) {
+    const a = e.target && e.target.closest ? e.target.closest(`a[data-term-sheet]`) : null;
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (window.Views.quiz && Views.quiz.openTermSheet && Views.quiz.openTermSheet(a.dataset.termSheet)) e.preventDefault();
+  }
+
+  function streakLineHtml() {
+    return window.Views.quiz && Views.quiz.streakLineHtml ? Views.quiz.streakLineHtml() : ``;
+  }
+
+  function termLinkBtnHtml(s) {
+    const link = termLink(s.termId, s.topicIds);
+    return link ? `<a class="link-btn" href="${link.href}" data-term-sheet="${link.id}">${ic(`layers`, 14)}用語を確認</a>` : ``;
   }
 
   function markSvg(kind, cls) {
@@ -363,11 +432,13 @@ window.Views.ox = (function () {
   // ===== 描画: 入口 =====
 
   function render(root, param) {
+    ensurePrefs();
     const wrap = document.createElement(`div`);
     wrap.className = `view ox-view`;
     root.appendChild(wrap);
     const ctx = { run: null };
     bindKeys(wrap, ctx);
+    wrap.addEventListener(`click`, onTermLinkClick);
 
     const route = parseParam(param);
     if (route.kind === `run`) {
@@ -426,10 +497,13 @@ window.Views.ox = (function () {
     // 最後の文に答えたあと結果を見ずに離れた場合も、ここから結果を開けるようにする
     const resumable = !!session && !session.finished;
     const allAnswered = resumable && answeredCount(session) >= session.items.length;
+    // 前回出題を始めた条件(1タップで始められるよう、条件の選択より上に出す)
+    const last = lastStarted();
+    const lastPool = last ? buildPool(statements, last.scope, last.filter, stats).length : 0;
 
     wrap.innerHTML = `
       <h2>○×一問一答</h2>
-      <p class="view-desc">4択問題の選択肢を1文ずつ取り出し、正しい(○)か誤り(×)かを判定します。本試験の「正しいもの/誤っているものはどれか」は、1つ1つの記述の正誤を根拠とともに判断できれば解けます。間違えた文の用語は「今日の復習」に追加されます。</p>
+      <p class="view-desc">4択問題の選択肢を1文ずつ、正しい(○)か誤り(×)かで判定します。</p>
       ${resumable ? `
         <div class="card ox-resume">
           <span class="ox-resume-icon">${ic(`o-x`, 22)}</span>
@@ -443,13 +517,12 @@ window.Views.ox = (function () {
             ? `<button type="button" class="btn" data-role="show-result">${ic(`flag`)}結果を見る</button>`
             : `<a class="btn" href="#ox/run">${ic(`play`)}再開</a>`}
         </div>` : ``}
+      ${total && last && lastPool && !resumable ? `
+        <button type="button" class="btn btn-lg btn-block ox-quick" data-role="quick" aria-label="前回の条件で開始(${esc(scopeLabel(last.scope))}・${esc(filterLabel(last.filter))}・${Math.min(lastPool, last.count)}問)">
+          ${ic(`play`)}<span class="ox-quick-text"><span>前回の条件で開始</span><span class="ox-quick-meta">${esc(scopeLabel(last.scope))}・${esc(filterLabel(last.filter))}・${Math.min(lastPool, last.count)}問</span></span>
+        </button>` : ``}
       ${opts.notice ? `<p class="ox-notice" role="status">${ic(`info`)}<span>${esc(opts.notice)}</span></p>` : ``}
       ${total ? `
-        <div class="stat-grid ox-stats">
-          <div class="stat-tile"><span class="stat-value num">${total}<small>文</small></span><span class="stat-label">収録</span></div>
-          <div class="stat-tile"><span class="stat-value num">${answered}<small>文</small></span><span class="stat-label">回答済み</span></div>
-          <div class="stat-tile"><span class="stat-value num">${acc == null ? `—` : `${acc}<small>%</small>`}</span><span class="stat-label">正答率</span></div>
-        </div>
         <section class="card ox-setup" aria-labelledby="ox-setup-title">
           <h3 class="ox-setup-title" id="ox-setup-title">出題の条件</h3>
           <p class="ox-label" id="ox-scope-label">分野</p>
@@ -460,7 +533,13 @@ window.Views.ox = (function () {
           <div class="segmented ox-count" role="group" aria-labelledby="ox-count-label" data-role="count"></div>
           <p class="ox-setup-note" data-role="note" aria-live="polite"></p>
           <button type="button" class="btn btn-lg btn-block" data-role="start"></button>
+          <label class="check-inline ox-auto-next"><input type="checkbox" data-role="auto-next"${prefs.autoNext ? ` checked` : ``}>正解したら自動で次へ(約1秒後)</label>
         </section>
+        <div class="stat-grid ox-stats">
+          <div class="stat-tile"><span class="stat-value num">${total}<small>文</small></span><span class="stat-label">収録</span></div>
+          <div class="stat-tile"><span class="stat-value num">${answered}<small>文</small></span><span class="stat-label">回答済み</span></div>
+          <div class="stat-tile"><span class="stat-value num">${acc == null ? `—` : `${acc}<small>%</small>`}</span><span class="stat-label">正答率</span></div>
+        </div>
         ${keysHintHtml()}` : ``}
     `;
 
@@ -532,8 +611,27 @@ window.Views.ox = (function () {
       if (!inScopeList.length) noteEl.textContent = `この分野の○×問題はまだありません。ほかの分野を選んでください。`;
       else if (!poolSize && prefs.filter === `unanswered`) noteEl.textContent = `${where}文はすべて回答済みです。「すべて」か「間違えたことがある」を選んでください。`;
       else if (!poolSize) noteEl.textContent = `${where || `まだ`}間違えた文はありません。`;
-      else noteEl.textContent = `条件に合う${poolSize}文から${n}問を${prefs.filter === `wrong` ? `、間違えた回数が多い順に` : `ランダムに`}出題します。`;
+      else noteEl.textContent = `条件に合う${poolSize}文から${n}問を${prefs.filter === `wrong` ? `、前回まちがえた文から順に` : `ランダムに`}出題します。`;
     }
+
+    function begin() {
+      if (!startFromPrefs()) return false;
+      session.fromLanding = true;
+      saveStartedPrefs();
+      Router.navigate(`#ox/run`);
+      return true;
+    }
+
+    const quickBtn = wrap.querySelector(`[data-role="quick"]`);
+    if (quickBtn) {
+      quickBtn.addEventListener(`click`, () => {
+        prefs.scope = Object.assign({}, last.scope);
+        prefs.filter = last.filter;
+        prefs.count = last.count;
+        if (!begin()) paint();
+      });
+    }
+    wrap.querySelector(`[data-role="auto-next"]`).addEventListener(`change`, (e) => saveAutoNext(e.target.checked));
 
     scopeEl.addEventListener(`click`, (e) => {
       const b = e.target.closest(`[data-scope]`);
@@ -555,12 +653,7 @@ window.Views.ox = (function () {
       paint();
     });
     startBtn.addEventListener(`click`, () => {
-      if (startFromPrefs()) {
-        session.fromLanding = true;
-        Router.navigate(`#ox/run`);
-      } else {
-        paint();
-      }
+      if (!begin()) paint();
     });
 
     paint();
@@ -630,14 +723,16 @@ window.Views.ox = (function () {
             <span class="ox-verdict">${ic(a.ok ? `check-circle` : `x-circle`, 22)}${a.ok ? `正解` : `不正解`}</span>
             <span class="ox-truth">この文は${truthHtml(s.truth)}</span>
           </p>
+          ${review && link ? `<p class="review-added ox-review">${ic(`repeat`, 14)}<span>「${esc(link.name)}」を<a href="#review">今日の復習</a>に追加しました</span></p>` : ``}
           ${note ? `<p class="ox-note">${s.note ? `` : `<span class="ox-note-label">4択問題全体の解説: </span>`}${esc(note)}</p>` : ``}
-          ${review ? `<p class="ox-review">${ic(`repeat`, 14)}関連する用語を「今日の復習」に追加しました</p>` : ``}
           <div class="ox-links">
             <a class="chip chip-small chip-muted" href="#quiz/q/${encodeURIComponent(s.quizId)}">${ic(`list`, 14)}元の4択問題</a>
-            ${link ? `<a class="chip chip-small chip-muted" href="${link.href}">${ic(`layers`, 14)}用語を確認: ${esc(link.name)}</a>` : ``}
+            ${link ? `<a class="chip chip-small chip-muted" href="${link.href}" data-term-sheet="${link.id}">${ic(`layers`, 14)}用語を確認: ${esc(link.name)}</a>` : ``}
           </div>
         </div>
-        <button type="button" class="btn btn-lg btn-block ox-next" data-role="next">${isLast ? `結果を見る` : `次へ`}${ic(`arrow-right`)}</button>
+        <div class="ox-next-wrap">
+          <button type="button" class="btn btn-lg btn-block ox-next" data-role="next">${isLast ? `結果を見る` : `次へ`}${ic(`arrow-right`)}</button>
+        </div>
       `;
       resultEl.querySelector(`[data-role="next"]`).addEventListener(`click`, next);
       if (animate && !UI.prefersReducedMotion()) {
@@ -653,9 +748,40 @@ window.Views.ox = (function () {
       focusEl(resultEl.querySelector(`[data-role="next"]`));
       // 解説が画面外(スマホの下部タブの裏)に出たら見える位置までスクロール(余白は CSS の scroll-margin)
       requestAnimationFrame(() => UI.scrollIntoView(resultEl, `nearest`));
+      // 「正解したら自動で次へ」: 間違えたときは解説を読めるよう必ず止まる
+      if (res.ok && prefs.autoNext) startAutoNext();
+    }
+
+    // 自動で次へ: 細いバーで残り時間を見せ、画面に触れる・キーを押すと取りやめる
+    // (動きを減らす設定ではバーを出さずに、同じ時間で進む)
+    let autoTimer = null;
+    function cancelAutoNext() {
+      if (!autoTimer) return;
+      clearTimeout(autoTimer);
+      autoTimer = null;
+      document.removeEventListener(`pointerdown`, cancelAutoNext, true);
+      document.removeEventListener(`keydown`, cancelAutoNext, true);
+      window.removeEventListener(`hashchange`, cancelAutoNext);
+      const bar = resultEl.querySelector(`[data-role="auto-bar"]`);
+      if (bar) bar.remove();
+    }
+    function startAutoNext() {
+      const nextWrap = resultEl.querySelector(`.ox-next-wrap`);
+      if (!nextWrap) return;
+      // バーの長さが縮む時間(CSS の ox-countdown)は AUTO_NEXT_MS と同じ 1.2秒
+      nextWrap.insertAdjacentHTML(`afterbegin`, `<div class="ox-auto-bar" data-role="auto-bar" aria-hidden="true"><span></span></div>`);
+      autoTimer = setTimeout(() => {
+        cancelAutoNext();
+        if (session !== sess || !wrap.isConnected || document.querySelector(`.modal-overlay, .sheet-backdrop, .onb-overlay`)) return;
+        next();
+      }, AUTO_NEXT_MS);
+      document.addEventListener(`pointerdown`, cancelAutoNext, true);
+      document.addEventListener(`keydown`, cancelAutoNext, true);
+      window.addEventListener(`hashchange`, cancelAutoNext);
     }
 
     function next() {
+      cancelAutoNext();
       if (!sess.answers[sess.index] || session !== sess) return;
       if (sess.index >= n - 1) {
         sess.finished = true;
@@ -671,6 +797,7 @@ window.Views.ox = (function () {
     }
 
     function quit() {
+      cancelAutoNext();
       if (!answeredCount(sess)) {
         // 1問も答えずに終了: 履歴を増やさずにトップへ(増やすと「戻る」で出題画面→トップに飛ばされ、何も起きないように見える)
         session = null;
@@ -716,14 +843,15 @@ window.Views.ox = (function () {
       <h2>○×一問一答</h2>
       <p class="ox-run-label">${esc(sess.label)}</p>
       <section class="card ox-summary" aria-labelledby="ox-summary-title">
-        <h3 class="ox-summary-title" id="ox-summary-title">${ic(pct >= 80 ? `trophy` : `flag`, 20)}今回の結果</h3>
+        <h3 class="ox-summary-title" id="ox-summary-title">${ic(pct >= PASS_PCT ? `trophy` : `flag`, 20)}今回の結果</h3>
         <p class="ox-score">
           <span class="ox-score-value num">${sum.correct}</span>
           <span class="ox-score-of num">/ ${sum.answered}問 正解</span>
           <span class="ox-score-pct num">${pct}%</span>
         </p>
-        <div class="progress-bar progress-bar-lg" aria-hidden="true"><div class="progress-bar-fill ${pct >= 80 ? `fill-success` : ``}" style="width:${pct}%"></div></div>
+        <div class="progress-bar progress-bar-lg" aria-hidden="true"><div class="progress-bar-fill ${pct >= PASS_PCT ? `fill-success` : ``}" style="width:${pct}%"></div></div>
         ${sess.quit && sum.answered < sum.total ? `<p class="ox-summary-note">${sum.total}問中${sum.answered}問で終了しました。</p>` : ``}
+        ${streakLineHtml()}
         <div class="ox-summary-actions">
           ${sum.wrong.length ? `<button type="button" class="btn btn-lg" data-role="retry-wrong">${ic(`repeat`)}間違えた文だけもう一度(${sum.wrong.length}問)</button>` : ``}
           <button type="button" class="btn btn-lg ${sum.wrong.length ? `btn-secondary` : ``}" data-role="continue"${nextPool.length ? `` : ` disabled`}>${ic(`refresh`)}同じ条件で続ける</button>
@@ -739,7 +867,7 @@ window.Views.ox = (function () {
               const p = Math.round((c.correct / c.total) * 100);
               return `<div>
                 <div class="cat-bar-head"><span class="cat-bar-name">${esc(c.name)}</span><span class="cat-bar-meta">${c.correct} / ${c.total}問(${p}%)</span></div>
-                <div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill ${p >= 80 ? `fill-success` : ``}" style="width:${p}%"></div></div>
+                <div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill ${p >= PASS_PCT ? `fill-success` : ``}" style="width:${p}%"></div></div>
               </div>`;
             }).join(``)}
           </div>
@@ -757,7 +885,10 @@ window.Views.ox = (function () {
                 ${contextFor(s) ? `<p class="ox-wrong-context">${esc(contextFor(s))}</p>` : ``}
                 <p class="ox-wrong-text">${esc(s.text)}</p>
                 ${s.note ? `<p class="ox-wrong-note">${esc(s.note)}</p>` : ``}
-                <a class="link-btn" href="#quiz/q/${encodeURIComponent(s.quizId)}">${ic(`list`, 14)}元の4択問題</a>
+                <div class="ox-wrong-links">
+                  <a class="link-btn" href="#quiz/q/${encodeURIComponent(s.quizId)}">${ic(`list`, 14)}元の4択問題</a>
+                  ${termLinkBtnHtml(s)}
+                </div>
               </li>`).join(``)}
           </ol>` : `<p class="ox-all-correct">${ic(`check-circle`)}${sum.answered ? `全問正解です。` : `回答した文はありません。`}</p>`}
       </section>
@@ -777,6 +908,7 @@ window.Views.ox = (function () {
       if (startFromPrefs(new Set(sess.items.map((s) => s.id)))) {
         // 同じ履歴エントリ(#ox/run)のまま続けるので、1つ前の履歴は元のセッションと同じ
         session.fromLanding = sess.fromLanding;
+        saveStartedPrefs();
         Router.navigate(`#ox/run`);
       }
     });
@@ -786,9 +918,9 @@ window.Views.ox = (function () {
     render,
     // テスト用
     _internal: {
-      STATS_KEY, COUNTS, prefs, parseParam, scopeCategories, withCategory, loadStatements, cleanEntry, loadStats, recordAnswer,
+      STATS_KEY, PREFS_KEY, COUNTS, prefs, parseParam, scopeCategories, withCategory, loadStatements, cleanEntry, loadStats, recordAnswer,
       inScope, matchesFilter, buildPool, weakOrder, spreadByQuiz, pickQuestions, createSession, startFromPrefs,
-      answerCurrent, summarize, contextOf, termLink, conditionLabel,
+      answerCurrent, summarize, contextOf, termLink, conditionLabel, loadSavedPrefs, lastStarted, validScope,
       getSession: () => session,
       setSession: (s) => { session = s; },
     },

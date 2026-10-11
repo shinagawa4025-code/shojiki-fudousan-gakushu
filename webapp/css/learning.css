@@ -1,0 +1,167 @@
+/* 学習画面(トピック・用語集・図解・ブックマーク・情報源・動画一覧)の追加スタイル */
+/* 色は style.css のトークンだけを使う(ライト/ダーク両対応) */
+
+/* ---------- トピック一覧 ---------- */
+.topics-stat-grid { margin-bottom: var(--sp-2); }
+.topic-card-main { min-width: 0; }
+.topic-card-tags { margin-top: var(--sp-1); }
+
+/* ---------- トピック詳細: 見出しまわり ---------- */
+.topic-hero-main { min-width: 0; }
+.topic-practice { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: 0 0 var(--sp-2); }
+.topic-practice .btn { flex: 0 1 auto; white-space: nowrap; gap: 6px; }
+.topic-practice-count { font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; }
+@media (max-width: 479px) {
+  .topic-practice .btn { flex: 1 1 140px; min-width: 0; padding-left: var(--sp-2); padding-right: var(--sp-2); }
+}
+
+/* 項目へスクロールしたときの上の余白(スマホの固定ヘッダーの分は style.css の html の scroll-padding-top で確保済み) */
+.topic-sec, .basics-item, .basics-section { scroll-margin-top: var(--sp-2); }
+@media (min-width: 1024px) {
+  .topic-sec, .basics-item, .basics-section { scroll-margin-top: var(--sp-4); }
+}
+
+/* 右側の進捗(広い画面) */
+.topic-rail-card { margin: 0; }
+.topic-rail-bar { margin-top: var(--sp-2); }
+.topic-rail-heading { padding: 0 0 var(--sp-2); }
+
+/* ---------- 基礎知識: 進捗・次の未学習・絞り込み ---------- */
+.basics-progress { display: flex; flex-direction: column; gap: var(--sp-3); margin: calc(var(--sp-1) * -1) 0 var(--sp-4); }
+.basics-progress[hidden] { display: none; }
+.basics-progress > .progress-bar { flex: none; }
+.basics-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.basics-next { flex: 1 1 260px; min-width: 0; justify-content: flex-start; text-align: left; min-height: 40px; line-height: var(--lh-snug); }
+.basics-next-label { min-width: 0; }
+.basics-next:disabled { opacity: 1; color: var(--color-success); border-color: var(--color-border); cursor: default; }
+.basics-filter { flex: 0 0 auto; }
+.basics-filter .segmented-item { min-height: 36px; }
+@media (pointer: coarse) { .basics-filter .segmented-item { min-height: 40px; } }
+
+/* ---------- 基礎知識: 小見出し(折りたたみ) ---------- */
+.basics-sections { list-style: none; margin: 0 0 var(--sp-5); padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.basics-section > details > summary { list-style: none; }
+.basics-section > details > summary::-webkit-details-marker { display: none; }
+.basics-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 48px;
+  padding: var(--sp-1) var(--sp-1);
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--color-heading);
+  border-radius: var(--radius-sm);
+  font-feature-settings: "palt";
+}
+.basics-section-head .chevron { display: inline-flex; color: var(--color-text-muted); transform: rotate(-90deg); transition: transform var(--dur-2) var(--ease-std); }
+.basics-section > details[open] > .basics-section-head .chevron { transform: none; }
+.basics-section-name { flex: 1 1 auto; min-width: 0; line-height: var(--lh-snug); }
+.basics-section-count { flex-shrink: 0; display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); font-weight: 500; color: var(--color-text-muted); white-space: nowrap; }
+.basics-section-count.is-done { color: var(--color-success); font-weight: 700; }
+.basics-section > details > .basics-checklist { margin: var(--sp-1) 0 var(--sp-3); }
+.basics-section-head:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+/* ---------- 基礎知識: チェックリスト(1つの枠にまとめた一覧) ---------- */
+/* 横幅に関係なく1列(2列にすると開いた項目の高さで左右がずれて読みにくい) */
+.topic-detail-layout .basics-checklist,
+.basics-checklist {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+/* 区切り線は各項目の上辺に引き、1px 上へずらして先頭の線を枠の内側で隠す(「未学習のみ」で先頭が非表示でも線が二重にならない) */
+.basics-checklist > .basics-item { margin: -1px 0 0; border: 0; border-top: 1px solid var(--color-border); border-radius: 0; box-shadow: none; background: transparent; }
+.basics-checklist > li:not(.basics-item) { border: 0; }
+
+/* 学習済みチェックは開閉(summary)の外に置き、左の列に並べる */
+.basics-item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: var(--sp-1);
+  align-items: start;
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-1);
+}
+.basics-item > .basics-check-wrap { grid-column: 1; align-self: start; }
+.basics-item > details { grid-column: 2; min-width: 0; }
+.basics-item details > :not(summary) { margin-left: 0; }
+.basics-item summary { min-height: 44px; padding: var(--sp-2) 0; }
+.basics-item.is-learned .basics-name { color: var(--color-text-muted); }
+.basics-item.highlighted { outline: 2px solid var(--color-primary); outline-offset: -2px; background: var(--color-primary-soft); transition: background var(--dur-3) var(--ease-out); }
+.basics-body { padding: 0 0 var(--sp-2); }
+.basics-body .figure { margin-top: var(--sp-3); }
+
+/* 開いた項目の下部の操作 */
+.basics-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px dashed var(--color-border); }
+.basics-actions .btn { min-height: 40px; }
+.basics-actions .bookmark-toggle { color: var(--color-text-muted); }
+.basics-actions .bookmark-toggle.is-bookmarked { color: var(--color-primary); }
+
+/* 「未学習のみ」: 学習済みの項目と、すべて学習済みの小見出しを隠す(表示中にチェックした項目はその場に残す) */
+.basics-only-unlearned .basics-item.is-learned:not(.keep-visible),
+.basics-only-unlearned .basics-section.is-complete:not(.keep-visible) { display: none; }
+
+/* 用語カード欄の「基礎知識もカードで」案内 */
+.basics-card-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  color: var(--color-primary);
+  font-weight: 500;
+  font-size: var(--fs-md);
+  text-decoration: none;
+}
+.basics-card-hint > span { flex: 1 1 auto; min-width: 0; }
+.card-grid[hidden] { display: none; }
+
+/* 具体例: リンクを1行目、チェック2つを2行目に */
+.ep-link { flex: 1 0 100%; }
+.ep-check { flex: 0 0 auto; }
+
+/* ---------- 出典: 1件ずつ改行 ---------- */
+.term-citation { display: flex; align-items: flex-start; gap: var(--sp-1); }
+.term-citation-label { flex-shrink: 0; }
+.term-citation-list { list-style: none; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cite-tail { white-space: nowrap; }
+.cite-tail .icon { margin-left: 2px; }
+
+/* 計算機へのリンク */
+.calc-link-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin: var(--sp-2) 0 0; }
+.calc-link-label { font-size: var(--fs-xs); color: var(--color-text-muted); }
+
+/* ---------- 用語フリップカード ---------- */
+/* 裏面の見出し(用語名) */
+.flip-back-title { margin: 0 0 var(--sp-2); font-size: var(--fs-md); font-weight: 700; line-height: var(--lh-snug); color: var(--color-primary); font-feature-settings: "palt"; overflow-wrap: anywhere; }
+
+/* 裏面の内容に合わせてカードの高さを伸ばす(今日の復習 .review-view は別の担当のため対象外) */
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .card-grid { align-items: start; }
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card { height: auto; }
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card-inner { height: auto; }
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card-front { min-height: 168px; }
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) :is(.flip-card-front, .flip-card-back) { position: relative; inset: auto; overflow: visible; }
+/* 見えていない面は重ねて置くだけ(高さはカードに合わせて切る) */
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card:not(.flipped) .flip-card-back,
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card.flipped .flip-card-front { position: absolute; inset: 0; overflow: hidden; }
+
+/* ---------- 用語集 ---------- */
+.glossary-view .card-grid > .glossary-empty { grid-column: 1 / -1; }
+
+/* ---------- 図解 ---------- */
+/* シートの見出しに図のタイトルが出るので、図の中のタイトルは出さない */
+.fig-sheet .figure-title { display: none; }
+.fig-sheet .figure { margin-top: 0; }
+.fig-sheet-link { margin-top: var(--sp-2); }
+.fig-help { margin-top: var(--sp-6); }
+
+/* ---------- 情報源 ---------- */
+.source-use { font-size: var(--fs-xs); color: var(--color-text-muted); }
+
+/* ---------- 文中のリンクボタン(行の高さを乱さない) ---------- */
+.view-desc .link-btn, .episode-empty-state .link-btn { display: inline; min-height: 0; vertical-align: baseline; }
+

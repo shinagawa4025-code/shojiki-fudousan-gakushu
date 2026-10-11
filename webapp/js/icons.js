@@ -86,7 +86,7 @@ window.Icons = (function () {
     // 不動産と消費税
     percent: `<path d="M5.5 18.5 18.5 5.5"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>`,
     // ○×一問一答
-    'o-x': `<circle cx="7.5" cy="12" r="4"/><path d="M14.5 8l5.5 8M20 8l-5.5 8"/>`
+    'o-x': `<circle cx="7" cy="12" r="5"/><path d="M14 6.75l6.5 10.5M20.5 6.75l-6.5 10.5"/>`
   };
 
   const warned = {};

@@ -180,20 +180,101 @@ window.QuizEngine = (function () {
     }
     return pool;
   }
-  // ダミー同士も同じ条文を挙げていないものを優先する(足りなければ、文字列が違うものを後ろに補う)
+  // ダミー同士も同じ条文を挙げていないものを優先する(足りなければ、選択肢の文字列が違うものを後ろに補う)
   function pickLawRefDistractors(allTerms, correctTerm, want) {
     const picked = [];
     const spare = [];
+    const sameText = (a, b) => lawChoiceText(a) === lawChoiceText(b);
     for (const t of shuffle(lawRefPool(allTerms, correctTerm))) {
       if (picked.length >= want) break;
-      if (picked.some((p) => p.lawRef === t.lawRef)) continue;
+      if (picked.some((p) => sameText(p, t))) continue;
       if (picked.some((p) => lawRefsOverlap(p.lawRef, t.lawRef))) { spare.push(t); continue; }
       picked.push(t);
     }
     spare.forEach((t) => {
-      if (picked.length < want && !picked.some((p) => p.lawRef === t.lawRef)) picked.push(t);
+      if (picked.length < want && !picked.some((p) => sameText(p, t))) picked.push(t);
     });
     return picked;
+  }
+
+  // 根拠法令の選択肢の文字列。括弧書きの補足(「民法265条(地上権)」の「(地上権)」など)は
+  // 答えの手がかりになるため、どの選択肢からも同じように外す
+  // ただし「9条(6)〜(11)号」のような番号だけの括弧は条文番号の一部なので残す
+  function stripLawNotes(ref) {
+    let text = String(ref || ``).replace(/[(（]([0-9０-９]+)[)）]/g, `⦅$1⦆`);
+    let prev;
+    do {
+      prev = text;
+      text = text.replace(/[(（][^()（）]*[)）]/g, ``);
+    } while (text !== prev);
+    text = text.replace(/⦅/g, `(`).replace(/⦆/g, `)`);
+    text = text.replace(/\s+/g, ` `).replace(/([、・,，])\s*(?=[、・,，])/g, ``).replace(/^[\s、・,，]+|[\s、・,，]+$/g, ``).trim();
+    return text || String(ref || ``).trim();
+  }
+
+  function lawChoiceText(term) {
+    return truncate(stripLawNotes(term.lawRef), 80);
+  }
+
+  // 用語名から根拠法令が分かってしまうか(用語名に条番号・法令名・法令名の主要部分が入っている)
+  // 例: 「農地法3条(権利移動の制限)」「消費者契約法による契約取消」「印紙税の課税文書」(→ 印紙税法)
+  const lawHintCache = new Map();
+  function lawNameHints(ref) {
+    const key = String(ref || ``);
+    if (lawHintCache.has(key)) return lawHintCache.get(key);
+    const hints = new Set();
+    // 法令の本体名(施行令・施行規則・別表・附則を除く)と、正式名に対応する略称
+    lawCitations(key).forEach((c) => {
+      const body = lawBody(c.law).replace(/(施行令|施行規則)$/, ``);
+      const names = [[body, 2]];
+      LAW_ALIASES.forEach(([short, full]) => { if (body === full) names.push([short, 3]); });
+      names.forEach(([name, minStem]) => {
+        if (name.length >= 2) hints.add(name);
+        // 「〜法」「〜に関する法律」「〜法基本通達」の主要部分(略称由来の「措置」のような一般的な語は除く)
+        const at = name.lastIndexOf(`法`);
+        const stem = at > 0 ? name.slice(0, at).replace(/に関する$/, ``) : ``;
+        if (stem.length >= minStem) hints.add(stem);
+      });
+    });
+    const out = Array.from(hints);
+    lawHintCache.set(key, out);
+    return out;
+  }
+
+  // 正解の選択肢(括弧書きを外した根拠法令)に用語名がそのまま出ている場合
+  // (例: 「原状回復」→「…「原状回復をめぐるトラブルとガイドライン」」)も答えが分かるため出題しない
+  function lawRefLeaks(term) {
+    const name = String(term.name || ``);
+    if (/\d+条/.test(name)) return true;
+    if (lawNameHints(term.lawRef).some((h) => name.includes(h))) return true;
+    const answer = stripLawNotes(term.lawRef);
+    if (nameVariants(term).some((v) => answer.includes(v))) return true;
+    // 用語名と正解が3文字以上の語を共有している(「媒介契約」→「標準媒介契約約款」など)。ひらがなを含む部分と、
+    // 多くの法令名に入る「不動産」だけの一致は手がかりにならないので数えない
+    const plainAnswer = answer.replace(/[【】「」『』]/g, ``);
+    const core = name.replace(/[(（][^()（）]*[)）]/g, ``);
+    for (let i = 0; i + 3 <= core.length; i++) {
+      const part = core.slice(i, i + 3);
+      if (/[ぁ-ん・、\s]/.test(part) || part === `不動産`) continue;
+      if (plainAnswer.includes(part)) return true;
+    }
+    return false;
+  }
+
+  // 根拠法令の問題を出せる用語か(答えが用語名から分からない・4択が揃う)。用語ごとに覚えておく
+  const lawEligibleCache = new Map();
+  function isLawRefEligible(term) {
+    if (!term || !term.lawRef) return false;
+    const key = `${term.id}\n${term.lawRef}\n${term.name}`;
+    if (lawEligibleCache.has(key)) return lawEligibleCache.get(key);
+    let ok = !lawRefLeaks(term);
+    if (ok) {
+      const texts = new Set(lawRefPool(AppIndex.allTerms, term).map(lawChoiceText));
+      texts.delete(lawChoiceText(term));
+      ok = texts.size >= 3;
+    }
+    lawEligibleCache.set(key, ok);
+    return ok;
   }
 
   // 上限文字数の直前(手前15文字以内)に句読点があればそこで切り、不自然な文中カットを避ける
@@ -238,10 +319,16 @@ window.QuizEngine = (function () {
     return maskNames(term.simpleExplanation, nameVariants(term));
   }
 
+  // 「意味を選ぶ」の選択肢: 先頭の「〇〇は」「〇〇とは」は外す(伏せ字の位置で正解が目立たないように)
+  function definitionChoiceText(term) {
+    const text = maskedExplanation(term).replace(/^〇〇(?:とは|は)[、,]?\s*/, ``);
+    return truncate(text || maskedExplanation(term), 100);
+  }
+
   function buildChoiceText(term, type) {
     if (type === `name-from-def`) return term.name;
-    if (type === `law-ref`) return truncate(term.lawRef, 80);
-    return truncate(maskedExplanation(term), 100);
+    if (type === `law-ref`) return lawChoiceText(term);
+    return definitionChoiceText(term);
   }
 
   // stats({termId:{wrong,correct}})がある場合、不正解が多い用語ほど先に来るよう並べ替える
@@ -256,23 +343,31 @@ window.QuizEngine = (function () {
     return withScore.map((x) => x.t);
   }
 
+  const QUESTION_TYPES = [`name-from-def`, `def-from-name`, `law-ref`];
+
   // 1つの用語から出題可能なら問題オブジェクトを、4択が揃わなければ null を返す
+  // opts.types: 出題形式の候補(省略時は出せる形式すべて)。選んだ形式で4択が揃わなければ、残りの候補を試す
   function buildQuestionForTerm(term, opts) {
     opts = opts || {};
-    const lawEligible = !!term.lawRef && new Set(lawRefPool(AppIndex.allTerms, term).map((t) => t.lawRef)).size >= 3;
-    const typeOptions = opts.types || (lawEligible ? [`name-from-def`, `def-from-name`, `law-ref`] : [`name-from-def`, `def-from-name`]);
-    const usableTypes = typeOptions.filter((t) => t !== `law-ref` || lawEligible);
-    if (!usableTypes.length) return null;
-    const type = usableTypes[Math.floor(Math.random() * usableTypes.length)];
+    const lawEligible = isLawRefEligible(term);
+    const typeOptions = Array.isArray(opts.types) && opts.types.length ? opts.types : QUESTION_TYPES;
+    const usableTypes = shuffle(typeOptions.filter((t) => QUESTION_TYPES.includes(t) && (t !== `law-ref` || lawEligible)));
+    for (const type of usableTypes) {
+      const q = buildQuestionOfType(term, type);
+      if (q) return q;
+    }
+    return null;
+  }
 
+  function buildQuestionOfType(term, type) {
     const variants = nameVariants(term);
     const stem = type === `name-from-def` ? maskNames(term.simpleExplanation, variants)
-      : type === `law-ref` ? `${term.name} の根拠法令は?`
+      : type === `law-ref` ? `「${term.name}」の根拠法令は?`
       : term.name;
     const correctText = buildChoiceText(term, type);
     const usedTexts = new Set([correctText]);
     // 根拠法令以外は関連の強い順に全用語を並べ、条件に合うものを先頭から3つ使う
-    const candidates = type === `law-ref` ? pickLawRefDistractors(AppIndex.allTerms, term, 8) : pickDistractors(AppIndex.allTerms, term, AppIndex.allTerms.length);
+    const candidates = type === `law-ref` ? pickLawRefDistractors(AppIndex.allTerms, term, 12) : pickDistractors(AppIndex.allTerms, term, AppIndex.allTerms.length);
     const distractors = [];
     for (const cand of candidates) {
       if (distractors.length >= 3) break;
@@ -281,6 +376,9 @@ window.QuizEngine = (function () {
       // 答えの手がかり・複数正解のもとになるダミーは使わない
       // 用語を選ぶ: 問題文(説明)にそのダミーの用語名が出てくる / 意味を選ぶ: ダミーの説明に問われている用語名が出てくる
       if (type === `name-from-def` && mentionsAny(stem, nameVariants(cand))) continue;
+      // 用語を選ぶ: 問題文の伏せ字(〇〇)に当てはまる名前のダミーも使わない
+      // (例: 「仲介手数料・管理手数料と消費税」の説明「不動産の〇〇や…」に対するダミー「仲介手数料」)
+      if (type === `name-from-def` && nameVariants(cand).some((v) => variants.includes(v))) continue;
       if (type === `def-from-name` && mentionsAny(text, variants)) continue;
       usedTexts.add(text);
       distractors.push({ text, correct: false });
@@ -306,15 +404,18 @@ window.QuizEngine = (function () {
     return terms.map((t) => buildQuestionForTerm(t, opts)).filter(Boolean);
   }
 
-  function generateAutoQuiz(level, topicId, count, weakStats) {
-    let pool = AppIndex.allTerms.filter((t) => level === `全て` || t.level === level);
-    if (topicId && topicId !== `全て`) pool = pool.filter((t) => (t.topicIds || []).includes(topicId));
+  // level / topicId: 絞り込まない場合は `全て`(または `all`・空)
+  // opts.types: 出題形式の候補(例: [`law-ref`] で根拠法令の問題だけ)
+  function generateAutoQuiz(level, topicId, count, weakStats, opts) {
+    const isAll = (v) => !v || v === `全て` || v === `all` || v === `すべて`;
+    let pool = AppIndex.allTerms.filter((t) => isAll(level) || t.level === level);
+    if (!isAll(topicId)) pool = pool.filter((t) => (t.topicIds || []).includes(topicId));
 
     const orderedPool = weakStats ? orderByWeakness(pool, weakStats) : shuffle(pool);
     const questions = [];
     orderedPool.some((term) => {
       if (questions.length >= count) return true;
-      const q = buildQuestionForTerm(term);
+      const q = buildQuestionForTerm(term, opts);
       if (q) questions.push(q);
       return false;
     });
@@ -403,9 +504,9 @@ window.QuizEngine = (function () {
   }
 
   return {
-    shuffle, truncate, pickDistractors, pickLawRefDistractors, buildChoiceText, orderByWeakness,
+    QUESTION_TYPES, shuffle, truncate, pickDistractors, pickLawRefDistractors, buildChoiceText, orderByWeakness,
     buildQuestionForTerm, buildQuestionsFromTerms, generateAutoQuiz, isMcItem, fromFixedMc,
     statementTruths, statementsFrom, allStatements, stemContext, lawRefsOverlap, lawCitations,
-    nameVariants, maskNames,
+    nameVariants, maskNames, stripLawNotes, lawRefLeaks, isLawRefEligible,
   };
 })();

@@ -75,7 +75,9 @@ window.Srs = (function () {
       card.reps += 1;
       card.dueDate = addDays(todayStr(), card.interval);
     } else { // 簡単
-      card.interval = Math.round((card.interval || 1) * card.ease * 1.3) + 1;
+      // 「普通」より短くならないようにする(2回目の復習は「普通」が6日固定のため、計算だけだと4日になることがあった)
+      const good = card.reps === 0 ? 1 : card.reps === 1 ? 6 : Math.round(card.interval * card.ease);
+      card.interval = Math.max(good + 1, Math.round((card.interval || 1) * card.ease * 1.3) + 1);
       card.ease += 0.15;
       card.reps += 1;
       card.dueDate = addDays(todayStr(), card.interval);
@@ -94,6 +96,7 @@ window.Srs = (function () {
 
   function intervalLabel(days) {
     if (days <= 0) return `今日`;
+    if (days === 1) return `明日`;
     if (days < 30) return `${days}日後`;
     if (days < 365) return `${Math.round(days / 30)}か月後`;
     return `${Math.round(days / 36.5) / 10}年後`;

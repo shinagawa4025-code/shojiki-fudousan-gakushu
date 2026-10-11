@@ -18,11 +18,18 @@ window.Recommend = (function () {
       }
     }
 
-    // 苦手な用語の数え方は弱点分析・クイズ画面の「苦手な用語」と同じ(Analysis.weakTermIds)
-    const weakIds = window.Analysis && typeof Analysis.weakTermIds === `function` ? Analysis.weakTermIds() : [];
+    // 苦手な用語の数え方は弱点分析・クイズ画面の「苦手な用語」と同じ(Analysis.weakTermIds)。
+    // 目標の試験があれば、その試験の分野に入る用語だけを数える
+    const primary = Stats.primaryTarget ? Stats.primaryTarget() : null;
+    const primaryType = primary ? Stats.examType(primary.examTypeId) : null;
+    const examScoped = !!(primaryType && Array.isArray(primaryType.categories));
+    let weakIds = window.Analysis && typeof Analysis.weakTermIds === `function` ? Analysis.weakTermIds() : [];
+    if (examScoped) {
+      weakIds = weakIds.filter((id) => AppIndex.termsById[id] && Stats.categoryOf(AppIndex.termsById[id], primaryType.id));
+    }
     if (weakIds.length) {
       return {
-        title: `苦手な用語が${weakIds.length}件あります`,
+        title: examScoped ? `${primaryType.shortName}の苦手な用語が${weakIds.length}語あります` : `苦手な用語が${weakIds.length}語あります`,
         detail: `自動生成クイズで間違えることが多い用語があります。優先的に解き直しましょう。`,
         ctaLabel: `苦手な用語のクイズに挑戦`,
         nav: `#quiz/auto/weak`,

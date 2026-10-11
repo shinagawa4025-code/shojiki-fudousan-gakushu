@@ -71,7 +71,7 @@ window.APP_DATA.quiz = [
   { id: `quiz-I-07`, level: `超入門`, topicIds: [`topicI`], question: `引っ越し後の転入届は、いつまでに提出することとされているか。根拠法令も答えよ。`,
     answer: `引っ越し後14日以内。住民基本台帳法22条に定められており、放置すると過料の対象になりうる`, relatedTermId: `basicI11`, episodes: [] },
   { id: `quiz-I-08`, level: `超入門`, topicIds: [`topicI`], question: `退去予告の期間について、民法が定める原則の期間と、実務上契約書でよく使われる期間をそれぞれ答えよ。`,
-    answer: `民法617条の原則は建物で3ヶ月前の通知だが、実務では契約書の特約で1〜2ヶ月前までの通知とされることが多い`, relatedTermId: `basicI12`, episodes: [] },
+    answer: `民法617条の原則は建物で3ヶ月前の通知だが、実務では契約書の特約で1〜2ヶ月前までの通知とされることが多い`, relatedTermId: `basicA19`, episodes: [] },
 
   // ===== 賃貸(topicA)追加分 =====
   { id: `quiz-A-01`, level: `初級`, topicIds: [`topicA`], question: `賃貸借契約の更新料の支払い義務は、法律上すべての契約に一律で発生するものか?`,
