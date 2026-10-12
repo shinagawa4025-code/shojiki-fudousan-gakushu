@@ -4,9 +4,43 @@
 :root { --calc-input-border: #848e9c; }
 :root[data-theme="dark"] { --calc-input-border: #6a7b92; }
 
-/* 分類(セグメント)と計算機チップ */
-.calculators-view .calc-groups { margin: var(--sp-4) 0 var(--sp-3); }
-.calculators-view .calc-groups .segmented-item { min-height: 40px; }
+/* 分類(下線のタブ)と計算機チップ。上の「学ぶ」メニュー(区分の切り替え)と見分けられるよう、分類は塗りのない下線タブにする */
+.calc-tabs {
+  display: flex;
+  gap: var(--sp-1);
+  margin: var(--sp-3) 0 var(--sp-3);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.calc-tabs::-webkit-scrollbar { display: none; }
+.calc-tab {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-1), border-color var(--dur-1);
+}
+.calc-tab .icon { flex-shrink: 0; }
+.calc-tab[aria-pressed="true"] { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+@media (hover: hover) { .calc-tab:hover { color: var(--color-text); } .calc-tab[aria-pressed="true"]:hover { color: var(--color-primary); } }
+.calc-tab:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; border-radius: var(--radius-sm); }
 .calculators-view .calc-chips { margin-bottom: var(--sp-4); }
 .calculators-view .calc-chips .chip { flex-shrink: 0; }
 .calculators-view .calc-chips[hidden] { display: none; }
@@ -41,8 +75,8 @@
 
 /* 入力フォーム */
 .calc-form { display: flex; flex-direction: column; gap: var(--sp-3); }
-.calc-field { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 500; }
-.calc-field-label { color: var(--color-text); line-height: var(--lh-snug); }
+.calc-field { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 400; }
+.calc-field-label { color: var(--color-text); line-height: var(--lh-snug); font-weight: 600; }
 .calc-field-unit { color: var(--color-text-muted); font-weight: 400; margin-left: 2px; }
 .calc-input-wrap { position: relative; display: flex; align-items: center; }
 .calc-field .calc-input-wrap input[type="text"] { padding-right: 4.5em; font-variant-numeric: tabular-nums; }
@@ -177,7 +211,7 @@
   background: none;
   color: var(--color-primary);
   font: inherit;
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -187,9 +221,13 @@
 .calc-row-why { display: block; margin-top: calc(var(--sp-2) * -1); padding-bottom: var(--sp-2); font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
 
 @media (max-width: 480px) {
-  /* 4分類をスマホ幅に収める */
-  .calculators-view .calc-groups .segmented-item { padding: 0 var(--sp-2); }
-  .calculators-view .calc-groups .segmented-item .icon { display: none; }
+  /* 4分類をスマホ幅に収める(記号を省き、文字を少し小さく) */
+  .calc-tab { padding: 0 var(--sp-2); font-size: var(--fs-sm); }
+  .calc-tab .icon { display: none; }
+}
+@media (max-width: 359px) {
+  .calc-tabs { gap: 0; }
+  .calc-tab { padding: 0 6px; }
 }
 
 /* 計算式 */
@@ -245,7 +283,7 @@
 .calc-basis-name strong { color: var(--color-heading); }
 .calc-basis-note { color: var(--color-text-muted); }
 .calc-basis-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--sp-1); margin: var(--sp-3) 0 var(--sp-2); }
-.calc-basis a, .calc-helper-note a { color: var(--color-accent); display: inline-flex; align-items: center; gap: 2px; min-height: 24px; overflow-wrap: anywhere; }
+.calc-basis a, .calc-helper-note a { color: var(--color-primary); display: inline-flex; align-items: center; gap: 2px; min-height: 24px; overflow-wrap: anywhere; }
 .calc-helper-note a { display: inline; }
 
 /* 関連する用語 */
@@ -264,6 +302,8 @@
   line-height: var(--lh-snug);
 }
 .calc-disclaimer > .icon { flex-shrink: 0; margin-top: 1px; }
+/* 計算・税率の誤りの報告リンク(注意書きのすぐ下・右寄せ) */
+.calc-report { margin: var(--sp-1) 0 0; justify-content: flex-end; }
 
 /* スマホ: 見出しまわりを詰める(説明は2行まで。「続きを読む」で全文) */
 @media (max-width: 767px) {

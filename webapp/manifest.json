@@ -1,15 +1,16 @@
 {
   "id": "./",
-  "name": "不動産学習",
-  "short_name": "不動産学習",
-  "description": "宅建士・税理士試験の学習にも使える、不動産の基礎から法令・税務までを学べる学習サイト(非公式)",
+  "name": "まなぶ不動産",
+  "short_name": "まなぶ不動産",
+  "description": "宅建士試験の4択・○×・模擬試験と、賃貸・購入・売却・相続の基礎知識、ローンや税金の計算機をひとつに。登録不要・無料で、学習記録は端末の中だけに保存されます。",
   "start_url": "./index.html#home",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "background_color": "#f3f5f7",
-  "theme_color": "#1e3a5f",
+  "orientation": "any",
+  "background_color": "#f4f6f9",
+  "theme_color": "#ffffff",
   "lang": "ja",
+  "dir": "ltr",
   "categories": [
     "education"
   ],
@@ -46,19 +47,21 @@
       "url": "./index.html#review",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192"
+          "src": "icons/shortcut-review-96.png",
+          "sizes": "96x96",
+          "type": "image/png"
         }
       ]
     },
     {
-      "name": "模擬試験",
-      "short_name": "模擬試験",
-      "url": "./index.html#exam",
+      "name": "4択問題",
+      "short_name": "4択",
+      "url": "./index.html#quiz",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192"
+          "src": "icons/shortcut-quiz-96.png",
+          "sizes": "96x96",
+          "type": "image/png"
         }
       ]
     },
@@ -68,19 +71,21 @@
       "url": "./index.html#ox",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192"
+          "src": "icons/shortcut-ox-96.png",
+          "sizes": "96x96",
+          "type": "image/png"
         }
       ]
     },
     {
-      "name": "クイズ",
-      "short_name": "クイズ",
-      "url": "./index.html#quiz",
+      "name": "模擬試験",
+      "short_name": "模擬試験",
+      "url": "./index.html#exam",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192"
+          "src": "icons/shortcut-exam-96.png",
+          "sizes": "96x96",
+          "type": "image/png"
         }
       ]
     },
@@ -90,8 +95,9 @@
       "url": "./index.html#calculators",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192"
+          "src": "icons/shortcut-calc-96.png",
+          "sizes": "96x96",
+          "type": "image/png"
         }
       ]
     }

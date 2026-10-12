@@ -49,13 +49,43 @@ window.Views.figures = (function () {
     renderGallery(root, ids);
   }
 
+  // 一覧の図(SVG)は画面に近づいてから描く(枠の高さは CSS で決まっているので、後から描いても位置はずれない)
+  function fillPreviews(wrap) {
+    const boxes = Array.from(wrap.querySelectorAll(`.fig-preview[data-fig]`));
+    const fill = (box) => {
+      if (!box.hasAttribute(`data-fig`)) return;
+      const id = box.getAttribute(`data-fig`);
+      box.removeAttribute(`data-fig`);
+      box.innerHTML = safeSvg(id);
+    };
+    // 最初に見える数枚はすぐ描く(開いた直後に空の枠が見えないように)
+    boxes.slice(0, 6).forEach(fill);
+    if (!(`IntersectionObserver` in window)) { boxes.forEach(fill); return; }
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (!en.isIntersecting) return;
+        io.unobserve(en.target);
+        fill(en.target);
+      });
+    }, { rootMargin: `600px 0px` });
+    boxes.forEach((b) => io.observe(b));
+    // 画面を離れたら監視をやめる
+    const stop = () => { if (!wrap.isConnected) { io.disconnect(); window.removeEventListener(`hashchange`, stop); } };
+    window.addEventListener(`hashchange`, stop);
+  }
+
   function renderGallery(root, ids) {
     const wrap = document.createElement(`div`);
     wrap.className = `view figures-view`;
     wrap.innerHTML = `
-      <h2>図解</h2>
-      <p class="view-desc">文章だけではつかみにくい論点を図で整理しました。図をタップすると大きく表示され、関連する用語にも移動できます。</p>`;
+      <div class="learn-head">
+        <h2>図解</h2>
+        <button type="button" class="btn btn-icon learn-info-btn" data-role="info" aria-label="図解について">${ic(`info`, 20)}</button>
+      </div>`;
     root.appendChild(wrap);
+    wrap.querySelector(`[data-role="info"]`).addEventListener(`click`, () => {
+      UI.sheet({ title: `図解について`, content: `<p class="learn-info-text">文章だけではつかみにくい論点を図で整理しました。図をタップすると大きく表示され、この図の説明と関連する用語を確認できます。</p>` });
+    });
 
     if (!ids.length) {
       wrap.appendChild(UI.emptyState({
@@ -75,7 +105,7 @@ window.Views.figures = (function () {
       const shown = terms.slice(0, 3);
       return `
         <a class="card card-interactive fig-card" href="#figures/${id}">
-          <div class="fig-preview" aria-hidden="true">${safeSvg(id)}</div>
+          <div class="fig-preview" aria-hidden="true" data-fig="${id}"></div>
           <div class="fig-card-body">
             <p class="fig-card-title">${def.title}</p>
             ${terms.length ? `<div class="fig-card-terms">${shown.map((t) => `<span class="chip chip-small chip-muted">${t.name}</span>`).join(``)}${terms.length > shown.length ? `<span class="fig-more">ほか${terms.length - shown.length}語</span>` : ``}</div>` : ``}
@@ -97,6 +127,16 @@ window.Views.figures = (function () {
       sec.innerHTML = `<div class="section-head"><h3>アプリの使い方</h3></div><div class="fig-grid">${helpIds.map(cardHtml).join(``)}</div>`;
       wrap.appendChild(sec);
     }
+    fillPreviews(wrap);
+  }
+
+  // 「誤りを報告」(報告フォームが未設定なら出さない)
+  function reportHtml(id, def) {
+    if (!window.Report || typeof Report.linkHtml !== `function`) return ``;
+    try {
+      const link = Report.linkHtml({ kind: `fig`, id, title: def.title, location: `#figures/${id}` });
+      return link ? `<p class="item-meta fig-report">${link}</p>` : ``;
+    } catch (e) { return ``; }
   }
 
   function renderDetail(root, id, ids) {
@@ -118,6 +158,7 @@ window.Views.figures = (function () {
           <h3 class="card-title">${ic(`info`)}この図の説明</h3>
           <p class="fig-desc">${def.alt}</p>
         </section>` : ``}
+      ${reportHtml(id, def)}
       ${terms.length ? `
         <section class="fig-related">
           <div class="section-head"><h3>関連する用語</h3></div>

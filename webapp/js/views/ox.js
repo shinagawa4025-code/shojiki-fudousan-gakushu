@@ -50,8 +50,10 @@ window.Views.ox = (function () {
   }
 
   // 文に分野を付ける。cats: 該当する分野ID(宅建士の分野と shohi の両方に入ることもある) / cat: 表示・集計用の代表分野
-  function withCategory(s) {
+  // quiz: 文の元の4択問題(試験分野が明示されていれば examCats を優先する。null は「その試験の範囲外」)
+  function withCategory(s, quiz) {
     const probe = { relatedTermId: s.termId, topicIds: s.topicIds };
+    if (quiz && quiz.examCats) probe.examCats = quiz.examCats;
     const t = Stats.categoryOf(probe, `takken`);
     const z = Stats.categoryOf(probe, `zeirishi`);
     const cats = [];
@@ -60,8 +62,19 @@ window.Views.ox = (function () {
     return Object.assign({}, s, { cats, cat: cats.includes(SHOHI) ? SHOHI : (t ? t.id : null) });
   }
 
+  // 分野を付けた文の一覧(画面を開くたびに何度も使うので覚えておく)。
+  // QuizEngine.allStatements() は同じ文のオブジェクトを返すので、先頭・末尾・件数が同じなら作り直さない
+  let catCache = null;
   function loadStatements() {
-    return QuizEngine.allStatements().map(withCategory);
+    const src = QuizEngine.allStatements();
+    const first = src[0] || null;
+    const last = src[src.length - 1] || null;
+    if (!catCache || catCache.n !== src.length || catCache.first !== first || catCache.last !== last) {
+      const byId = {};
+      ((window.APP_DATA && window.APP_DATA.quiz) || []).forEach((q) => { byId[q.id] = q; });
+      catCache = { n: src.length, first, last, list: src.map((s) => withCategory(s, byId[s.quizId] || null)) };
+    }
+    return catCache.list.slice();
   }
 
   // ===== 記録 =====
@@ -367,6 +380,19 @@ window.Views.ox = (function () {
     return window.Views.quiz && Views.quiz.streakLineHtml ? Views.quiz.streakLineHtml() : ``;
   }
 
+  // 「誤りを報告」(○×の文ごと。報告フォームが未設定なら出さない)
+  function reportMetaHtml(s, quiz) {
+    const R = window.Report;
+    try {
+      if (!R || typeof R.enabled !== `function` || !R.enabled()) return ``;
+      const o = { kind: `ox`, id: s.id, title: s.text, location: `#quiz/q/${s.quizId}` };
+      const asOf = quiz && quiz.asOf;
+      if (typeof R.metaHtml === `function`) return R.metaHtml(o, { asOf });
+      const linkHtml = typeof R.linkHtml === `function` ? R.linkHtml(o) : ``;
+      return linkHtml ? `<p class="item-meta"><span>${esc(typeof R.asOfText === `function` ? R.asOfText(asOf) : ``)}</span>${linkHtml}</p>` : ``;
+    } catch (e) { return ``; }
+  }
+
   function termLinkBtnHtml(s) {
     const link = termLink(s.termId, s.topicIds);
     return link ? `<a class="link-btn" href="${link.href}" data-term-sheet="${link.id}">${ic(`layers`, 14)}用語を確認</a>` : ``;
@@ -502,8 +528,10 @@ window.Views.ox = (function () {
     const lastPool = last ? buildPool(statements, last.scope, last.filter, stats).length : 0;
 
     wrap.innerHTML = `
-      <h2>○×一問一答</h2>
-      <p class="view-desc">4択問題の選択肢を1文ずつ、正しい(○)か誤り(×)かで判定します。</p>
+      <div class="view-head">
+        <h2>○×一問一答</h2>
+        <button type="button" class="btn btn-icon view-info-btn" data-role="view-info" aria-label="○×一問一答について" aria-haspopup="dialog">${ic(`info`, 20)}</button>
+      </div>
       ${resumable ? `
         <div class="card ox-resume">
           <span class="ox-resume-icon">${ic(`o-x`, 22)}</span>
@@ -542,6 +570,16 @@ window.Views.ox = (function () {
         </div>
         ${keysHintHtml()}` : ``}
     `;
+
+    // 画面の説明は ⓘ のシートで(「開始」を最初の画面に収めるため)
+    wrap.querySelector(`[data-role="view-info"]`).addEventListener(`click`, () => UI.sheet({
+      title: `○×一問一答について`,
+      content: `<div class="view-info">
+        <p>4択問題の選択肢を1文ずつ、正しい(○)か誤り(×)かで判定します。</p>
+        <p>間違えた文の用語は「<a href="#review">今日の復習</a>」に自動で追加されます。「間違えたことがある」を選ぶと、前回まちがえた文から順に解き直せます。</p>
+        <p class="view-info-keys">キーボード: <kbd>O</kbd>・<kbd>1</kbd>・<kbd>←</kbd> で○ / <kbd>X</kbd>・<kbd>2</kbd>・<kbd>→</kbd> で× / <kbd>Enter</kbd> で次へ</p>
+      </div>`,
+    }));
 
     const resultBtn = wrap.querySelector(`[data-role="show-result"]`);
     if (resultBtn) {
@@ -729,6 +767,7 @@ window.Views.ox = (function () {
             <a class="chip chip-small chip-muted" href="#quiz/q/${encodeURIComponent(s.quizId)}">${ic(`list`, 14)}元の4択問題</a>
             ${link ? `<a class="chip chip-small chip-muted" href="${link.href}" data-term-sheet="${link.id}">${ic(`layers`, 14)}用語を確認: ${esc(link.name)}</a>` : ``}
           </div>
+          ${reportMetaHtml(s, quiz)}
         </div>
         <div class="ox-next-wrap">
           <button type="button" class="btn btn-lg btn-block ox-next" data-role="next">${isLast ? `結果を見る` : `次へ`}${ic(`arrow-right`)}</button>

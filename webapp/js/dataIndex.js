@@ -4,6 +4,20 @@ window.AppIndex = (function () {
   // 索引はプロトタイプを持たないオブジェクトにする(#topics/constructor のようなURLで Object の組み込みを拾わないように)
   const dict = () => Object.create(null);
 
+  // 廃止した問題(data/content/q2_fix.js などが APP_DATA.retiredQuizIds = [問題ID, ...] で指定)は、索引を作る前に
+  // APP_DATA.quiz から取り除く。クイズ・模擬試験・○×・検索・分野別の集計のどこにも出なくなる
+  // (保存済みの記録(quizHistory・examHistory・ブックマーク・oxStats)に残ったIDは、各画面で存在しない問題として読み飛ばされる)
+  const retiredQuizIds = new Set(Array.isArray(data.retiredQuizIds) ? data.retiredQuizIds.filter((id) => typeof id === `string`) : []);
+  const retiredQuizMissing = [];
+  if (retiredQuizIds.size) {
+    const present = new Set(data.quiz.map((q) => q && q.id));
+    retiredQuizIds.forEach((id) => { if (!present.has(id)) retiredQuizMissing.push(id); });
+    const kept = data.quiz.filter((q) => !(q && retiredQuizIds.has(q.id)));
+    // 他のモジュールが同じ配列を参照していても食い違わないよう、配列そのものを詰め直す
+    data.quiz.length = 0;
+    kept.forEach((q) => data.quiz.push(q));
+  }
+
   // 統合・削除した用語ID → 引き継ぎ先(データ中の参照と保存済みの学習記録を読み替える)
   const RETIRED_TERMS = { basicI12: `basicA19` };
   const retired = (id) => (Object.prototype.hasOwnProperty.call(RETIRED_TERMS, id) ? RETIRED_TERMS[id] : id);
@@ -31,7 +45,7 @@ window.AppIndex = (function () {
   const sourcesById = dict();
   data.sources.forEach((src) => { sourcesById[src.id] = src; });
 
-  // 用語は「作中用語(terms)」と「基礎知識(basics)」を統合した1つのプールとして扱う
+  // 用語は「用語集の用語(terms)」と「基礎知識(basics)」を統合した1つのプールとして扱う
   const allTerms = [...data.terms, ...data.basics];
   const termsById = dict();
   allTerms.forEach((t) => { termsById[t.id] = t; });
@@ -55,7 +69,7 @@ window.AppIndex = (function () {
     });
   });
 
-  // トピックID -> [termId, ...] (作中用語+基礎知識、term.topicIds を単一の正として逆引きを構築)
+  // トピックID -> [termId, ...] (用語集の用語+基礎知識、term.topicIds を単一の正として逆引きを構築)
   const topicTermIndex = dict();
   allTerms.forEach((t) => {
     (t.topicIds || []).forEach((topicId) => {
@@ -93,7 +107,12 @@ window.AppIndex = (function () {
   });
 
   // ---- データ整合性チェック(問題があれば console.warn で列挙) ----
+  // 開発時(localhost・127.0.0.1・ファイルを直接開いたとき・URL に ?debug)と、Node で読み込む確認(tools/check.js など)だけで動かす。
+  // 公開サイトでは起動を速くするため省く(公開前に CI が同じチェックを必ず通している)。索引づくり(小見出しなど)はいつも行う
+  const loc = typeof location !== `undefined` && location ? location : null;
+  const CHECK = !loc || !loc.hostname || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(loc.hostname) || /debug/.test(String(loc.search || ``));
   const issues = [];
+  const reviewDue = [];
 
   // トピックの小見出し: topicId -> [{ name, ids }](basicIds にある項目だけ・各項目は最初の小見出しに1回だけ)
   // 小見出しのないトピックは null。どの小見出しにも入っていない項目は末尾の「その他」にまとめる
@@ -133,55 +152,89 @@ window.AppIndex = (function () {
       seen.add(id);
     });
   }
-  dupCheck(`用語・基礎知識`, allTerms.map((t) => t.id));
-  dupCheck(`クイズ`, data.quiz.map((q) => q.id));
-  dupCheck(`トピック`, data.topics.map((t) => t.id));
-  dupCheck(`情報源`, data.sources.map((s) => s.id));
+  if (CHECK) {
+    dupCheck(`用語・基礎知識`, allTerms.map((t) => t.id));
+    dupCheck(`クイズ`, data.quiz.map((q) => q.id));
+    dupCheck(`トピック`, data.topics.map((t) => t.id));
+    dupCheck(`情報源`, data.sources.map((s) => s.id));
+    retiredQuizMissing.forEach((id) => issues.push(`retiredQuizIds: 存在しない問題 ${id}`));
 
-  allTerms.forEach((t) => {
-    if (!Array.isArray(t.aliases)) issues.push(`${t.id}: aliases が配列ではない`);
-    (t.topicIds || []).forEach((tid) => { if (!topicsById[tid]) issues.push(`${t.id}: 存在しないトピック ${tid}`); });
-    (t.sources || []).forEach((sid) => { if (!sourcesById[sid]) issues.push(`${t.id}: 存在しない出典 ${sid}`); });
-    (t.relatedEpisodes || []).forEach((eid) => { if (!episodesById[eid]) issues.push(`${t.id}: 存在しないエピソード ${eid}`); });
-  });
-  data.topics.forEach((tp) => {
-    tp.basicIds.forEach((id) => { if (!termsById[id]) issues.push(`${tp.id}.basicIds: 存在しない ${id}`); });
-    tp.episodes.forEach((id) => { if (!episodesById[id]) issues.push(`${tp.id}.episodes: 存在しない ${id}`); });
-  });
-  data.quiz.forEach((q) => {
-    if (q.relatedTermId && !termsById[q.relatedTermId]) issues.push(`${q.id}: 存在しない relatedTermId ${q.relatedTermId}`);
-    (q.topicIds || []).forEach((tid) => { if (!topicsById[tid]) issues.push(`${q.id}: 存在しないトピック ${tid}`); });
-    if (q.format === `mc`) {
-      if (!Array.isArray(q.choices) || q.choices.length !== 4) issues.push(`${q.id}: 4択問題の選択肢が4つではない`);
-      else if (new Set(q.choices).size !== 4) issues.push(`${q.id}: 選択肢に重複がある`);
-      if (!Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex > 3) issues.push(`${q.id}: correctIndex が0〜3ではない`);
-      if (q.ask != null && q.ask !== `correct` && q.ask !== `incorrect`) issues.push(`${q.id}: ask は correct / incorrect のどちらか`);
-      if (q.choiceNotes != null && (!Array.isArray(q.choiceNotes) || q.choiceNotes.length !== 4 || q.choiceNotes.some((n) => typeof n !== `string` || !n))) issues.push(`${q.id}: choiceNotes は空でない文字列4つ`);
-      if (!q.explanation) issues.push(`${q.id}: 4択問題に explanation がない`);
-    } else if (!q.answer) {
-      issues.push(`${q.id}: 記述式なのに answer がない`);
-    }
-  });
-  data.laws.laws.forEach((law) => {
-    (law.topicIds || []).forEach((tid) => { if (!topicsById[tid]) issues.push(`${law.id}: 存在しないトピック ${tid}`); });
-  });
-  if (data.exams && Array.isArray(data.exams.types)) {
-    data.exams.types.forEach((type) => {
-      (type.categories || []).forEach((c) => {
-        (c.topicIds || []).forEach((tid) => { if (!topicsById[tid]) issues.push(`試験${type.id}.${c.id}: 存在しないトピック ${tid}`); });
-        (c.termIds || []).forEach((id) => { if (!termsById[id]) issues.push(`試験${type.id}.${c.id}: 存在しない用語 ${id}`); });
+    // 試験分野の明示 examCats: { 試験ID: 分野ID | null }(null は「その試験の範囲外」)。js/stats.js の categoryOf が最優先で使う
+    const examTypesById = dict();
+    if (data.exams && Array.isArray(data.exams.types)) data.exams.types.forEach((type) => { examTypesById[type.id] = type; });
+    function checkExamCats(id, ec) {
+      if (ec == null) return;
+      if (typeof ec !== `object` || Array.isArray(ec)) { issues.push(`${id}: examCats は { 試験ID: 分野ID または null } の形にする`); return; }
+      Object.keys(ec).forEach((typeId) => {
+        const type = examTypesById[typeId];
+        if (!type) { issues.push(`${id}: examCats に存在しない試験 ${typeId}`); return; }
+        const cid = ec[typeId];
+        if (cid === null) return;
+        if (!(Array.isArray(type.categories) ? type.categories : []).some((c) => c.id === cid)) issues.push(`${id}: examCats.${typeId} に存在しない分野 ${cid}`);
       });
-    });
-  }
+    }
 
-  const examTypeCount = data.exams && Array.isArray(data.exams.types) ? data.exams.types.length : 0;
-  const packs = window.ContentPack ? ContentPack.list() : [];
-  const packNote = packs.map((p) => p.patched != null ? `${p.id}(上書き${p.patched})` : `${p.id}(基礎${p.basics}・問題${p.quiz})`).join(` `) || `なし`;
-  const mcCount = data.quiz.filter((q) => q.format === `mc`).length;
-  const emptyTopics = data.topics.filter((t) => !t.basicIds.length).map((t) => t.id);
-  if (emptyTopics.length) issues.push(`基礎知識が0件のトピック: ${emptyTopics.join(`, `)}`);
-  console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length}, topics=${data.topics.length} (期待値14), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length}(うち4択${mcCount}), sources=${data.sources.length}, 試験種別=${examTypeCount} (期待値3), 追加パック=${packNote}, 警告=${issues.length}件`);
-  issues.forEach((msg) => console.warn(`[データ整合性チェック] ${msg}`));
+    // 期限付きの情報(reviewBy: 'YYYY-MM-DD'。画面には出さない)は、見直しの期限を過ぎたものを開発用にコンソールへ出す
+    const today = window.DateUtil && typeof DateUtil.today === `function` ? DateUtil.today() : ``;
+    function checkReviewBy(item) {
+      if (item.reviewBy == null) return;
+      if (typeof item.reviewBy !== `string` || !(window.DateUtil ? DateUtil.isValid(item.reviewBy) : /^\d{4}-\d{2}-\d{2}$/.test(item.reviewBy))) {
+        issues.push(`${item.id}: reviewBy は YYYY-MM-DD の日付にする`);
+        return;
+      }
+      if (today && item.reviewBy < today) reviewDue.push(`${item.id}(${item.reviewBy})`);
+    }
+
+    allTerms.forEach((t) => {
+      checkExamCats(t.id, t.examCats);
+      checkReviewBy(t);
+      if (!Array.isArray(t.aliases)) issues.push(`${t.id}: aliases が配列ではない`);
+      (t.topicIds || []).forEach((tid) => { if (!topicsById[tid]) issues.push(`${t.id}: 存在しないトピック ${tid}`); });
+      (t.sources || []).forEach((sid) => { if (!sourcesById[sid]) issues.push(`${t.id}: 存在しない出典 ${sid}`); });
+      (t.relatedEpisodes || []).forEach((eid) => { if (!episodesById[eid]) issues.push(`${t.id}: 存在しないエピソード ${eid}`); });
+    });
+    data.topics.forEach((tp) => {
+      tp.basicIds.forEach((id) => { if (!termsById[id]) issues.push(`${tp.id}.basicIds: 存在しない ${id}`); });
+      tp.episodes.forEach((id) => { if (!episodesById[id]) issues.push(`${tp.id}.episodes: 存在しない ${id}`); });
+    });
+    data.quiz.forEach((q) => {
+      checkExamCats(q.id, q.examCats);
+      checkReviewBy(q);
+      if (q.relatedTermId && !termsById[q.relatedTermId]) issues.push(`${q.id}: 存在しない relatedTermId ${q.relatedTermId}`);
+      (q.topicIds || []).forEach((tid) => { if (!topicsById[tid]) issues.push(`${q.id}: 存在しないトピック ${tid}`); });
+      if (q.format === `mc`) {
+        if (!Array.isArray(q.choices) || q.choices.length !== 4) issues.push(`${q.id}: 4択問題の選択肢が4つではない`);
+        else if (new Set(q.choices).size !== 4) issues.push(`${q.id}: 選択肢に重複がある`);
+        if (!Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex > 3) issues.push(`${q.id}: correctIndex が0〜3ではない`);
+        if (q.ask != null && q.ask !== `correct` && q.ask !== `incorrect`) issues.push(`${q.id}: ask は correct / incorrect のどちらか`);
+        if (q.choiceNotes != null && (!Array.isArray(q.choiceNotes) || q.choiceNotes.length !== 4 || q.choiceNotes.some((n) => typeof n !== `string` || !n))) issues.push(`${q.id}: choiceNotes は空でない文字列4つ`);
+        if (!q.explanation) issues.push(`${q.id}: 4択問題に explanation がない`);
+      } else if (!q.answer) {
+        issues.push(`${q.id}: 記述式なのに answer がない`);
+      }
+    });
+    data.laws.laws.forEach((law) => {
+      (law.topicIds || []).forEach((tid) => { if (!topicsById[tid]) issues.push(`${law.id}: 存在しないトピック ${tid}`); });
+    });
+    if (data.exams && Array.isArray(data.exams.types)) {
+      data.exams.types.forEach((type) => {
+        (type.categories || []).forEach((c) => {
+          (c.topicIds || []).forEach((tid) => { if (!topicsById[tid]) issues.push(`試験${type.id}.${c.id}: 存在しないトピック ${tid}`); });
+          (c.termIds || []).forEach((id) => { if (!termsById[id]) issues.push(`試験${type.id}.${c.id}: 存在しない用語 ${id}`); });
+        });
+      });
+    }
+
+    const examTypeCount = data.exams && Array.isArray(data.exams.types) ? data.exams.types.length : 0;
+    const packs = window.ContentPack ? ContentPack.list() : [];
+    const packNote = packs.map((p) => p.patched != null ? `${p.id}(上書き${p.patched})` : `${p.id}(基礎${p.basics}・問題${p.quiz})`).join(` `) || `なし`;
+    const mcCount = data.quiz.filter((q) => q.format === `mc`).length;
+    const emptyTopics = data.topics.filter((t) => !t.basicIds.length).map((t) => t.id);
+    if (emptyTopics.length) issues.push(`基礎知識が0件のトピック: ${emptyTopics.join(`, `)}`);
+    console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length}, topics=${data.topics.length} (期待値16), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length}(うち4択${mcCount}・廃止${retiredQuizIds.size - retiredQuizMissing.length}), sources=${data.sources.length}, 試験種別=${examTypeCount} (期待値3), 追加パック=${packNote}, 見直し期限切れ=${reviewDue.length}件, 警告=${issues.length}件`);
+    issues.forEach((msg) => console.warn(`[データ整合性チェック] ${msg}`));
+    if (reviewDue.length) console.warn(`[見直し時期] reviewBy を過ぎた項目 ${reviewDue.length}件(法改正・統計の更新を確認して、内容と reviewBy を直す): ${reviewDue.join(`, `)}`);
+  } // if (CHECK)
 
   // 統合した用語IDの学習記録(★・学習済み・復習カード・自動クイズの成績・ブックマーク)を引き継ぎ先へ移す
   // (読み込んだバックアップに古いIDが入っていた場合も、次回の起動時に移る)
@@ -217,5 +270,5 @@ window.AppIndex = (function () {
   }
   try { migrateRetiredTerms(); } catch (e) { /* 移行に失敗しても表示には影響しない(古いIDは各画面で無視される) */ }
 
-  return { episodesById, topicsById, termsById, allTerms, sourcesById, episodeTermIndex, topicTermIndex, topicQuizIndex, termQuizIndex, topicLawIndex, topicSections, topicBasicOrder, termByName, issues, retiredTermId: retired };
+  return { episodesById, topicsById, termsById, allTerms, sourcesById, episodeTermIndex, topicTermIndex, topicQuizIndex, termQuizIndex, topicLawIndex, topicSections, topicBasicOrder, termByName, issues, reviewDue, retiredTermId: retired, isRetiredQuiz: (id) => retiredQuizIds.has(id) };
 })();

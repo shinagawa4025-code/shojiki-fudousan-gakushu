@@ -2,7 +2,8 @@
 // CSSのダーク配色は :root[data-theme="dark"] の1か所だけで定義している
 window.ThemeManager = (function () {
   // ブラウザのツールバー色はヘッダーの背景(--color-surface)に合わせる
-  const THEME_COLORS = { light: `#ffffff`, dark: `#1c2530` };
+  // index.html には media 付きの theme-color が2つある(JSの実行前でも端末の設定に合う色を出すため)
+  const THEME_COLORS = { light: `#ffffff`, dark: `#171e27` };
   const mql = window.matchMedia ? window.matchMedia(`(prefers-color-scheme: dark)`) : null;
   const listeners = [];
 
@@ -20,11 +21,21 @@ window.ThemeManager = (function () {
     return resolve(getPreference());
   }
 
+  // theme-color: 「端末設定に従う」なら media ごとの色(ライト用は白・ダーク用は暗色)に戻し、
+  // ライト/ダークを明示的に選んだときは、どちらの media でも選んだテーマの色にする
+  function applyThemeColor(pref, theme) {
+    document.querySelectorAll(`meta[name="theme-color"]`).forEach((meta) => {
+      const media = meta.getAttribute(`media`) || ``;
+      const forTheme = /dark/.test(media) ? `dark` : /light/.test(media) ? `light` : null;
+      const color = pref === `system` && forTheme ? THEME_COLORS[forTheme] : THEME_COLORS[theme];
+      if (meta.getAttribute(`content`) !== color) meta.setAttribute(`content`, color);
+    });
+  }
+
   function apply(pref) {
     const theme = resolve(pref);
     document.documentElement.setAttribute(`data-theme`, theme);
-    const meta = document.querySelector(`meta[name="theme-color"]`);
-    if (meta) meta.setAttribute(`content`, THEME_COLORS[theme]);
+    applyThemeColor(pref === `light` || pref === `dark` ? pref : `system`, theme);
     listeners.slice().forEach((fn) => fn(theme));
   }
 

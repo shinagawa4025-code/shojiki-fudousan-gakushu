@@ -2,6 +2,8 @@
 // ルート: #exam(受験メニュー・履歴) / #exam/short・#exam/full(形式を選んだ状態でメニュー) / #exam/run(受験中) / #exam/result/<id>(結果)
 // 保存キー: examSession(受験中の状態) / examHistory(結果の履歴、新しい順・最大30件) / examRetryResult(直近の解き直し結果)
 // 古い形式の保存データ(activeMs・asked・flagged・truths などが無いもの)もそのまま読めるようにしている
+// 履歴の容量: 問題文・選択肢まで残すのは新しい5回分だけ。それより古い回の4択問題は ID と解答(と選択肢の並び)だけにし
+// (compact: true)、結果を開いたときに今のデータから問題文を復元する。データから消えた問題は「現在のデータにありません」と出す
 window.Views = window.Views || {};
 window.Views.exam = (function () {
   const TYPE_ID = `takken`;
@@ -9,6 +11,7 @@ window.Views.exam = (function () {
   const HISTORY_KEY = `examHistory`;
   const RETRY_RESULT_KEY = `examRetryResult`;
   const HISTORY_MAX = 30;
+  const HISTORY_FULL = 5; // 問題文まで残す新しい回数(それより古い回は ID だけにする)
   const HISTORY_SHOW = 5; // 受験メニューで最初に見せる履歴の件数
   const RECENT_EXAMS = 2; // 直近この回数に出した問題は後回しにする
   const STORAGE_PREFIX = `shojikiLearn.v1.`;
@@ -21,11 +24,14 @@ window.Views.exam = (function () {
   const WRONG_SHOW = 10; // 結果の「間違えた問題」で最初に見せる数
   const LEVELS = [`超入門`, `初級`, `中級`, `上級`];
   const RETIO_URL = `https://www.retio.or.jp/exam/exam_detail/`;
+  const COUNT_UP_MS = 600; // 採点直後の得点のカウントアップ
   const ic = (name, size) => UI.icon(name, { size: size || 18 });
   const esc = (s) => UI.escapeHtml(s);
 
   // 受験メニューで選んだ設定(画面を行き来しても保持)
   const pref = { mode: `full`, timed: true };
+  // 採点した直後に開く結果(この結果だけ得点をカウントアップする。履歴から開いたとき・戻る/再読み込みでは動かさない)
+  let freshResult = null;
 
   // 受験中のタイマー・キー操作・経過時間の記録(画面を離れたら必ず解除する)
   let tickTimer = null;
@@ -94,6 +100,30 @@ window.Views.exam = (function () {
     return window.APP_DATA.quiz.filter((q) => QuizEngine.isMcItem(q) && catIdOf(q) === catId);
   }
 
+  // 問題IDから今のデータの4択問題を引く(データは読み込み後に変わらないので1回だけ作る)
+  let quizMap = null;
+  function quizItem(id) {
+    if (!quizMap) {
+      quizMap = Object.create(null);
+      (window.APP_DATA.quiz || []).forEach((q) => { if (q && typeof q.id === `string`) quizMap[q.id] = q; });
+    }
+    return typeof id === `string` && quizMap[id] ? quizMap[id] : null;
+  }
+
+  // order: 出題したときの選択肢の並び(i 番目に表示した選択肢 = データの order[i] 番目)。0〜n−1 を1回ずつ含むものだけ使う
+  function isPermutation(order, n) {
+    if (!Array.isArray(order) || order.length !== n || !n) return false;
+    const seen = new Set();
+    return order.every((x) => Number.isInteger(x) && x >= 0 && x < n && !seen.has(x) && seen.add(x));
+  }
+
+  // 4択問題の選択肢の並びを、データの選択肢の文と突き合わせて求める(求められなければ null)
+  function orderFromTexts(texts, item) {
+    if (!QuizEngine.isMcItem(item) || !Array.isArray(texts)) return null;
+    const order = texts.map((t) => item.choices.indexOf(t));
+    return isPermutation(order, item.choices.length) ? order : null;
+  }
+
   // ===== 出題 =====
 
   function promptFor(type) {
@@ -103,8 +133,10 @@ window.Views.exam = (function () {
   }
 
   // 問題オブジェクトを保存用の形に固定する(再開しても同じ問題・同じ選択肢順になるように)
+  // 4択の確認問題には選択肢の並び(order)も残す(古い履歴で問題文を省いても、今のデータから同じ並びで復元できるように)
   function packQuestion(q, catId) {
-    return {
+    const order = q.kind === `fixed` ? orderFromTexts(q.choices.map((c) => c.text), quizItem(q.refId)) : null;
+    return Object.assign({
       kind: q.kind,
       refId: q.refId,
       termId: q.termId || null,
@@ -120,7 +152,7 @@ window.Views.exam = (function () {
       notes: q.choices.some((c) => c.note) ? q.choices.map((c) => c.note || ``) : null,
       // 選択肢ごとの記述の正誤(「正しいもの/誤っているものはどれか」型のみ)。結果で○×を付けるのに使う
       truths: q.choices.length && q.choices.every((c) => typeof c.truth === `boolean`) ? q.choices.map((c) => c.truth) : null,
-    };
+    }, order ? { order } : null);
   }
 
   // 直近の模擬試験で出した問題: refId → 2(前回) / 1(前々回)。asked を持たない古い記録は使わない
@@ -278,7 +310,8 @@ window.Views.exam = (function () {
     const order = QuizEngine.shuffle(w.choices.map((_, i) => i));
     const notes = validNotes(w) ? w.notes : null;
     const truths = validTruths(w) ? w.truths : null;
-    return {
+    const dataOrder = isPermutation(w.order, w.choices.length) ? w.order : null;
+    return Object.assign({
       kind: w.kind, refId: w.refId, termId: w.termId || null, categoryId: w.categoryId || null,
       level: w.level || ``, type: w.type || ``, prompt: w.prompt || ``, stem: w.stem,
       choices: order.map((i) => w.choices[i]),
@@ -286,7 +319,7 @@ window.Views.exam = (function () {
       explanation: w.explanation || ``,
       notes: notes ? order.map((i) => String(notes[i] || ``)) : null,
       truths: truths ? order.map((i) => truths[i]) : null,
-    };
+    }, dataOrder ? { order: order.map((i) => dataOrder[i]) } : null);
   }
 
   // 結果の「間違えた問題」(と、選べば見直し印を付けて正解した問題)から、時間制限なしの解き直しセッションを作る(履歴には残さない)
@@ -351,7 +384,8 @@ window.Views.exam = (function () {
   }
 
   function clearSession() {
-    // Storage には削除関数がないため直接消す(失敗時は null で上書き)
+    // Storage.remove があればそれで消す(保存できなかった受験中のデータを「古い記録を整理」で書き戻さないように)
+    if (typeof Storage.remove === `function`) { Storage.remove(SESSION_KEY); return; }
     try { localStorage.removeItem(STORAGE_PREFIX + SESSION_KEY); } catch (e) { Storage.set(SESSION_KEY, null); }
   }
 
@@ -378,7 +412,97 @@ window.Views.exam = (function () {
       correctIndex: q.correctIndex, chosen, explanation: q.explanation || ``,
       notes: validNotes(q) ? q.notes.slice() : null,
       truths: validTruths(q) ? q.truths.slice() : null,
-    }, flagged ? { flagged: true } : null);
+    }, isPermutation(q.order, q.choices.length) ? { order: q.order.slice() } : null, flagged ? { flagged: true } : null);
+  }
+
+  // ===== 履歴の容量を抑える(古い回は問題文を省き、ID と解答だけにする) =====
+
+  // 省いた問題: 選択肢の文(choices)を持たず、問題ID(refId)がある
+  function isCompactItem(w) {
+    return !!w && typeof w === `object` && !Array.isArray(w) && !Array.isArray(w.choices) && typeof w.refId === `string`;
+  }
+
+  // 1問を省いた形にする。今のデータから同じ問題・同じ並びに戻せる4択の確認問題だけを省き、
+  // 戻せないもの(用語から作った問題・データの文や正解が変わった問題)は全文のまま残す
+  function compactQuestion(w) {
+    if (!validQuestion(w) || w.kind !== `fixed`) return w;
+    const item = quizItem(w.refId);
+    if (!QuizEngine.isMcItem(item) || item.choices.length !== w.choices.length) return w;
+    const order = isPermutation(w.order, w.choices.length) ? w.order : orderFromTexts(w.choices, item);
+    if (!order || order[w.correctIndex] !== item.correctIndex) return w;
+    const c = {
+      no: Number.isInteger(w.no) ? w.no : null, kind: `fixed`, refId: w.refId, termId: w.termId || null, categoryId: w.categoryId || null,
+      chosen: Number.isInteger(w.chosen) && w.chosen >= 0 && w.chosen < w.choices.length ? w.chosen : null,
+      correctIndex: w.correctIndex, order: order.slice(),
+    };
+    if (w.flagged === true) c.flagged = true;
+    return c;
+  }
+
+  // 1回分の記録を省いた形にする(点数・分野別・出題記録などはそのまま)。失敗したら元のまま返す
+  function compactEntry(e) {
+    try {
+      if (!validEntry(e)) return e;
+      const conv = (list) => (Array.isArray(list) ? list.map(compactQuestion) : list);
+      return Object.assign({}, e, { wrong: conv(e.wrong), flaggedOk: conv(e.flaggedOk), compact: true });
+    } catch (err) {
+      console.warn(`[exam] 履歴の整理に失敗しました`, err);
+      return e;
+    }
+  }
+
+  // 新しい keepFull 回分は全文のまま、それより古い回を省いた形にする
+  function trimHistory(list, keepFull) {
+    // 省いた形の記録をもう一度通しても変わらない(全文のまま残した問題も、毎回同じ判定で残る)
+    return list.map((e, i) => (i < keepFull ? e : compactEntry(e)));
+  }
+
+  // 履歴を整理して保存する(容量不足のときなどに外から呼ぶ。Storage の「古い記録を整理」)
+  // keepFull: 全文を残す新しい回数(省略時は5)。pending: 保存できなかった履歴(渡されたらそれを整理して保存する)
+  // 戻り値: { ok: 保存できたか, saved: 減らした文字数 }
+  function compactHistory(keepFull, pending) {
+    const keep = Number.isInteger(keepFull) && keepFull >= 0 ? keepFull : HISTORY_FULL;
+    const raw = Array.isArray(pending) ? pending : Storage.get(HISTORY_KEY, []);
+    if (!Array.isArray(raw)) return { ok: true, saved: 0 };
+    const before = JSON.stringify(raw).length;
+    const list = trimHistory(raw.filter(validEntry).slice(0, HISTORY_MAX), keep);
+    const after = JSON.stringify(list).length;
+    // 保存済みの履歴が小さくならないときは書き直さない(保存できなかった履歴は必ず書き直す)
+    if (!Array.isArray(pending) && after >= before) return { ok: true, saved: 0 };
+    const ok = Storage.set(HISTORY_KEY, list);
+    return { ok: !!ok, saved: ok ? Math.max(0, before - after) : 0 };
+  }
+
+  // 結果に表示する形に戻す。省いた問題は今のデータから問題文・選択肢・解説を復元する
+  // 戻せないとき(データから消えた・正解が変わった)は missing: true の印だけを返す
+  function expandQuestion(w) {
+    if (validQuestion(w)) return w;
+    if (!isCompactItem(w)) return null;
+    const item = quizItem(w.refId);
+    const base = w.kind === `fixed` && item ? QuizEngine.fromFixedMc(item, { keepOrder: true }) : null;
+    const n = base ? base.choices.length : 0;
+    const okIndex = (x) => Number.isInteger(x) && x >= 0 && x < n;
+    const head = {
+      no: Number.isInteger(w.no) ? w.no : null, kind: w.kind === `term` ? `term` : `fixed`, refId: w.refId,
+      termId: typeof w.termId === `string` ? w.termId : null, categoryId: typeof w.categoryId === `string` ? w.categoryId : null,
+    };
+    if (w.flagged === true) head.flagged = true;
+    if (!base || !isPermutation(w.order, n) || !okIndex(w.correctIndex) || w.order[w.correctIndex] !== item.correctIndex) {
+      return Object.assign(head, { missing: true, chosen: Number.isInteger(w.chosen) ? w.chosen : null, correctIndex: Number.isInteger(w.correctIndex) ? w.correctIndex : null });
+    }
+    const list = w.order.map((i) => base.choices[i]);
+    return Object.assign(head, {
+      termId: head.termId || base.termId || null,
+      level: base.level || ``, type: `mc`, prompt: ``, stem: base.stem,
+      choices: list.map((c) => c.text),
+      correctIndex: w.correctIndex,
+      chosen: okIndex(w.chosen) ? w.chosen : null,
+      explanation: base.explanation || ``,
+      notes: list.some((c) => c.note) ? list.map((c) => c.note || ``) : null,
+      truths: list.every((c) => typeof c.truth === `boolean`) ? list.map((c) => c.truth) : null,
+      order: w.order.slice(),
+      restored: true,
+    });
   }
 
   function gradeSession(s, finishedAt) {
@@ -454,8 +578,11 @@ window.Views.exam = (function () {
     });
     if (window.Streak) Streak.recordToday();
     hist.unshift(entry);
-    // 履歴を保存できなかった(容量不足など)ときは、結果を失わないよう受験中のデータを残しておく
-    if (Storage.set(HISTORY_KEY, hist.slice(0, HISTORY_MAX))) clearSession();
+    // 新しい5回分だけ問題文まで残す(以前の版の記録もここで少しずつ省いた形に移す)
+    const list = trimHistory(hist.slice(0, HISTORY_MAX), HISTORY_FULL);
+    // 保存できなければ(容量不足など)今回分以外をすべて省いてもう一度試す。
+    // それでも保存できなかったときは、結果を失わないよう受験中のデータを残しておく
+    if (Storage.set(HISTORY_KEY, list) || Storage.set(HISTORY_KEY, trimHistory(list, 1))) clearSession();
     return entry;
   }
 
@@ -556,7 +683,7 @@ window.Views.exam = (function () {
   function showAutoGraded(root, s) {
     const entry = finalizeSession(s, s.deadline);
     history.replaceState(null, ``, `#exam/result/${entry.id}`);
-    renderResult(root, entry.id, { autoGraded: true });
+    renderResult(root, entry.id, { autoGraded: true, fresh: true });
   }
 
   // ===== 受験メニュー =====
@@ -700,6 +827,7 @@ window.Views.exam = (function () {
           cleanupRun();
           const entry = finalizeSession(s, s.deadline);
           UI.toast(`制限時間を過ぎたため、自動で採点しました`);
+          freshResult = entry.id;
           Router.navigate(`#exam/result/${entry.id}`);
           return;
         }
@@ -826,6 +954,8 @@ window.Views.exam = (function () {
     let navSheet = null;
     let submitSheet = null;
     let finished = false;
+    // 別のタブで同じ試験が進められた(このタブの古い状態で上書きしないよう、以後は保存しない)
+    let detached = false;
     let lastPaceAt = 0;
 
     // ---- 経過時間(画面を開いている間だけ数える。中断・別アプリに切り替えている間は数えない) ----
@@ -842,7 +972,7 @@ window.Views.exam = (function () {
       return s.activeMs + (paused ? 0 : Math.max(0, now - segStart));
     }
     function onVisibility() {
-      if (finished || !wrap.isConnected) return;
+      if (finished || detached || !wrap.isConnected) return;
       if (document.visibilityState === `hidden`) {
         flushActive();
         paused = true;
@@ -854,28 +984,60 @@ window.Views.exam = (function () {
       }
     }
     function onPageHide() {
-      if (finished || !wrap.isConnected) return;
+      if (finished || detached || !wrap.isConnected) return;
       flushActive();
       paused = true;
       saveSession(s);
     }
     function onPageShow() {
-      if (finished || !wrap.isConnected) return;
+      if (finished || detached || !wrap.isConnected) return;
       paused = document.visibilityState === `hidden`;
       segStart = Date.now();
     }
+
+    // ---- 別のタブ(同じ端末で2つ開いている)で同じ試験が進められたとき ----
+    // storage イベントは書き込んだタブ以外にだけ届く。保存された試験が消えた・別の試験になった・
+    // 回答か見直し印が食い違うときは、このタブの古い状態で上書きしないよう保存をやめ、最新の状態を開くか尋ねる
+    const sameList = (a, b, norm) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => norm(x) === norm(b[i]));
+    const normAnswer = (x) => (Number.isInteger(x) ? x : null);
+    const normFlag = (x) => x === true;
+    function isConflict(stored) {
+      if (!stored || typeof stored !== `object` || stored.id !== s.id) return true;
+      return !sameList(stored.answers, s.answers, normAnswer) || !sameList(stored.flags, s.flags, normFlag);
+    }
+    async function onStorage(e) {
+      if (finished || detached || !wrap.isConnected) return;
+      // e.key が null: 別のタブで保存データがすべて消された
+      if (e.key !== null && e.key !== STORAGE_PREFIX + SESSION_KEY) return;
+      let stored = null;
+      try { stored = e.key === null ? Storage.get(SESSION_KEY, null) : (e.newValue ? JSON.parse(e.newValue) : null); } catch (err) { stored = null; }
+      if (!isConflict(stored)) return;
+      detached = true;
+      cleanupRun();
+      if (navSheet) navSheet.close();
+      if (submitSheet) submitSheet.close();
+      const ok = await UI.confirm(`別のタブで模擬試験が進められました。このタブでの解答は保存されません。最新の状態を開きますか?`, { confirmLabel: `最新の状態を開く`, cancelLabel: `メニューへ` });
+      // 別のタブで提出済みなら、その結果を開く
+      const done = !loadSession() && readHistory().some((x) => x.id === s.id);
+      if (!ok) Router.navigate(`#exam`);
+      else Router.navigate(done ? `#exam/result/${s.id}` : `#exam/run`);
+    }
+
     document.addEventListener(`visibilitychange`, onVisibility);
     window.addEventListener(`pagehide`, onPageHide);
     window.addEventListener(`pageshow`, onPageShow);
+    window.addEventListener(`storage`, onStorage);
     runCleanup = () => {
       document.removeEventListener(`visibilitychange`, onVisibility);
       window.removeEventListener(`pagehide`, onPageHide);
       window.removeEventListener(`pageshow`, onPageShow);
+      window.removeEventListener(`storage`, onStorage);
       // 画面を離れる(中断・別画面へ移動)ときは、それまでの経過時間を保存しておく
-      if (!finished) { flushActive(); saveSession(s); }
+      if (!finished && !detached) { flushActive(); saveSession(s); }
     };
 
     function persist() {
+      if (detached) return;
       flushActive();
       saveSession(s);
     }
@@ -1038,7 +1200,7 @@ window.Views.exam = (function () {
     }
 
     function finish(finishedAt, message) {
-      if (finished) return;
+      if (finished || detached) return;
       flushActive();
       finished = true;
       cleanupRun();
@@ -1046,8 +1208,10 @@ window.Views.exam = (function () {
       if (submitSheet) submitSheet.close();
       const entry = finalizeSession(s, finishedAt);
       if (message) UI.toast(message);
+      const resultId = s.mode === `retry` ? `retry` : entry.id;
+      freshResult = resultId;
       // 受験画面の履歴を結果で置き換える(戻るで「受験中の試験はありません」に戻らないように)
-      location.replace(`#exam/result/${s.mode === `retry` ? `retry` : entry.id}`);
+      location.replace(`#exam/result/${resultId}`);
     }
 
     // ---- 提出前の確認(未回答・見直しの番号から戻れる) ----
@@ -1082,7 +1246,7 @@ window.Views.exam = (function () {
 
     function submit() {
       // 二重に開かない(連打・自動提出と重なったときも1回だけ)
-      if (finished || submitSheet || !wrap.isConnected) return;
+      if (finished || detached || submitSheet || !wrap.isConnected) return;
       if (navSheet) navSheet.close();
       submitSheet = UI.sheet({ title: `提出前の確認`, content: submitHtml(), onClose: () => { submitSheet = null; } });
       submitSheet.el.classList.add(`exam-submit-sheet`);
@@ -1125,7 +1289,7 @@ window.Views.exam = (function () {
     }
     function tick() {
       if (!wrap.isConnected) { cleanupRun(); return; }
-      if (finished) return;
+      if (finished || detached) return;
       const now = Date.now();
       if (s.timed) {
         const rem = s.deadline - now;
@@ -1195,8 +1359,37 @@ window.Views.exam = (function () {
     const label = modeDef(entry.mode).label;
     const parts = [];
     if (prev) parts.push(`前回(${esc(label)})比 <strong>${signed(entry.score - prev.score, `問`)}</strong>`);
-    parts.push(isNewBest ? `<strong>${label}の最高点</strong>` : `最高 ${best}問`);
+    // 最高点の更新はお祝いの色(暖色)で示す
+    parts.push(isNewBest ? `<strong class="exam-newbest">${ic(`sparkles`, 14)}${label}の最高点</strong>` : `最高 ${best}問`);
     return `<p class="exam-result-sub num">${ic(`chart`, 16)}<span>${parts.join(`・`)}</span></p>`;
+  }
+
+  // 採点直後の得点を 0 から数え上げる(600ms・だんだん遅く)。動きを減らす設定では何もしない
+  function countUp(el, to) {
+    if (!el || !(to > 0) || UI.prefersReducedMotion() || typeof requestAnimationFrame !== `function`) return;
+    // 桁が増えても「/ 20問」が動かないよう、最終の桁数ぶんの幅を先に取る
+    el.style.minWidth = `${String(to).length}ch`;
+    el.textContent = `0`;
+    const t0 = (window.performance && performance.now()) || Date.now();
+    const step = (now) => {
+      if (!el.isConnected) return;
+      const p = Math.min(1, Math.max(0, (now - t0) / COUNT_UP_MS));
+      el.textContent = String(Math.round(to * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // 誤りの報告リンク(報告フォームが設定されているときだけ)
+  function reportHtml(w) {
+    if (!window.Report || typeof Report.linkHtml !== `function` || !w || !w.refId) return ``;
+    const fixed = w.kind === `fixed`;
+    const id = fixed ? w.refId : (w.termId || w.refId);
+    let link = ``;
+    try {
+      link = Report.linkHtml({ kind: fixed ? `quiz` : `term`, id, title: w.stem || ``, location: fixed ? `#quiz/q/${id}` : `#glossary/${id}` });
+    } catch (e) { link = ``; }
+    return link ? `<p class="item-meta exam-item-meta">${link}</p>` : ``;
   }
 
   function renderResult(root, id, opts) {
@@ -1221,9 +1414,15 @@ window.Views.exam = (function () {
       return;
     }
 
+    const fresh = !!opts.fresh || (freshResult !== null && freshResult === id);
+    freshResult = null;
     const cats = categories();
-    const wrong = Array.isArray(entry.wrong) ? entry.wrong.filter(validQuestion) : [];
-    const flaggedOk = Array.isArray(entry.flaggedOk) ? entry.flaggedOk.filter(validQuestion) : [];
+    // 古い回は問題文を省いて保存しているので、今のデータから復元する(復元できない問題は missing の印だけ)
+    const wrong = Array.isArray(entry.wrong) ? entry.wrong.map(expandQuestion).filter(Boolean) : [];
+    const flaggedOk = Array.isArray(entry.flaggedOk) ? entry.flaggedOk.map(expandQuestion).filter(Boolean) : [];
+    // 解き直しに使えるのは、問題文・選択肢がそろっているものだけ
+    const retryWrong = wrong.filter(validQuestion);
+    const retryFlagged = flaggedOk.filter(validQuestion);
     const flaggedNos = Array.isArray(entry.flagged) ? entry.flagged.filter((x) => Number.isInteger(x)) : null;
     const isFlagged = (w) => w.flagged === true || (!!flaggedNos && flaggedNos.includes(w.no));
     const byCat = entry.byCategory && typeof entry.byCategory === `object` ? entry.byCategory : {};
@@ -1255,14 +1454,14 @@ window.Views.exam = (function () {
 
     // 次にやること: 正答率が7割に届かなかった分野(低い順)
     const lowRows = catRows.filter((r) => catById(r.id) && r.pct < GOOD_PCT).sort((a, b) => (a.pct - b.pct) || (b.total - a.total));
-    const retryCount = wrong.length || flaggedOk.length;
+    const retryCount = retryWrong.length || retryFlagged.length;
     const nextHtml = `
       <section class="card exam-next" aria-labelledby="exam-next-title">
         <h3 class="card-title" id="exam-next-title">${ic(`flag`, 20)} 次にやること</h3>
         ${retryCount ? `
           <div class="exam-next-retry">
-            <button type="button" class="btn btn-block" data-role="retry">${ic(`repeat`)}<span>${wrong.length ? `間違えた問題を解き直す` : `見直し印の問題を解き直す`}(<span data-role="retry-count">${retryCount}</span>問)</span></button>
-            ${wrong.length && flaggedOk.length ? `<label class="check-inline exam-retry-flag"><input type="checkbox" data-role="retry-flagged"> 見直し印を付けて正解した${flaggedOk.length}問も含める</label>` : ``}
+            <button type="button" class="btn btn-block" data-role="retry">${ic(`repeat`)}<span>${retryWrong.length ? `間違えた問題を解き直す` : `見直し印の問題を解き直す`}(<span data-role="retry-count">${retryCount}</span>問)</span></button>
+            ${retryWrong.length && retryFlagged.length ? `<label class="check-inline exam-retry-flag"><input type="checkbox" data-role="retry-flagged"> 見直し印を付けて正解した${retryFlagged.length}問も含める</label>` : ``}
           </div>` : ``}
         ${lowRows.length ? `
           <p class="exam-next-lead">正答率が7割に届かなかった分野</p>
@@ -1300,7 +1499,7 @@ window.Views.exam = (function () {
           ${isRetry ? `` : `<p class="exam-verdict">${ic(passed ? `trophy` : `target`, 20)}${passed ? `目安ライン到達` : `目安まであと${line - entry.score}問`}</p>`}
         </div>
         <div class="progress-bar progress-bar-lg exam-score-bar" aria-hidden="true">
-          <div class="progress-bar-fill ${passed ? `fill-success` : ``}" style="width:${pct}%"></div>
+          <div class="progress-bar-fill ${passed ? `fill-success` : ``}" data-role="score-fill" style="width:${pct}%"></div>
           ${isRetry ? `` : `<span class="exam-score-line" style="left:${Math.round((line / entry.total) * 100)}%"></span>`}
         </div>
         ${isRetry
@@ -1349,17 +1548,28 @@ window.Views.exam = (function () {
     `;
     root.appendChild(wrap);
 
+    // 採点した直後だけ、得点を数え上げ、棒を伸ばす(履歴から開いたときは止まった表示)
+    if (fresh && !UI.prefersReducedMotion()) {
+      countUp(wrap.querySelector(`.exam-score-value`), entry.score);
+      const fill = wrap.querySelector(`[data-role="score-fill"]`);
+      if (fill && typeof requestAnimationFrame === `function`) {
+        fill.classList.add(`is-growing`);
+        fill.style.width = `0%`;
+        requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = `${pct}%`; }));
+      }
+    }
+
     renderWrongList(wrap, wrong, flaggedOk, isFlagged);
 
     const retryBtn = wrap.querySelector(`[data-role="retry"]`);
     const retryFlag = wrap.querySelector(`[data-role="retry-flagged"]`);
     if (retryFlag) {
       retryFlag.addEventListener(`change`, () => {
-        wrap.querySelector(`[data-role="retry-count"]`).textContent = String(wrong.length + (retryFlag.checked ? flaggedOk.length : 0));
+        wrap.querySelector(`[data-role="retry-count"]`).textContent = String(retryWrong.length + (retryFlag.checked ? retryFlagged.length : 0));
       });
     }
     if (retryBtn) {
-      retryBtn.addEventListener(`click`, () => startRetry(Object.assign({}, entry, { wrong, flaggedOk }), { includeFlagged: !wrong.length || !!(retryFlag && retryFlag.checked) }));
+      retryBtn.addEventListener(`click`, () => startRetry(Object.assign({}, entry, { wrong: retryWrong, flaggedOk: retryFlagged }), { includeFlagged: !retryWrong.length || !!(retryFlag && retryFlag.checked) }));
     }
     const againBtn = wrap.querySelector(`[data-role="again"]`);
     if (againBtn) {
@@ -1455,7 +1665,25 @@ window.Views.exam = (function () {
     });
   }
 
+  // 今のデータに見つからない問題(古い記録で問題文を省いたもの): 番号・正誤・分野だけ出す
+  function missingItemHtml(w, status, flagged) {
+    const statusHtml = status === `skip` ? `<span class="review-status exam-status-skip">未回答</span>`
+      : status === `ok` ? `<span class="review-status review-status-ok">${ic(`check-circle`, 12)}正解</span>`
+        : `<span class="review-status review-status-ng">${ic(`x-circle`, 12)}不正解</span>`;
+    return `
+      <article class="card exam-wrong-item is-missing" data-item data-status="${status}" data-cat="${esc(w.categoryId || ``)}" data-flag="${flagged ? 1 : 0}">
+        <div class="exam-q-head exam-wrong-head">
+          ${Number.isInteger(w.no) ? `<span class="exam-q-num num">問${w.no}</span>` : ``}
+          ${statusHtml}
+          ${w.categoryId ? `<span class="badge badge-soft">${esc(catName(w.categoryId))}</span>` : ``}
+          ${flagged ? `<span class="exam-flag-tag">${ic(`flag`, 14)}見直し印</span>` : ``}
+        </div>
+        <p class="exam-missing">${ic(`info`, 16)}<span>この問題は現在のデータにありません(問題の見直し・削除などのため)。</span></p>
+      </article>`;
+  }
+
   function wrongItemHtml(w, status, flagged) {
+    if (!validQuestion(w)) return missingItemHtml(w, status, flagged);
     const chosen = Number.isInteger(w.chosen) && w.chosen >= 0 && w.chosen < w.choices.length ? w.chosen : null;
     const term = w.termId ? AppIndex.termsById[w.termId] : null;
     const truths = validTruths(w) ? w.truths : null;
@@ -1507,13 +1735,16 @@ window.Views.exam = (function () {
           <ol class="exam-review-list">${choiceRows}</ol>
           ${showExplain ? `<p class="quiz-explanation"><strong>解説</strong> ${esc(w.explanation)}</p>` : ``}
           ${links.length ? `<div class="chip-row exam-wrong-links">${links.join(``)}</div>` : ``}
+          ${reportHtml(w)}
         </details>
       </article>`;
   }
 
   return {
     render,
+    // 保存容量が足りないときの「古い記録を整理」(Storage)から呼ぶ
+    compactHistory,
     // テスト・他画面からの参照用
-    _internal: { buildExam, createSession, createRetrySession, gradeSession, finalizeSession, loadSession, passLine, modeDef, isExpired, recentAsked, reshuffleQuestion },
+    _internal: { buildExam, createSession, createRetrySession, gradeSession, finalizeSession, loadSession, passLine, modeDef, isExpired, recentAsked, reshuffleQuestion, compactEntry, compactQuestion, expandQuestion, trimHistory, HISTORY_FULL },
   };
 })();

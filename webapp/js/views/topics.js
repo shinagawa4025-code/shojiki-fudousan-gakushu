@@ -1,9 +1,37 @@
-// 学習トピックビュー: 試験分野ごとのトピック一覧 + トピック詳細(基礎知識/問題/用語/具体例/法律)
+// 学習トピックビュー: 目的別(暮らし・取引/宅建士試験/税理士試験)のトピック一覧 + トピック詳細(基礎知識/問題/用語/法律)
 // ルート: #topics / #topics/<topicId> / #topics/<topicId>/<基礎知識ID>
 window.Views = window.Views || {};
 window.Views.topics = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 20 });
   const esc = (s) => UI.escapeHtml(s);
+
+  // 一覧の切り替え(暮らし・取引 / 宅建士試験 / 税理士試験)
+  const TRACKS = [
+    { id: `life`, label: `暮らし・取引` },
+    { id: `takken`, label: `宅建士試験` },
+    { id: `zeirishi`, label: `税理士試験` },
+  ];
+  // 暮らし・取引のまとまり(まだないトピックは表示しない)
+  const LIFE_GROUPS = [
+    { id: `rent`, name: `住まいを借りる`, ids: [`topicI`, `topicA`] },
+    { id: `own`, name: `買う・持つ・売る`, ids: [`topicB`, `topicC`, `topicD`, `topicP`, `topicQ`, `topicE`, `topicH`] },
+    { id: `trade`, name: `業界のしくみとトラブル`, ids: [`topicF`, `topicG`] },
+  ];
+
+  // 学ぶ目的(設定・初回ガイドで選んだもの)。未設定なら登録している試験から決める
+  function profileGoal() {
+    try {
+      const p = window.Stats && typeof Stats.getProfile === `function` ? Stats.getProfile() : null;
+      if (p && typeof p.goal === `string`) return p.goal;
+    } catch (e) { /* 読めなければ試験の登録から決める */ }
+    const target = window.Stats && Stats.primaryTarget ? Stats.primaryTarget() : null;
+    return target ? target.examTypeId : null;
+  }
+
+  function defaultTrack() {
+    const g = profileGoal();
+    return g === `takken` || g === `zeirishi` ? g : `life`;
+  }
 
   function render(root, param) {
     if (param) {
@@ -32,103 +60,99 @@ window.Views.topics = (function () {
     return !!(Storage.isPlainObject(progress[id]) && progress[id].learned);
   }
 
-  // 宅建士の出題分野でトピックをまとめる(はじめに / 各分野 / 税理士試験 / 実務・トラブル)
-  // 目標が税理士試験のときは、税理士試験のまとまりを「はじめに」の次に出す
-  function groupTopics() {
-    const type = Stats.examType(`takken`);
-    const cats = type && Array.isArray(type.categories) ? type.categories : [];
-    const groups = [{ id: `start`, name: `はじめに`, meta: `一人暮らし未経験ならここから`, topics: [] }];
-    cats.forEach((c) => groups.push({ id: c.id, name: c.name, meta: c.questions ? `宅建士試験 例年${c.questions}問` : ``, topics: [] }));
-    // 宅建士の範囲外で税理士試験向けのトピック(不動産と消費税など)
+  // 一覧のまとまり: [{id, name, meta, topics}](1つのトピックは同じ一覧の中で1回だけ出す)
+  function trackGroups(track) {
+    const byId = AppIndex.topicsById;
+    const takken = Stats.examType(`takken`);
+    const cats = takken && Array.isArray(takken.categories) ? takken.categories : [];
     const zei = Stats.examType(`zeirishi`);
-    const zeiTopicIds = zei && Array.isArray(zei.categories) ? zei.categories.flatMap((c) => c.topicIds || []) : [];
-    const zeiGroup = { id: `zeirishi`, name: `税理士試験`, meta: `宅建士の範囲外・税理士試験向け`, topics: [] };
-    const target = Stats.primaryTarget ? Stats.primaryTarget() : null;
-    if (target && target.examTypeId === `zeirishi`) groups.splice(1, 0, zeiGroup);
-    else groups.push(zeiGroup);
-    groups.push({ id: `practice`, name: `実務・トラブル対応`, meta: `試験範囲外の実務知識`, topics: [] });
-    window.APP_DATA.topics.forEach((topic) => {
-      if (topic.id === `topicI`) { groups[0].topics.push(topic); return; }
-      const cat = cats.find((c) => (c.topicIds || []).includes(topic.id));
-      let g = cat ? groups.find((x) => x.id === cat.id) : null;
-      if (!g && zeiTopicIds.includes(topic.id)) g = zeiGroup;
-      if (!g) g = groups[groups.length - 1];
-      g.topics.push(topic);
-    });
-    // 分野の中は試験設定(data/exams.js)の topicIds の順(主要なトピックを先頭に)
-    groups.forEach((g) => {
-      const c = cats.find((x) => x.id === g.id);
-      if (c) g.topics.sort((a, b) => (c.topicIds || []).indexOf(a.id) - (c.topicIds || []).indexOf(b.id));
-    });
+    const zeiIds = zei && Array.isArray(zei.categories) ? zei.categories.flatMap((c) => c.topicIds || []) : [];
+    const used = new Set();
+    const pick = (ids) => ids.filter((id) => byId[id] && !used.has(id)).map((id) => { used.add(id); return byId[id]; });
+    let groups;
+    if (track === `takken`) {
+      // 宅建士の出題分野ごと(分野の中は試験設定 data/exams.js の topicIds の順)
+      groups = cats.map((c) => ({ id: c.id, name: c.name, meta: c.questions ? `例年${c.questions}問` : ``, topics: pick(c.topicIds || []) }));
+    } else if (track === `zeirishi`) {
+      groups = [{ id: `zeirishi`, name: `不動産の税金と消費税`, meta: ``, topics: pick(zeiIds) }];
+    } else {
+      groups = LIFE_GROUPS.map((g) => ({ id: g.id, name: g.name, meta: ``, topics: pick(g.ids) }));
+      // どの一覧にも入っていないトピック(新しく追加したものなど)は、暮らし・取引の最後にまとめる
+      const elsewhere = new Set(cats.flatMap((c) => c.topicIds || []).concat(zeiIds));
+      const rest = window.APP_DATA.topics.filter((t) => !used.has(t.id) && !elsewhere.has(t.id)).map((t) => t.id);
+      groups.push({ id: `other`, name: `そのほかのテーマ`, meta: ``, topics: pick(rest) });
+    }
     return groups.filter((g) => g.topics.length);
   }
 
-  // すべてのトピックの基礎知識チェックリスト(重複を除く)と、そのうち学習済みの数
-  function basicsTotals(basicsProgress) {
-    const ids = new Set();
-    window.APP_DATA.topics.forEach((t) => t.basicIds.forEach((id) => { if (AppIndex.termsById[id]) ids.add(id); }));
-    let done = 0;
-    ids.forEach((id) => { if (isLearned(basicsProgress, id)) done += 1; });
-    return { done, total: ids.size };
+  function topicCardHtml(topic, stat) {
+    const basicsCount = topic.basicIds.filter((id) => AppIndex.termsById[id]).length;
+    const quizCount = (AppIndex.topicQuizIndex[topic.id] || []).length;
+    return `
+      <a class="card card-interactive topic-card" href="#topics/${topic.id}">
+        <div class="topic-card-head">
+          <span class="topic-icon">${ic(topic.icon || `book-open`, 22)}</span>
+          <div class="topic-card-main">
+            <div class="topic-card-title">${esc(topic.name)}</div>
+            <p class="topic-card-desc">${esc(topic.description)}</p>
+          </div>
+        </div>
+        <div class="topic-progress-row"><span class="topic-progress-label">進捗<span class="sr-only">(記憶済み・学習済み)</span></span><div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill" style="width:${stat.pct}%"></div></div><span class="num">${stat.done}/${stat.total}</span></div>
+        <div class="topic-card-tags">
+          <span class="badge badge-${topicLevelBadgeClass(topic.level)}">${esc(topic.level)}</span>
+          ${basicsCount ? `<span class="source-tag">${ic(`check-circle`, 12)} 基礎知識${basicsCount}</span>` : ``}
+          ${quizCount ? `<span class="source-tag">${ic(`pencil-check`, 12)} 問題${quizCount}</span>` : ``}
+        </div>
+      </a>`;
   }
 
   function renderList(root) {
-    const basicsProgress = obj(`basicsProgress`);
-    const roadmap = obj(`roadmap`);
     const byTopic = {};
     Stats.byTopic().forEach((r) => { byTopic[r.topic.id] = r; });
-    const overall = Stats.overall();
-    const bt = basicsTotals(basicsProgress);
+
+    // 戻るで帰ってきたときは、選んでいた一覧を元に戻す(履歴エントリごとに保存)
+    const hs = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
+    const savedTrack = Storage.isPlainObject(hs.tState) && hs.tState.list === true ? hs.tState.track : null;
+    let track = TRACKS.some((t) => t.id === savedTrack) ? savedTrack : defaultTrack();
+    const myHash = location.hash;
 
     const wrap = document.createElement(`div`);
     wrap.className = `view topics-view`;
     wrap.innerHTML = `
       <h2>学習トピック</h2>
-      <p class="view-desc">不動産の基本をトピック別に学べます。宅建士試験の出題分野ごとに並べています。「正直不動産」のエピソードは各トピックの具体例として入っています。</p>
-      <div class="stat-grid topics-stat-grid">
-        <div class="stat-tile"><span class="stat-value">${overall.pct}<small>%</small></span><span class="stat-label" title="★記憶済み+✓学習済み">全体の進捗(★+✓) <span class="nowrap">${overall.done}/${overall.total}項目</span></span></div>
-        <div class="stat-tile"><span class="stat-value">${bt.done}<small>/${bt.total}</small></span><span class="stat-label">基礎知識 <span class="nowrap">✓学習済み</span></span></div>
+      <p class="view-desc">テーマごとに、基礎知識 → 用語カード → 問題の順で学べます。</p>
+      <div class="segmented topic-tracks" role="group" aria-label="表示するトピック">
+        ${TRACKS.map((t) => `<button type="button" class="segmented-item" data-track="${t.id}" aria-pressed="${t.id === track}">${t.label}</button>`).join(``)}
       </div>
       <div data-role="groups"></div>
     `;
     root.appendChild(wrap);
     const groupsEl = wrap.querySelector(`[data-role="groups"]`);
 
-    groupTopics().forEach((g) => {
-      const section = document.createElement(`section`);
-      section.className = `topic-group`;
-      section.innerHTML = `
-        <div class="topic-group-head"><h3>${esc(g.name)}</h3>${g.meta ? `<span class="topic-group-meta">${esc(g.meta)}</span>` : ``}</div>
-        <div class="topic-grid"></div>`;
-      const grid = section.querySelector(`.topic-grid`);
-      g.topics.forEach((topic) => {
-        const stat = byTopic[topic.id] || { done: 0, total: 0, pct: 0 };
-        const basicsDone = topic.basicIds.filter((id) => isLearned(basicsProgress, id)).length;
-        const epDone = topic.episodes.filter((id) => roadmap[id] && roadmap[id].watched).length;
-        const quizCount = (AppIndex.topicQuizIndex[topic.id] || []).length;
-        const card = document.createElement(`a`);
-        card.className = `card card-interactive topic-card`;
-        card.href = `#topics/${topic.id}`;
-        card.innerHTML = `
-          <div class="topic-card-head">
-            <span class="topic-icon">${ic(topic.icon || `book-open`, 22)}</span>
-            <div class="topic-card-main">
-              <div class="topic-card-title">${esc(topic.name)}</div>
-              <span class="badge badge-${topicLevelBadgeClass(topic.level)}">${esc(topic.level)}</span>
-            </div>
-          </div>
-          <p class="episode-summary">${esc(topic.description)}</p>
-          <div class="topic-progress-row" title="★記憶済み+✓学習済み"><span>進捗</span><div class="progress-bar"><div class="progress-bar-fill" style="width:${stat.pct}%"></div></div><span>${stat.done}/${stat.total}</span></div>
-          <div class="topic-progress-row" title="基礎知識の✓学習済み"><span>基礎知識</span><div class="progress-bar"><div class="progress-bar-fill fill-accent" style="width:${topic.basicIds.length ? Math.round((basicsDone / topic.basicIds.length) * 100) : 0}%"></div></div><span>${basicsDone}/${topic.basicIds.length}</span></div>
-          ${topic.episodes.length ? `<div class="topic-progress-row"><span>動画視聴</span><div class="progress-bar"><div class="progress-bar-fill fill-video" style="width:${Math.round((epDone / topic.episodes.length) * 100)}%"></div></div><span>${epDone}/${topic.episodes.length}</span></div>` : ``}
-          <div class="chip-row topic-card-tags">
-            <span class="source-tag">${ic(`layers`, 12)} 用語${stat.total}</span>
-            ${quizCount ? `<span class="source-tag">${ic(`pencil-check`, 12)} 問題${quizCount}</span>` : ``}
-          </div>`;
-        grid.appendChild(card);
-      });
-      groupsEl.appendChild(section);
-    });
+    function paintGroups() {
+      groupsEl.innerHTML = trackGroups(track).map((g) => `
+        <section class="topic-group">
+          <div class="topic-group-head"><h3>${esc(g.name)}</h3>${g.meta ? `<span class="topic-group-meta">${esc(g.meta)}</span>` : ``}</div>
+          <div class="topic-grid">${g.topics.map((topic) => topicCardHtml(topic, byTopic[topic.id] || { done: 0, total: 0, pct: 0 })).join(``)}</div>
+        </section>`).join(``);
+    }
+
+    function saveTrack() {
+      if (location.hash !== myHash || !wrap.isConnected) return;
+      try {
+        const st = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
+        window.history.replaceState(Object.assign({}, st, { tState: { list: true, track } }), ``);
+      } catch (e) { /* 履歴の保存に失敗しても表示には影響しない */ }
+    }
+
+    wrap.querySelectorAll(`[data-track]`).forEach((b) => b.addEventListener(`click`, () => {
+      if (b.dataset.track === track) return;
+      track = b.dataset.track;
+      wrap.querySelectorAll(`[data-track]`).forEach((x) => x.setAttribute(`aria-pressed`, String(x === b)));
+      paintGroups();
+      saveTrack();
+    }));
+    paintGroups();
   }
 
   // 件数の多い一覧は一定数ずつ表示して「もっと見る」で末尾に追加する(作り直さないのでスクロール位置が飛ばない)
@@ -158,7 +182,6 @@ window.Views.topics = (function () {
 
   function renderDetail(root, topic, focusBasicId) {
     const basicsProgress = obj(`basicsProgress`);
-    const roadmap = obj(`roadmap`);
     const known = obj(`flashcards`);
     Storage.set(`lastTopic`, topic.id);
     const stat = Stats.byTopic().find((r) => r.topic.id === topic.id) || { done: 0, total: 0, pct: 0 };
@@ -175,11 +198,12 @@ window.Views.topics = (function () {
     const allMc = quizzes.length > 0 && quizzes.every((q) => q.format === `mc`);
     const quizLabel = allMc ? `4択問題` : `確認問題`;
     const oxCount = window.QuizEngine && QuizEngine.statementsFrom ? quizzes.reduce((n, q) => n + QuizEngine.statementsFrom(q).length, 0) : 0;
-    // 用語カードは基礎知識チェックリストにない用語だけ(同じ内容を2回並べない)
-    const extraTerms = termIds.filter((id) => !topic.basicIds.includes(id)).map((id) => AppIndex.termsById[id]).filter(Boolean);
+    // 用語カードは基礎知識チェックリストにない用語だけ(同じ内容を2回並べない)。
+    // 作品由来の俗語(worksOnly)は「作品で学ぶ」コーナー用なので出さない
+    const extraTerms = termIds.filter((id) => !topic.basicIds.includes(id)).map((id) => AppIndex.termsById[id]).filter((t) => t && t.worksOnly !== true);
 
     // 戻る/再読み込みで帰ってきたときは、開いていた項目・表示件数・絞り込みを元に戻す(履歴エントリごとに保存)
-    // (Router が保存位置へスクロールするのは描画の50ms後なので、ここで同期的に元の高さまで作っておく)
+    // (Router は描画の直後に保存位置へスクロールするので、ここで同期的に元の高さまで作っておく)
     const hs = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
     const returning = Number(hs.y) > 0;
     const saved = hs.tState && typeof hs.tState === `object` && hs.tState.topic === topic.id && (!focusBasicId || returning) ? hs.tState : null;
@@ -191,7 +215,6 @@ window.Views.topics = (function () {
       [`sec-basics`, `基礎知識`, `check-circle`],
       [`sec-quiz`, `問題`, `pencil-check`],
       [`sec-terms`, `用語カード`, `layers`],
-      episodes.length ? [`sec-episodes`, `具体例`, `play-square`] : null,
       laws.length ? [`sec-laws`, `関連法律`, `library`] : null,
     ].filter(Boolean);
     wrap.innerHTML = `
@@ -235,16 +258,12 @@ window.Views.topics = (function () {
             ${order.length ? `<a class="card card-interactive basics-card-hint" href="#glossary/topic/${topic.id}">${ic(`layers`, 18)}<span>基礎知識(${order.length}項目)もカードで暗記チェック</span>${ic(`chevron-right`, 16)}</a>` : ``}
             <div class="card-grid" data-role="term-grid"></div>
           </section>
-          ${episodes.length ? `
-          <section id="sec-episodes" class="topic-sec">
-            <div class="section-head"><h3>正直不動産の具体例</h3></div>
-            <ul class="episode-checklist" data-role="episode-list"></ul>
-          </section>` : ``}
           ${laws.length ? `
           <section id="sec-laws" class="topic-sec">
             <div class="section-head"><h3>関連法律・制度</h3></div>
             <div class="law-row-grid">${laws.map((law) => `<div class="card card-compact law-row"><div class="law-name">${ic(`library`, 18)}${esc(law.name)}</div><div class="law-desc">${esc(law.description)}</div></div>`).join(``)}</div>
           </section>` : ``}
+          ${episodes.length ? `<a class="card card-interactive topic-works-link" href="#works/topic/${topic.id}">${ic(`play-square`, 18)}<span>作品で学ぶ: このテーマを扱った回(${episodes.length}件)</span>${ic(`chevron-right`, 16)}</a>` : ``}
         </div>
         <aside class="topic-rail" aria-label="このトピックの進捗">
           <div class="card topic-rail-card">
@@ -337,6 +356,12 @@ window.Views.topics = (function () {
       return order.find((id) => !learned(id)) || null;
     }
 
+    // この項目より後ろ(学習の順)で最初の未学習
+    function nextUnlearnedAfter(id) {
+      const i = order.indexOf(id);
+      return order.slice(i + 1).find((x) => !learned(x)) || null;
+    }
+
     function updateBasicsHead() {
       const done = order.filter(learned).length;
       basicsCount.textContent = `学習済み ${done}/${order.length}`;
@@ -361,10 +386,11 @@ window.Views.topics = (function () {
         li.classList.toggle(`is-learned`, value);
         const cb = li.querySelector(`[data-role="learned-checkbox"]`);
         if (cb.checked !== value) cb.checked = value;
-        paintCloseBtn(li, value);
         // 「未学習のみ」の表示中にチェックした項目は、その場では消さない(一覧が詰まって位置が飛ぶため)
         if (filterUnlearned && value) li.classList.add(`keep-visible`);
       }
+      // 「学習済みにして次へ / 閉じる」は後ろの未学習の有無で変わるので、作ってある項目のボタンをまとめて塗り直す
+      itemEls.forEach((x) => paintCloseBtn(x));
       const sec = secOf.get(id);
       if (sec) {
         paintSection(sec);
@@ -376,20 +402,74 @@ window.Views.topics = (function () {
       if (filterUnlearned) saveState();
     }
 
-    function paintCloseBtn(li, value) {
+    // 開いた項目の下の主ボタン: 未学習なら「学習済みにして次へ」(後ろに未学習がなければ「…閉じる」)、学習済みなら「閉じる」
+    function paintCloseBtn(li) {
       const btn = li.querySelector(`[data-role="learn-close"]`);
       if (!btn) return;
-      btn.className = `btn btn-sm ${value ? `btn-secondary` : `btn-success`}`;
-      btn.innerHTML = value ? `閉じる` : `${ic(`check`, 16)}学習済みにして閉じる`;
+      const id = li.dataset.id;
+      if (learned(id)) {
+        btn.className = `btn btn-secondary btn-block basics-learn-btn`;
+        btn.textContent = `閉じる`;
+        return;
+      }
+      btn.className = `btn btn-success btn-lg btn-block basics-learn-btn`;
+      btn.innerHTML = `${ic(`check`, 20)}${nextUnlearnedAfter(id) ? `学習済みにして次へ` : `学習済みにして閉じる`}`;
+    }
+
+    // 項目の本文(読む部分)は開くときに作る(一覧には数十項目あり、ほとんどは閉じたまま)
+    function bodyHtml(concept) {
+      const id = concept.id;
+      const diagrams = CardUi.diagramsFor(id);
+      const relQuiz = (AppIndex.termQuizIndex && AppIndex.termQuizIndex[id]) || [];
+      const bmOn = window.Bookmarks ? Bookmarks.has(`term:${id}`) : false;
+      return `
+        <p class="term-simple">${concept.simpleExplanation}</p>
+        ${CardUi.deepHtml(concept, topic.id)}
+        ${CardUi.buildLawRefHtml(concept)}
+        ${CardUi.practiceNoteHtml(concept)}
+        ${CardUi.buildSourceCitationHtml(concept)}
+        ${diagrams.map((dId) => CardUi.figureHtml(dId)).join(``)}
+        ${CardUi.calcLinksHtml(id)}
+        <div class="basics-actions">
+          <button type="button" data-role="learn-close"></button>
+          <div class="basics-actions-row">
+            ${relQuiz.length ? `<a class="btn btn-secondary" href="#quiz/q/${encodeURIComponent(relQuiz[0])}">${ic(`pencil-check`, 18)}確認問題 ${relQuiz.length}問</a>` : ``}
+            ${window.Bookmarks ? `<button type="button" class="btn btn-secondary bookmark-toggle${bmOn ? ` is-bookmarked` : ``}" data-role="bookmark" data-label="ブックマーク" aria-pressed="${bmOn}">${ic(bmOn ? `bookmark-fill` : `bookmark`, 16)}<span>ブックマーク</span></button>` : ``}
+          </div>
+        </div>
+        ${CardUi.itemMetaHtml(concept, `#topics/${topic.id}/${id}`)}`;
+    }
+
+    function ensureBody(li) {
+      const body = li && li.querySelector(`.basics-body[data-lazy]`);
+      if (!body) return;
+      const id = li.dataset.id;
+      body.removeAttribute(`data-lazy`);
+      body.innerHTML = bodyHtml(AppIndex.termsById[id]);
+      paintCloseBtn(li);
+      const details = li.querySelector(`details`);
+      body.querySelector(`[data-role="learn-close"]`).addEventListener(`click`, () => {
+        const wasLearned = learned(id);
+        if (!wasLearned) setLearned(id, true);
+        details.open = false;
+        // 未学習だった項目は、学習の順で次の未学習を開く(なければ閉じた項目の見出しを画面の上端に合わせる)
+        const next = wasLearned ? null : nextUnlearnedAfter(id);
+        if (next) openItem(next, `start`);
+        else UI.scrollIntoView(li, `start`);
+      });
+      const bm = body.querySelector(`[data-role="bookmark"]`);
+      if (bm) {
+        bm.addEventListener(`click`, () => {
+          const on = Bookmarks.toggle(`term:${id}`);
+          CardUi.paintBookmarkButtons(li, on);
+        });
+      }
     }
 
     function buildItem(concept) {
       const id = concept.id;
       const done = learned(id);
-      const diagrams = CardUi.diagramsFor(id);
-      const relQuiz = (AppIndex.termQuizIndex && AppIndex.termQuizIndex[id]) || [];
-      const bmOn = window.Bookmarks ? Bookmarks.has(`term:${id}`) : false;
-      const deepLabel = CardUi.deepDiveLabel ? CardUi.deepDiveLabel(concept, topic.id) : `もう一歩踏み込むと`;
+      const hasDiagram = CardUi.diagramsFor(id).length > 0;
       const li = document.createElement(`li`);
       li.className = `basics-item` + (done ? ` is-learned` : ``);
       li.id = `basic-${id}`;
@@ -399,41 +479,20 @@ window.Views.topics = (function () {
         <details>
           <summary>
             <span class="basics-name">${concept.name}</span>
-            ${diagrams.length ? `<span class="source-tag">${ic(`diagram`, 12)} 図解</span>` : ``}
+            ${hasDiagram ? `<span class="source-tag">${ic(`diagram`, 12)} 図解</span>` : ``}
             <span class="chevron">${ic(`chevron-down`, 18)}</span>
           </summary>
-          <div class="basics-body">
-            <p class="term-simple">${concept.simpleExplanation}</p>
-            <p class="term-deep"><strong>${deepLabel}:</strong> ${concept.deepDive}</p>
-            ${CardUi.buildLawRefHtml(concept)}
-            ${CardUi.buildSourceCitationHtml(concept)}
-            ${diagrams.map((dId) => CardUi.figureHtml(dId)).join(``)}
-            ${CardUi.calcLinksHtml ? CardUi.calcLinksHtml(id) : ``}
-            <div class="basics-actions">
-              <button type="button" data-role="learn-close"></button>
-              ${relQuiz.length ? `<a class="btn btn-sm btn-secondary" href="#quiz/q/${encodeURIComponent(relQuiz[0])}">${ic(`pencil-check`, 16)}確認問題(${relQuiz.length}問)</a>` : ``}
-              ${window.Bookmarks ? `<button type="button" class="btn btn-sm btn-ghost bookmark-toggle${bmOn ? ` is-bookmarked` : ``}" data-role="bookmark" data-label="ブックマーク" aria-pressed="${bmOn}">${ic(bmOn ? `bookmark-fill` : `bookmark`, 16)}<span>ブックマーク</span></button>` : ``}
-            </div>
-          </div>
+          <div class="basics-body" data-lazy></div>
         </details>
       `;
-      paintCloseBtn(li, done);
       const details = li.querySelector(`details`);
       li.querySelector(`[data-role="learned-checkbox"]`).addEventListener(`change`, (e) => setLearned(id, e.target.checked));
-      li.querySelector(`[data-role="learn-close"]`).addEventListener(`click`, () => {
-        if (!learned(id)) setLearned(id, true);
-        details.open = false;
-        // 閉じると下の内容が詰まるので、閉じた項目の見出しを画面の上端に合わせる
-        UI.scrollIntoView(li, `start`);
+      // 開く操作の前に本文を作る(開いてから作ると、空の項目が一瞬見える)
+      li.querySelector(`summary`).addEventListener(`click`, () => ensureBody(li));
+      details.addEventListener(`toggle`, () => {
+        if (details.open) ensureBody(li);
+        saveState();
       });
-      const bm = li.querySelector(`[data-role="bookmark"]`);
-      if (bm) {
-        bm.addEventListener(`click`, () => {
-          const on = Bookmarks.toggle(`term:${id}`);
-          if (CardUi.paintBookmarkButtons) CardUi.paintBookmarkButtons(li, on);
-        });
-      }
-      details.addEventListener(`toggle`, saveState);
       itemEls.set(id, li);
       return li;
     }
@@ -492,6 +551,7 @@ window.Views.topics = (function () {
       if (!li) return null;
       const sec = secOf.get(id);
       if (sec) sec.details.open = true;
+      ensureBody(li);
       li.querySelector(`details`).open = true;
       li.classList.add(`highlighted`);
       setTimeout(() => li.classList.remove(`highlighted`), 2400);
@@ -505,7 +565,10 @@ window.Views.topics = (function () {
       secEls.forEach((sec) => { sec.details.open = openSecs.includes(sec.li.dataset.sec); });
       (Array.isArray(saved.open) ? saved.open : []).forEach((id) => {
         const li = typeof id === `string` ? itemEls.get(id) : null;
-        if (li) li.querySelector(`details`).open = true;
+        if (li) {
+          ensureBody(li);
+          li.querySelector(`details`).open = true;
+        }
       });
       if (filterUnlearned) {
         (Array.isArray(saved.keep) ? saved.keep : []).forEach((id) => {
@@ -520,16 +583,41 @@ window.Views.topics = (function () {
       if (first) first.details.open = true;
     }
 
+    // 問題・用語カードの欄はページの下のほうにあるので、初めて開いたときは画面に近づいてから作る
+    // (近づいたとき=まだ画面の下の外なので、作っても見えている内容は動かない。
+    //  戻る・再読み込みで帰ってきたときは、元の位置に戻せるよう最初から作る)
+    function whenNear(el, build) {
+      if (returning || !(`IntersectionObserver` in window)) { build(); return; }
+      const io = new IntersectionObserver((entries) => {
+        if (!entries.some((en) => en.isIntersecting)) return;
+        io.disconnect();
+        if (!wrap.isConnected) return;
+        build();
+        saveState();
+      }, { rootMargin: `1200px 0px` });
+      io.observe(el);
+      // 画面を離れたら監視をやめる
+      const stop = () => { if (!wrap.isConnected) { io.disconnect(); window.removeEventListener(`hashchange`, stop); } };
+      window.addEventListener(`hashchange`, stop);
+    }
+
     // ---- このトピックの問題(確認問題のカードを再利用) ----
     const quizList = wrap.querySelector(`[data-role="quiz-list"]`);
-    const quizHistory = obj(`quizHistory`);
     if (quizzes.length) {
       const onResult = (result, card, picked, restored) => {
         if (restored) return;
         answeredMap[card.dataset.quizId] = picked;
         saveState();
       };
-      quizPager = renderPaged(quizList, quizzes, (q) => Views.quiz.buildFixedCard(q, { history: quizHistory, restoreChoice: answeredMap[q.id], onResult }), 10, `問`, saved && saved.quiz, saveState);
+      whenNear(quizList, () => {
+        const quizHistory = obj(`quizHistory`);
+        // 「もっと見る」で続きを足したら、それまでの最後の回答済みのカードにも「次の問題」を付ける
+        const onMoreQuiz = () => {
+          if (Views.quiz.ensureNextButtons) Views.quiz.ensureNextButtons(quizList);
+          saveState();
+        };
+        quizPager = renderPaged(quizList, quizzes, (q) => Views.quiz.buildFixedCard(q, { history: quizHistory, restoreChoice: answeredMap[q.id], onResult }), 10, `問`, saved && saved.quiz, onMoreQuiz);
+      });
     } else {
       quizList.appendChild(UI.emptyState({ icon: `pencil-check`, title: `確認問題は準備中です`, body: `自動生成クイズで用語の理解を確認できます。` }));
     }
@@ -541,35 +629,15 @@ window.Views.topics = (function () {
         if (on) flippedIds.add(t.id); else flippedIds.delete(t.id);
         saveState();
       };
-      termsPager = renderPaged(termGrid, extraTerms, (term) => CardUi.buildFlipCard(term, { known, topicId: topic.id, flipped: flippedIds.has(term.id), onFlip, onToggleKnown: () => updateRail() }), 12, `語`, saved && saved.terms, saveState);
+      whenNear(termGrid, () => {
+        const bmAll = obj(`bookmarks`);
+        termsPager = renderPaged(termGrid, extraTerms, (term) => CardUi.buildFlipCard(term, { known, bookmarked: !!bmAll[`term:${term.id}`], topicId: topic.id, flipped: flippedIds.has(term.id), onFlip, onToggleKnown: () => updateRail() }), 12, `語`, saved && saved.terms, saveState);
+      });
     } else if (!order.length) {
       termGrid.appendChild(UI.emptyState({ icon: `layers`, title: `用語は準備中です` }));
     } else {
       termGrid.hidden = true;
     }
-
-    // ---- 正直不動産の具体例 ----
-    const episodeList = wrap.querySelector(`[data-role="episode-list"]`);
-    episodes.forEach((epId) => {
-      const ep = AppIndex.episodesById[epId];
-      const st = roadmap[epId] || { watched: false, understood: false };
-      const li = document.createElement(`li`);
-      li.innerHTML = `
-        <a class="ep-link" href="#summary/${epId}">${ic(`play-square`, 18)}${esc(ep.displayLabel)} ${esc(ep.theme)}</a>
-        <label class="check-label ep-check"><input type="checkbox" data-role="watched" ${st.watched ? `checked` : ``}> 視聴済み</label>
-        <label class="check-label ep-check"><input type="checkbox" data-role="understood" ${st.understood ? `checked` : ``}> 理解済み</label>
-      `;
-      [`watched`, `understood`].forEach((key) => {
-        li.querySelector(`[data-role="${key}"]`).addEventListener(`change`, (e) => {
-          Object.assign(roadmap, Storage.get(`roadmap`, {}));
-          if (!Storage.isPlainObject(roadmap[epId])) roadmap[epId] = { watched: false, understood: false };
-          roadmap[epId][key] = e.target.checked;
-          Storage.set(`roadmap`, roadmap);
-          Streak.recordToday();
-        });
-      });
-      episodeList.appendChild(li);
-    });
 
     // #topics/<topicId>/<basicId> で開いた場合は該当の基礎知識を開いて強調(戻るで帰ってきたときは保存位置を優先)
     if (focusBasicId && !saved) openItem(focusBasicId);

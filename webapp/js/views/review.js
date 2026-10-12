@@ -1,9 +1,16 @@
 // 今日の復習ビュー: 間隔反復学習(SRS)
-// 出題順: ①期限が来た復習カード → ②新しい用語(1日あたりの上限は設定の reviewNewLimit)
+// 出題順: ①期限が来た復習カード → ②新しい用語(1日あたりの上限は設定の reviewNewLimit。作品由来の俗語 worksOnly は除く)
+// 画面: 見出し「今日の復習 ⓘ  n / 全体」と細い進捗バー → カード → 画面の下のトレイ
+//       (表のあいだは「答えを見る」、めくると4段階の評価。どちらも同じ位置に出して親指を動かさずに続けられるように)
+// 全部終えたら完了の画面(チェックの輪・3つの数字・次の復習・次にやること1つ)
+// 初めての人には一度だけ「復習のしくみ」の図と説明を出す(Storage `seenReviewTip` = true で以後は出さない)
 window.Views = window.Views || {};
 window.Views.review = (function () {
   const DEFAULT_NEW_LIMIT = 10;
   const LEVEL_ORDER = { 超入門: 0, 初級: 1, 中級: 2, 上級: 3 };
+  const TIP_KEY = `seenReviewTip`;
+  const ic = (name, size) => UI.icon(name, { size: size || 18 });
+  const esc = (s) => UI.escapeHtml(s);
 
   function shuffle(arr) {
     for (let i = arr.length - 1; i > 0; i--) {
@@ -25,7 +32,24 @@ window.Views.review = (function () {
     return rec;
   }
 
-  // 新規の候補: SRSカード未作成の用語。主目標の試験分野に含まれる用語→レベルの易しい順
+  // 学ぶ目的(初回ガイド・設定で選ぶ)。stats.js に無ければ null
+  function learnerProfile() {
+    try {
+      return window.Stats && typeof Stats.getProfile === `function` ? Stats.getProfile() : null;
+    } catch (e) { return null; }
+  }
+
+  // 暮らし・仕事で学ぶ人が選んだ「気になるテーマ」のトピック(選んだ順)
+  function interestTopicIds(profile) {
+    if (!profile || (profile.goal !== `life` && profile.goal !== `work`)) return [];
+    try {
+      const ids = typeof Stats.interestTopicIds === `function` ? Stats.interestTopicIds(profile) : [];
+      return Array.isArray(ids) ? ids.filter((id) => typeof id === `string` && AppIndex.topicsById[id]) : [];
+    } catch (e) { return []; }
+  }
+
+  // 新規の候補: SRSカード未作成の用語。
+  // 気になるテーマ(暮らし・仕事の人)の用語 → 主目標の試験分野に含まれる用語 → レベルの易しい順
   function newCandidates() {
     const cards = Srs.getAllCards();
     const target = window.Stats && Stats.primaryTarget ? Stats.primaryTarget() : null;
@@ -34,10 +58,18 @@ window.Views.review = (function () {
       if (!examTypeId || !window.Stats || !Stats.categoryOf) return 0;
       return Stats.categoryOf(t, examTypeId) ? 0 : 1;
     };
+    const interests = interestTopicIds(learnerProfile());
+    const interestRank = (t) => {
+      if (!interests.length) return 0;
+      const ids = t.topicIds || [];
+      const i = interests.findIndex((id) => ids.includes(id));
+      return i >= 0 ? i : interests.length;
+    };
+    // 作品由来の俗語(worksOnly)は新しく出さない(すでにカードがあれば期限の復習としては出る)
     return AppIndex.allTerms
-      .filter((t) => !cards[t.id])
-      .map((t, i) => ({ t, i }))
-      .sort((a, b) => inExam(a.t) - inExam(b.t) || (LEVEL_ORDER[a.t.level] ?? 9) - (LEVEL_ORDER[b.t.level] ?? 9) || a.i - b.i)
+      .filter((t) => !cards[t.id] && t.worksOnly !== true)
+      .map((t, i) => ({ t, i, r: interestRank(t) }))
+      .sort((a, b) => a.r - b.r || inExam(a.t) - inExam(b.t) || (LEVEL_ORDER[a.t.level] ?? 9) - (LEVEL_ORDER[b.t.level] ?? 9) || a.i - b.i)
       .map((x) => x.t);
   }
 
@@ -55,8 +87,62 @@ window.Views.review = (function () {
     return { date: minDate, days: DateUtil.diffDays(today, minDate), count };
   }
 
+  // 完了の画面の「○×で仕上げる(10問)」の行き先(ホームの「○×で10問」と同じ考え方)
+  // 暮らし・仕事(試験の登録なし)で気になるテーマがあれば → そのテーマ。それ以外はホーム側に関数があればそれを使い、なければ:
+  // 税理士 → 不動産と消費税 / 宅建士・未登録 → 優先して伸ばしたい分野(なければ文の多い分野)。出せる文が少なければ ○× のトップ
+  function oxFinishNav() {
+    const O = window.Views && Views.ox && Views.ox._internal;
+    let st = null;
+    const statements = () => {
+      if (!st) {
+        try { st = O && typeof O.loadStatements === `function` ? O.loadStatements() : []; } catch (e) { st = []; }
+      }
+      return st;
+    };
+    const byTopic = (id) => statements().filter((s) => (s.topicIds || []).includes(id)).length;
+    const target = window.Stats && Stats.primaryTarget ? Stats.primaryTarget() : null;
+    const typeId = target ? target.examTypeId : null;
+    // 暮らし・仕事で学ぶ人(試験を登録していない)は、気になるテーマから(ホームの「○×で10問」は試験の分野で選ぶため先に決める)
+    if (!typeId) {
+      const topic = interestTopicIds(learnerProfile()).find((id) => byTopic(id) >= 5);
+      if (topic) return `#ox/topic/${topic}/10`;
+    }
+    try {
+      const H = window.Views && Views.home;
+      if (H && typeof H.oxLink === `function`) {
+        const l = H.oxLink();
+        if (l && typeof l.nav === `string` && l.nav.startsWith(`#ox`)) return l.nav;
+      }
+    } catch (e) { /* 下の考え方で決める */ }
+    if (!statements().length) return `#ox`;
+    const byCat = (id) => statements().filter((s) => (s.cats || []).includes(id)).length;
+    if (typeId === `zeirishi`) return byCat(`shohi`) ? `#ox/cat/shohi/10` : `#ox`;
+    if (typeId && typeId !== `takken`) return `#ox`;
+    const type = window.Stats && Stats.examType ? Stats.examType(`takken`) : null;
+    const cats = type && Array.isArray(type.categories) ? type.categories : [];
+    let focusId = null;
+    try {
+      const s = window.Analysis && typeof Analysis.summary === `function` ? Analysis.summary(`takken`) : null;
+      focusId = s && s.focus ? s.focus.id : null;
+    } catch (e) { focusId = null; }
+    const cat = cats.find((c) => c.id === focusId && byCat(c.id) >= 5)
+      || cats.slice().sort((a, b) => byCat(b.id) - byCat(a.id)).find((c) => byCat(c.id) >= 5);
+    return cat ? `#ox/cat/${cat.id}/10` : `#ox`;
+  }
+
+  // 見出しの ⓘ で開く「復習のしくみ」
+  function aboutHtml() {
+    const lim = newLimit();
+    return `<div class="view-info">
+      <p>忘れかけたころに出題する「間隔反復学習」です。カードをめくって意味を思い出せたかを4段階で評価すると、次に出題する日が自動で決まります。</p>
+      <p>期限が来た復習を先に出し、${lim ? `そのあと新しい用語を1日${lim}語まで出します` : `新しい用語は出さない設定です`}(<a href="#settings/limit" class="link-inline">設定</a>で変更できます)。</p>
+      <p class="view-info-keys">キーボード: <kbd>Space</kbd> でめくる / <kbd>1</kbd>〜<kbd>4</kbd> で評価 / <kbd>U</kbd> で元に戻す</p>
+    </div>`;
+  }
+
   function render(root) {
-    Srs.migrateIfNeeded();
+    // 古い記録の移行(起動時の Storage.migrate に移っていれば何もしない)
+    if (typeof Srs.migrateIfNeeded === `function`) Srs.migrateIfNeeded();
     const known = Storage.get(`flashcards`, {});
 
     const reviewQueue = shuffle(Srs.getReviewDueIds().map((id) => AppIndex.termsById[id]).filter(Boolean));
@@ -66,57 +152,83 @@ window.Views.review = (function () {
     let queue = reviewQueue.map((t) => ({ term: t, isNew: false }))
       .concat(candidates.slice(0, newRemaining).map((t) => ({ term: t, isNew: true })));
 
-    const session = { done: 0, again: 0, total: queue.length };
+    // again: 「もう一度」を押した回数 / againIds: 「もう一度」を押した用語(思い出せた割合の計算用。用語ID → 回数)
+    const session = { done: 0, again: 0, againIds: {} };
     let undoStack = [];
     let lastToast = null;
 
     const wrap = document.createElement(`div`);
     wrap.className = `view review-view`;
     wrap.innerHTML = `
-      <h2>今日の復習</h2>
-      <p class="view-desc">忘れかけたころに出題する「間隔反復学習」です。カードをめくって意味を思い出せたかを4段階で評価すると、次に出題する日が自動で決まります。期限が来た復習を先に出し、${newLimit() ? `そのあと新しい用語を1日${newLimit()}語まで出します` : `新しい用語は出さない設定です`}(<a href="#settings/limit" class="link-inline">設定</a>で変更可)。</p>
-      <div class="review-meta" data-role="meta"></div>
+      <div class="view-head review-head">
+        <h2>今日の復習</h2>
+        <button type="button" class="btn btn-icon view-info-btn" data-role="view-info" aria-label="復習のしくみ" aria-haspopup="dialog">${ic(`info`, 20)}</button>
+        <span class="review-count num" data-role="count"></span>
+      </div>
       <div class="progress-bar review-progress" data-role="bar" aria-hidden="true"><div class="progress-bar-fill"></div></div>
       <div class="card-grid single-col" data-role="review-area"></div>
+      <div data-role="tip"></div>
       <p class="review-keys" data-role="keys">キーボード: Space でめくる / 1〜4 で評価 / U で元に戻す</p>
     `;
     root.appendChild(wrap);
 
-    const meta = wrap.querySelector(`[data-role="meta"]`);
+    const countEl = wrap.querySelector(`[data-role="count"]`);
     const bar = wrap.querySelector(`[data-role="bar"]`);
+    const tipSlot = wrap.querySelector(`[data-role="tip"]`);
     const area = wrap.querySelector(`[data-role="review-area"]`);
     const keysHint = wrap.querySelector(`[data-role="keys"]`);
+    const infoBtn = wrap.querySelector(`[data-role="view-info"]`);
+    infoBtn.addEventListener(`click`, () => UI.sheet({ title: `復習のしくみ`, content: aboutHtml() }));
 
+    // 「n / 全体」と進捗バー。全体 = 評価し終えた枚数 + 残り(「もう一度」で後ろに回したカードは数え直さない)
     function renderMeta() {
-      const rev = queue.filter((q) => !q.isNew).length;
-      const nw = queue.filter((q) => q.isNew).length;
-      meta.innerHTML = queue.length
-        ? `<span class="review-counts"><span class="badge badge-review">復習 ${rev}</span><span class="badge badge-new">新規 ${nw}</span></span><span class="review-done">完了 ${session.done}</span>`
-        : ``;
-      const pct = session.total ? Math.round((session.done / Math.max(session.total, session.done + queue.length)) * 100) : 0;
-      bar.firstElementChild.style.width = `${pct}%`;
-      bar.hidden = !queue.length && !session.done;
+      const total = session.done + queue.length;
+      const finished = !queue.length && session.done > 0;
+      const cur = finished ? session.done : Math.min(session.done + 1, total);
+      countEl.hidden = !total;
+      countEl.textContent = total ? `${cur} / ${total}` : ``;
+      countEl.setAttribute(`aria-label`, finished ? `${total}枚すべて評価しました` : total ? `${total}枚中 ${cur}枚目` : ``);
+      const pct = total ? Math.round((session.done / total) * 100) : 0;
+      const fill = bar.firstElementChild;
+      fill.style.width = `${pct}%`;
+      fill.classList.toggle(`fill-success`, finished);
+      bar.hidden = !total;
+    }
+
+    // 初めての人に一度だけ出す「復習のしくみ」(カードの下に置く。上に置くと、スマホではカードの用語名が
+    // 画面の下の「答えを見る」のトレイに隠れ、表を見ないまま答えを開くことになるため)
+    function renderTip() {
+      if (Storage.get(TIP_KEY, false) || !queue.length) { tipSlot.innerHTML = ``; return; }
+      if (tipSlot.firstElementChild) return;
+      const fig = window.CardUi && window.Diagrams && Diagrams.defs && Diagrams.defs[`srs-cycle`] ? CardUi.figureHtml(`srs-cycle`) : ``;
+      tipSlot.innerHTML = `
+        <section class="card review-tip" aria-label="復習のしくみ">
+          ${fig}
+          <p class="review-tip-text">忘れかけたころに復習すると記憶が長持ちします。カードをめくって、思い出せたかを4段階で選ぶと、次に出す日が自動で決まります。</p>
+          <button type="button" class="btn btn-secondary btn-sm" data-role="tip-ok">わかった</button>
+        </section>`;
+      tipSlot.querySelector(`[data-role="tip-ok"]`).addEventListener(`click`, () => {
+        Storage.set(TIP_KEY, true);
+        tipSlot.innerHTML = ``;
+        const front = area.querySelector(`.flip-card:not(.flipped) .flip-card-front [data-role="flip"]`);
+        if (front) front.focus({ preventScroll: true });
+      });
     }
 
     function renderEmpty() {
       keysHint.hidden = true;
+      tipSlot.innerHTML = ``;
       area.innerHTML = ``;
+      const moreNew = newCandidates().length > 0;
+      if (session.done) {
+        renderDone(moreNew);
+        return;
+      }
+      infoBtn.hidden = false;
       const next = nextDueInfo();
       const nextText = next ? `次の復習は${next.days === 1 ? `明日` : `${next.days}日後`}(${next.count}件)です。` : ``;
-      const moreNew = newCandidates().length > 0;
       let el;
-      if (session.done) {
-        el = UI.emptyState({
-          icon: `check-circle`,
-          title: `今日の分は完了です。お疲れさまでした`,
-          body: `${session.done}件を評価しました(うち「もう一度」${session.again}件)。${nextText}`,
-          cta: { label: `クイズで力試し`, nav: `#quiz/auto` },
-        });
-        // 今日の学習量と連続日数(クイズ・○×の結果と同じ表示)
-        const streak = Views.quiz && Views.quiz.streakLineHtml ? Views.quiz.streakLineHtml() : ``;
-        const bodyEl = el.querySelector(`.empty-state-body`);
-        if (streak && bodyEl) bodyEl.insertAdjacentHTML(`afterend`, streak);
-      } else if (!Object.keys(Srs.getAllCards()).length && !candidates.length) {
+      if (!Object.keys(Srs.getAllCards()).length && !candidates.length) {
         el = UI.emptyState({ icon: `layers`, title: `出題できる用語がありません`, cta: { label: `用語集を見る`, nav: `#glossary` } });
       } else if (!moreNew) {
         // 新しい用語の候補が残っていない(すべての用語のカードがある)
@@ -134,50 +246,102 @@ window.Views.review = (function () {
           cta: { label: `用語集を見る`, nav: `#glossary` },
         });
       }
-      if (moreNew) {
-        const extra = document.createElement(`button`);
-        extra.type = `button`;
-        extra.className = `btn btn-secondary`;
-        extra.innerHTML = `${UI.icon(`sparkles`, { size: 18 })}新しい用語をあと5語学ぶ`;
-        extra.addEventListener(`click`, () => {
-          const more = newCandidates().slice(0, 5);
-          if (!more.length) return;
-          queue = more.map((t) => ({ term: t, isNew: true }));
-          session.total += queue.length;
-          renderQueue();
-        });
-        el.appendChild(extra);
-      }
+      if (moreNew) el.appendChild(moreNewButton(`btn btn-secondary`));
       area.appendChild(el);
+    }
+
+    // 「新しい用語をあと5語学ぶ」
+    function moreNewButton(cls) {
+      const extra = document.createElement(`button`);
+      extra.type = `button`;
+      extra.className = cls;
+      extra.dataset.role = `more-new`;
+      extra.innerHTML = `${ic(`sparkles`)}新しい用語をあと5語学ぶ`;
+      extra.addEventListener(`click`, () => {
+        const more = newCandidates().slice(0, 5);
+        if (!more.length) return;
+        queue = more.map((t) => ({ term: t, isNew: true }));
+        renderQueue();
+        // 完了の画面から続けるときは、カードの先頭が見える位置へ
+        showCardTop();
+      });
+      return extra;
+    }
+
+    // 完了の画面: チェックの輪・評価した枚数/思い出せた割合/連続日数・次の復習・次にやること
+    function renderDone(moreNew) {
+      infoBtn.hidden = true;
+      const done = session.done;
+      const missed = Math.min(done, Object.keys(session.againIds).filter((id) => session.againIds[id] > 0).length);
+      const pct = done ? Math.max(0, Math.round(((done - missed) / done) * 100)) : 0;
+      const streak = window.Streak && typeof Streak.getCurrentStreak === `function` ? Streak.getCurrentStreak() : null;
+      const next = nextDueInfo();
+      const el = document.createElement(`div`);
+      el.className = `rv-done`;
+      el.innerHTML = `
+        <div class="rv-done-ring" aria-hidden="true">
+          <svg viewBox="0 0 120 120" focusable="false"><circle cx="60" cy="60" r="56"></circle><path d="M38 62 L54 77 L84 45"></path></svg>
+          <span class="rv-done-dot d1"></span><span class="rv-done-dot d2"></span><span class="rv-done-dot d3"></span><span class="rv-done-dot d4"></span>
+        </div>
+        <h3 class="rv-done-title" tabindex="-1">今日の復習、完了!</h3>
+        <p class="rv-done-sub">お疲れさまでした。この調子で続けましょう。</p>
+        <div class="rv-done-stats">
+          <div class="rv-done-stat"><strong class="num">${done}</strong><span>評価した枚数</span></div>
+          <div class="rv-done-stat"><strong class="num">${pct}<small>%</small></strong><span>思い出せた</span></div>
+          ${streak != null ? `<div class="rv-done-stat is-warm"><strong class="num">${streak}</strong><span>日連続</span></div>` : ``}
+        </div>
+        ${next ? `<p class="rv-done-next">${ic(`calendar`)}<span>次の復習は <b>${next.days === 1 ? `明日` : `${next.days}日後`} ${next.count}枚</b></span></p>` : ``}
+        <div class="rv-done-actions">
+          <a class="btn btn-lg btn-block" href="${esc(oxFinishNav())}" data-role="ox-finish">${ic(`o-x`, 20)}○×で仕上げる(10問)</a>
+        </div>
+      `;
+      if (moreNew) el.querySelector(`.rv-done-actions`).appendChild(moreNewButton(`btn btn-secondary btn-block`));
+      area.appendChild(el);
+      const title = el.querySelector(`.rv-done-title`);
+      if (title) title.focus({ preventScroll: true });
     }
 
     function renderQueue() {
       renderMeta();
       area.innerHTML = ``;
       if (!queue.length) { renderEmpty(); return; }
+      infoBtn.hidden = false;
       keysHint.hidden = false;
+      renderTip();
       const { term, isNew } = queue[0];
       const hints = {};
       const pv = Srs.preview(term.id);
       [1, 2, 3, 4].forEach((g) => { hints[g] = Srs.intervalLabel(pv[g]); });
-      // 評価ボタンはカードの外(下)に置く。裏面の説明が長い用語でもボタンが隠れないように
+      // 評価ボタンはカードの外(下)のトレイに置く。裏面の説明が長い用語でもボタンが隠れないように
       const card = CardUi.buildFlipCard(term, { known });
       if (isNew) {
         const head = card.querySelector(`.flip-face-tags`);
         if (head) head.insertAdjacentHTML(`afterbegin`, `<span class="badge badge-new">新規</span>`);
       }
       area.appendChild(card);
-      const gradeRow = document.createElement(`div`);
-      gradeRow.className = `grade-row review-grade-row`;
-      gradeRow.setAttribute(`role`, `group`);
-      gradeRow.setAttribute(`aria-label`, `覚えていたかを評価`);
+      const tray = document.createElement(`div`);
+      tray.className = `grade-row review-grade-row`;
+      tray.setAttribute(`role`, `group`);
       const labels = { 1: [`grade-again`, `もう一度`], 2: [`grade-hard`, `難しい`], 3: [`grade-good`, `普通`], 4: [`grade-easy`, `簡単`] };
-      gradeRow.innerHTML = [1, 2, 3, 4].map((g) => `<button type="button" class="btn grade-btn ${labels[g][0]}" data-grade="${g}">${labels[g][1]}<small>${hints[g]}</small></button>`).join(``);
-      gradeRow.hidden = true;
-      gradeRow.querySelectorAll(`[data-grade]`).forEach((b) => b.addEventListener(`click`, () => doGrade(term, Number(b.dataset.grade), isNew)));
-      area.appendChild(gradeRow);
-      // 裏返したら評価ボタンを出す(表のままでは答えを見ずに評価できないように)
-      const syncGrade = () => { gradeRow.hidden = !card.classList.contains(`flipped`); };
+      tray.innerHTML = `<button type="button" class="btn btn-lg btn-block review-reveal" data-role="reveal">答えを見る</button>`
+        + [1, 2, 3, 4].map((g) => `<button type="button" class="btn grade-btn ${labels[g][0]}" data-grade="${g}">${labels[g][1]}<small>${hints[g]}</small></button>`).join(``);
+      tray.querySelectorAll(`[data-grade]`).forEach((b) => b.addEventListener(`click`, () => doGrade(term, Number(b.dataset.grade), isNew)));
+      // 作った直後のタップは受けない(前のカードの評価ボタンを2回押したとき、次のカードの答えが見えてしまうため)
+      const createdAt = Date.now();
+      tray.querySelector(`[data-role="reveal"]`).addEventListener(`click`, () => {
+        if (Date.now() - createdAt < 400 || card.classList.contains(`flipped`)) return;
+        if (card.flip) card.flip(); else card.classList.add(`flipped`);
+      });
+      area.appendChild(tray);
+      // 表のあいだは「答えを見る」、裏返したら評価ボタン(答えを見ずに評価できないように)
+      const syncGrade = () => {
+        const flipped = card.classList.contains(`flipped`);
+        tray.classList.toggle(`is-front`, !flipped);
+        tray.querySelector(`[data-role="reveal"]`).hidden = flipped;
+        tray.querySelectorAll(`[data-grade]`).forEach((b) => { b.hidden = !flipped; });
+        if (flipped) tray.setAttribute(`aria-label`, `覚えていたかを評価`);
+        else tray.removeAttribute(`aria-label`);
+      };
       if (window.MutationObserver) new MutationObserver(syncGrade).observe(card, { attributes: true, attributeFilter: [`class`] });
       syncGrade();
       const flipBtn = card.querySelector(`.flip-card-front [data-role="flip"]`);
@@ -188,7 +352,8 @@ window.Views.review = (function () {
       const prevCard = Srs.getCard(term.id);
       const prevKnown = !!known[term.id];
       const item = queue[0];
-      Srs.grade(term.id, g);
+      // 評価後のカード(保存できなかったとき=容量不足でも、次に出す日を通知に出せるよう戻り値を使う)
+      const graded = Srs.grade(term.id, g);
       // 別のタブでの変更を消さないよう、保存前に最新の値を読み直してから反映する
       const latestKnown = Storage.get(`flashcards`, {});
       Object.keys(known).forEach((k) => { if (!(k in latestKnown)) delete known[k]; });
@@ -207,6 +372,7 @@ window.Views.review = (function () {
       if (g === 1) {
         queue.splice(Math.min(3, queue.length), 0, { term, isNew: false });
         session.again += 1;
+        session.againIds[term.id] = (session.againIds[term.id] || 0) + 1;
       } else {
         session.done += 1;
       }
@@ -217,7 +383,8 @@ window.Views.review = (function () {
       const shortName = term.name.length > 14 ? `${term.name.slice(0, 13)}…` : term.name;
       // 前のトーストは閉じる(古いトーストの「元に戻す」で別の評価が取り消されないように)
       if (lastToast) lastToast.dismiss();
-      const when = g === 1 ? `このあともう一度出題します` : `${Srs.intervalLabel(Srs.getCard(term.id).interval)}に出題します`;
+      const nextCard = (graded && typeof graded === `object` ? graded : null) || Srs.getCard(term.id);
+      const when = g === 1 || !nextCard ? `このあともう一度出題します` : `${Srs.intervalLabel(nextCard.interval)}に出題します`;
       lastToast = UI.toast(`「${shortName}」は${when}`, `default`, { action: { label: `元に戻す`, onClick: undo }, duration: 3200 });
     }
 
@@ -243,6 +410,8 @@ window.Views.review = (function () {
         const idx = queue.findIndex((q) => q.term.id === last.term.id);
         if (idx >= 0) queue.splice(idx, 1);
         session.again = Math.max(0, session.again - 1);
+        const n = (session.againIds[last.term.id] || 0) - 1;
+        if (n > 0) session.againIds[last.term.id] = n; else delete session.againIds[last.term.id];
       } else {
         session.done = Math.max(0, session.done - 1);
       }
@@ -296,5 +465,5 @@ window.Views.review = (function () {
     renderQueue();
   }
 
-  return { render, DEFAULT_NEW_LIMIT };
+  return { render, DEFAULT_NEW_LIMIT, _internal: { newCandidates, nextDueInfo, oxFinishNav } };
 })();

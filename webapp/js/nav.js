@@ -3,42 +3,46 @@ window.Nav = (function () {
   // mobile: 下部タブバーのどのタブに属するか / section: サイドバーの見出し
   const ITEMS = [
     { view: `home`, label: `ホーム`, icon: `home`, mobile: `home`, section: `top` },
-    { view: `progress`, label: `学習の進捗`, icon: `chart`, mobile: `more`, section: `top` },
     { view: `topics`, label: `学習トピック`, short: `トピック`, icon: `book-open`, mobile: `learn`, section: `learn` },
     { view: `glossary`, label: `用語集`, icon: `layers`, mobile: `learn`, section: `learn` },
     { view: `figures`, label: `図解`, icon: `diagram`, mobile: `learn`, section: `learn` },
-    { view: `bookmarks`, label: `ブックマーク`, icon: `bookmark`, mobile: `learn`, section: `learn` },
-    { view: `summary`, label: `動画一覧`, icon: `play-square`, mobile: `more`, section: `learn` },
+    { view: `calculators`, label: `計算機`, icon: `calculator`, mobile: `learn`, section: `learn` },
     { view: `review`, label: `今日の復習`, icon: `repeat`, mobile: `review`, section: `practice`, badge: true },
-    { view: `quiz`, label: `クイズ`, icon: `pencil-check`, mobile: `practice`, section: `practice` },
+    { view: `quiz`, label: `4択問題`, short: `4択`, icon: `pencil-check`, mobile: `practice`, section: `practice` },
+    // サブナビは ○× の記号のアイコンと並ぶので、文字は「一問一答」(「○× ○×」と重ねない)
     { view: `ox`, label: `○×一問一答`, short: `一問一答`, icon: `o-x`, mobile: `practice`, section: `practice` },
     { view: `exam`, label: `模擬試験`, icon: `timer`, mobile: `practice`, section: `practice` },
-    { view: `calculators`, label: `計算機`, icon: `calculator`, mobile: `more`, section: `tools` },
-    { view: `sources`, label: `情報源`, icon: `library`, mobile: `more`, section: `tools` },
+    { view: `progress`, label: `学習の進捗`, icon: `chart`, mobile: `more`, section: `record` },
+    { view: `bookmarks`, label: `ブックマーク`, icon: `bookmark`, mobile: `more`, section: `record` },
+    { view: `sources`, label: `情報源`, icon: `library`, mobile: `more`, section: `other` },
+    { view: `works`, label: `作品で学ぶ`, icon: `play-square`, mobile: `more`, section: `other` },
+    { view: `about`, label: `このアプリについて`, icon: `info`, mobile: `more`, section: `other` },
     { view: `settings`, label: `設定`, icon: `settings`, mobile: `more`, section: `bottom` },
-    { view: `more`, label: `その他`, icon: `grid`, mobile: `more`, section: null },
+    { view: `more`, label: `メニュー`, icon: `menu`, mobile: `more`, section: null },
   ];
 
   const TABS = [
     { id: `home`, label: `ホーム`, icon: `home`, nav: `#home` },
-    { id: `learn`, label: `学習`, icon: `book-open`, nav: `#topics` },
+    { id: `learn`, label: `学ぶ`, icon: `book-open`, nav: `#topics` },
     { id: `review`, label: `復習`, icon: `repeat`, nav: `#review`, badge: true },
-    { id: `practice`, label: `演習`, icon: `pencil-check`, nav: `#quiz` },
-    { id: `more`, label: `その他`, icon: `grid`, nav: `#more` },
+    { id: `practice`, label: `問題`, icon: `pencil-check`, nav: `#quiz` },
+    { id: `more`, label: `メニュー`, icon: `menu`, nav: `#more` },
   ];
 
   const SECTIONS = [
     { id: `top`, heading: null },
     { id: `learn`, heading: `学ぶ` },
-    { id: `practice`, heading: `演習` },
-    { id: `tools`, heading: `ツール` },
+    { id: `practice`, heading: `問題` },
+    { id: `record`, heading: `記録` },
+    { id: `other`, heading: `その他` },
   ];
 
   // スマホでタブ内を切り替えるサブナビ
   const SUBNAVS = {
-    learn: [`topics`, `glossary`, `figures`, `bookmarks`],
+    learn: [`topics`, `glossary`, `figures`, `calculators`],
     practice: [`quiz`, `ox`, `exam`],
   };
+  const SUBNAV_LABELS = { learn: `学ぶメニュー`, practice: `問題メニュー` };
 
   function ic(name, size) {
     return window.Icons ? Icons.get(name, { size: size || 20 }) : ``;
@@ -48,8 +52,26 @@ window.Nav = (function () {
     return ITEMS.find((it) => it.view === view) || null;
   }
 
+  // 画面が属する下部タブ(home / learn / review / practice / more)。知らない画面は null
+  function tabOf(view) {
+    const it = itemOf(view);
+    return it ? it.mobile : null;
+  }
+
+  // 画面がサブナビ(学ぶ・問題のタブ内の切替)に入っていれば、そのタブの id
+  function subnavOf(view) {
+    const tab = tabOf(view);
+    return tab && SUBNAVS[tab] && SUBNAVS[tab].includes(view) ? tab : null;
+  }
+
   function sideItemHtml(it) {
     return `<a class="side-nav-item" href="#${it.view}" data-view="${it.view}">${ic(it.icon)}<span>${it.label}</span>${it.badge ? `<span class="badge-count" data-role="review-badge" hidden></span>` : ``}</a>`;
+  }
+
+  function showGuide() {
+    if (!window.Onboarding) return;
+    if (Onboarding.showGuide) Onboarding.showGuide();
+    else if (Onboarding.show) Onboarding.show();
   }
 
   function mount() {
@@ -66,8 +88,7 @@ window.Nav = (function () {
           ${bottom}
           <button type="button" class="side-nav-item" data-role="show-guide">${ic(`help`)}<span>使い方</span></button>
         </div>`;
-      const guideBtn = side.querySelector(`[data-role="show-guide"]`);
-      guideBtn.addEventListener(`click`, () => { if (window.Onboarding) Onboarding.show(); });
+      side.querySelector(`[data-role="show-guide"]`).addEventListener(`click`, showGuide);
     }
 
     const bottomNav = document.getElementById(`bottom-nav`);
@@ -92,7 +113,7 @@ window.Nav = (function () {
     refreshBadge();
   }
 
-  // タブ内で最後に開いたサブ画面(学習→用語集、演習→○×など)。このタブ(セッション)の間だけ覚える
+  // タブ内で最後に開いたサブ画面(学ぶ→用語集、問題→○×など)。このタブ(セッション)の間だけ覚える
   function lastSubview(tabId) {
     const list = SUBNAVS[tabId];
     if (!list) return null;
@@ -103,10 +124,9 @@ window.Nav = (function () {
   }
 
   function rememberSubview(view) {
-    const it = itemOf(view);
-    const list = it ? SUBNAVS[it.mobile] : null;
-    if (!list || !list.includes(view)) return;
-    try { sessionStorage.setItem(`navLast.${it.mobile}`, view); } catch (e) { /* 保存できなくても既定の画面を開く */ }
+    const tab = subnavOf(view);
+    if (!tab) return;
+    try { sessionStorage.setItem(`navLast.${tab}`, view); } catch (e) { /* 保存できなくても既定の画面を開く */ }
   }
 
   function tabHref(t) {
@@ -115,8 +135,7 @@ window.Nav = (function () {
   }
 
   function update(activeView) {
-    const it = itemOf(activeView);
-    const tab = it ? it.mobile : null;
+    const tab = tabOf(activeView);
     rememberSubview(activeView);
     document.querySelectorAll(`.side-nav-item[data-view]`).forEach((el) => {
       if (el.dataset.view === activeView) el.setAttribute(`aria-current`, `page`);
@@ -132,14 +151,12 @@ window.Nav = (function () {
 
   // スマホ時に画面上部へ差し込むサブナビ(PCではCSSで非表示)
   function subnavFor(view) {
-    const it = itemOf(view);
-    if (!it) return null;
-    const list = SUBNAVS[it.mobile];
-    if (!list || !list.includes(view)) return null;
+    const tab = subnavOf(view);
+    if (!tab) return null;
     const nav = document.createElement(`nav`);
     nav.className = `subnav`;
-    nav.setAttribute(`aria-label`, `${it.mobile === `learn` ? `学習` : `演習`}メニュー`);
-    nav.innerHTML = list.map((v) => {
+    nav.setAttribute(`aria-label`, SUBNAV_LABELS[tab]);
+    nav.innerHTML = SUBNAVS[tab].map((v) => {
       const sub = itemOf(v);
       return `<a class="subnav-item" href="#${v}"${v === view ? ` aria-current="page"` : ``}>${ic(sub.icon, 16)}${sub.short || sub.label}</a>`;
     }).join(``);
@@ -153,18 +170,19 @@ window.Nav = (function () {
   }
 
   function refreshBadge() {
-    const n = dueCount();
+    let n = 0;
+    try { n = dueCount(); } catch (e) { console.error(`[ナビ] 復習の件数を数えられませんでした`, e); }
     document.querySelectorAll(`[data-role="review-badge"]`).forEach((el) => {
       const prev = Number(el.dataset.count || 0);
       el.dataset.count = String(n);
       el.hidden = n <= 0;
       el.textContent = n > 99 ? `99+` : String(n);
       // 増えたときだけ弾ませる(0→1 は表示されるときに CSS のアニメーションが動く)
-      if (n > prev && prev > 0 && !UI.prefersReducedMotion()) { el.style.animation = `none`; void el.offsetWidth; el.style.animation = ``; }
+      if (n > prev && prev > 0 && !(window.UI && UI.prefersReducedMotion())) { el.style.animation = `none`; void el.offsetWidth; el.style.animation = ``; }
       const link = el.closest(`a`);
       if (link) link.setAttribute(`aria-label`, n > 0 ? `今日の復習(${n}件)` : `今日の復習`);
     });
   }
 
-  return { ITEMS, mount, update, subnavFor, refreshBadge, itemOf };
+  return { ITEMS, TABS, SUBNAVS, mount, update, subnavFor, refreshBadge, itemOf, tabOf, subnavOf, showGuide };
 })();

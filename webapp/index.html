@@ -3,32 +3,68 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>不動産学習</title>
-  <meta name="description" content="宅建士・税理士試験の学習にも使える、不動産の基礎から法令・税務までを学べる学習サイト(非公式)">
+  <title>まなぶ不動産|宅建・賃貸・売買・相続を基礎から学べる無料アプリ</title>
+  <meta name="description" content="宅建士試験の4択・○×・模擬試験と、賃貸・購入・売却・相続の基礎知識、ローンや税金の計算機をひとつに。登録不要・無料で、学習記録は端末の中だけに保存されます。">
+  <link rel="canonical" href="https://shinagawa4025-code.github.io/shojiki-fudousan-gakushu/">
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="まなぶ不動産">
+  <meta property="og:title" content="まなぶ不動産|宅建の合格にも、暮らしの安心にも。">
+  <meta property="og:description" content="宅建士試験の対策から、賃貸・購入・売却・相続の基礎まで。4択・○×・模擬試験・計算機つき。登録不要・無料。">
+  <meta property="og:url" content="https://shinagawa4025-code.github.io/shojiki-fudousan-gakushu/">
+  <meta property="og:image" content="https://shinagawa4025-code.github.io/shojiki-fudousan-gakushu/icons/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="まなぶ不動産 — 宅建の合格にも、暮らしの安心にも。">
+  <meta property="og:locale" content="ja_JP">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" type="image/svg+xml" href="icons/logo.svg">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <meta name="theme-color" content="#ffffff">
+  <!-- ブラウザのツールバー色(テーマを手動で選んだときは theme.js が両方を書き換える) -->
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#171e27" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="不動産学習">
+  <meta name="apple-mobile-web-app-title" content="まなぶ不動産">
+  <!-- ホーム画面から起動したときの iPhone の起動画面(ライト・ダーク) -->
+  <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="icons/splash-1170x2532-light.png">
+  <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="icons/splash-1170x2532-dark.png">
+  <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="icons/splash-1179x2556-light.png">
+  <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="icons/splash-1179x2556-dark.png">
+  <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="icons/splash-1290x2796-light.png">
+  <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="icons/splash-1290x2796-dark.png">
+  <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)" href="icons/splash-750x1334-light.png">
+  <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)" href="icons/splash-750x1334-dark.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"まなぶ不動産","url":"https://shinagawa4025-code.github.io/shojiki-fudousan-gakushu/","applicationCategory":"EducationalApplication","operatingSystem":"Web","inLanguage":"ja","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"JPY"},"description":"宅建士試験の4択・○×・模擬試験と、賃貸・購入・売却・相続の基礎知識、ローンや税金の計算機をひとつにした無料の学習アプリ"}</script>
   <script>
-    // 描画前にテーマを確定してちらつきを防ぐ(theme.js と同じ判定)
+    // 起動の見張り(1/2): 読み込めなかったスクリプト(404・通信断)を記録する(2/2 は body の最後)。古いブラウザでも動くよう ES5 で書く
+    window.addEventListener('error', function (e) {
+      var t = e.target;
+      if (t && t.tagName === 'SCRIPT') (window.__bootFailed = window.__bootFailed || []).push(t.src);
+    }, true);
+  </script>
+  <script>
+    // 描画前にテーマを確定してちらつきを防ぐ(theme.js と同じ判定。古いブラウザでも動くよう ES5 で書く)
     (function () {
-      var theme = `light`;
+      var theme = 'light';
       try {
-        var pref = JSON.parse(localStorage.getItem(`shojikiLearn.v1.themePreference`));
-        if (pref === `light` || pref === `dark`) theme = pref;
-        else if (window.matchMedia && window.matchMedia(`(prefers-color-scheme: dark)`).matches) theme = `dark`;
+        var pref = JSON.parse(localStorage.getItem('shojikiLearn.v1.themePreference'));
+        if (pref === 'light' || pref === 'dark') theme = pref;
+        else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
       } catch (e) {
-        if (window.matchMedia && window.matchMedia(`(prefers-color-scheme: dark)`).matches) theme = `dark`;
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
       }
-      document.documentElement.setAttribute(`data-theme`, theme);
+      document.documentElement.setAttribute('data-theme', theme);
     })();
   </script>
+  <!-- JavaScript が無効のときは「読み込み中…」を出さない(代わりに noscript の案内を出す) -->
+  <noscript><style>.boot-status { display: none; }</style></noscript>
+  <!-- build:css app : 公開時は tools/build.js がこの範囲の CSS を1つのファイルにまとめる(ローカルではこのまま)。CSS を追加するときはこの範囲の中に書く -->
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/shell.css">
   <link rel="stylesheet" href="css/calculators.css">
   <link rel="stylesheet" href="css/exam.css">
   <link rel="stylesheet" href="css/features.css">
@@ -36,13 +72,15 @@
   <link rel="stylesheet" href="css/practice.css">
   <link rel="stylesheet" href="css/home.css">
   <link rel="stylesheet" href="css/learning.css">
+  <!-- /build -->
 </head>
 <body>
   <header class="app-header" id="app-header">
+    <h1 class="sr-only">まなぶ不動産</h1>
     <div class="app-bar">
-      <a class="brand" href="#home" aria-label="不動産学習 ホームへ">
+      <a class="brand" href="#home" aria-label="まなぶ不動産 ホームへ">
         <img class="brand-mark" src="icons/logo.svg" alt="" width="28" height="28">
-        <span class="brand-name">不動産学習</span>
+        <span class="brand-name">まなぶ不動産</span>
       </a>
       <div class="app-bar-actions">
         <button type="button" class="btn btn-icon" id="search-toggle-btn" aria-label="検索を開く" aria-expanded="false" aria-controls="global-search-wrap"></button>
@@ -60,16 +98,32 @@
 
   <div id="global-search-results" class="global-search-results" role="listbox" aria-label="検索結果" hidden></div>
 
-  <main id="view-root" tabindex="-1"></main>
+  <main id="view-root" tabindex="-1">
+    <!-- 起動するまでの表示(最初の画面の描画で置き換わる) -->
+    <div class="boot">
+      <img class="boot-logo" src="icons/logo.svg" alt="" width="64" height="64">
+      <p class="boot-name">まなぶ不動産</p>
+      <p class="boot-tagline">宅建の合格にも、暮らしの安心にも。</p>
+      <p class="boot-status" role="status">読み込み中…</p>
+    </div>
+    <noscript><p class="boot-noscript">このアプリを使うには、ブラウザの設定で JavaScript を有効にしてください。学習の記録はこの端末のブラウザの中に保存されます。</p></noscript>
+  </main>
 
   <footer class="app-footer">
-    このサイトは個人が学習用に作った非公式サイトで、「正直不動産」の作品・公式チャンネルとは関係ありません。<br>
-    「正直不動産」エピソードの出典: <a href="https://www.youtube.com/@shojiki_comicanime/videos" target="_blank" rel="noopener">正直不動産【公式】チャンネル</a>(2026年10月4日時点の全119本)<br>
-    法令・税制は改正されることがあります。実際の取引や申告は必ず最新の一次情報と専門家に確認してください。
+    <p>個人が運営する非公式の学習アプリです。内容は<span data-role="as-of">2026年10月10日</span>時点の法令・公表資料に基づく一般的な解説で、個別の法律・税務相談には当たりません。</p>
+    <nav class="footer-links" aria-label="このアプリについて">
+      <a href="#about">このアプリについて</a>
+      <a href="#about/privacy">プライバシー</a>
+      <a href="#about/terms">免責事項</a>
+      <a href="#about/changelog">更新履歴</a>
+      <a href="#about/report">誤りを報告</a>
+    </nav>
   </footer>
 
   <nav class="bottom-nav" id="bottom-nav" aria-label="メインメニュー"></nav>
 
+  <!-- build:js data : 公開時は tools/build.js がこの範囲(設定とデータ)を1つのファイルにまとめる。データのファイルを追加するときはこの範囲の中に書く -->
+  <script src="js/siteConfig.js"></script>
   <script src="data/episodes.js"></script>
   <script src="data/specials.js"></script>
   <script src="data/terms.js"></script>
@@ -79,6 +133,7 @@
   <script src="data/quiz.js"></script>
   <script src="data/sources.js"></script>
   <script src="data/exams.js"></script>
+  <script src="data/changelog.js"></script>
   <script src="data/contentPack.js"></script>
   <script src="data/content/kenri.js"></script>
   <script src="data/content/horei.js"></script>
@@ -87,10 +142,22 @@
   <script src="data/content/shohizei.js"></script>
   <script src="data/content/quizmc_a.js"></script>
   <script src="data/content/quizmc_b.js"></script>
+  <script src="data/content/q2_gyoho_a.js"></script>
+  <script src="data/content/q2_gyoho_b.js"></script>
+  <script src="data/content/q2_kenri.js"></script>
+  <script src="data/content/q2_horei.js"></script>
+  <script src="data/content/q2_zei_menjo.js"></script>
+  <script src="data/content/q2_life.js"></script>
+  <!-- 既存・新規の問題と基礎知識の修正(新規の問題を上書きすることがあるので、追加パックの最後に読む) -->
+  <script src="data/content/q2_fix.js"></script>
+  <!-- /build -->
+  <!-- build:js app : 公開時は tools/build.js がこの範囲(アプリ本体)を1つのファイルにまとめる。JS を追加するときはこの範囲の中に書く -->
   <script src="js/storage.js"></script>
   <script src="js/dates.js"></script>
   <script src="js/icons.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/errorScreen.js"></script>
+  <script src="js/report.js"></script>
   <script src="js/dataIndex.js"></script>
   <script src="js/search.js"></script>
   <script src="js/router.js"></script>
@@ -117,11 +184,27 @@
   <script src="js/views/exam.js"></script>
   <script src="js/views/ox.js"></script>
   <script src="js/views/progress.js"></script>
-  <script src="js/views/summary.js"></script>
+  <script src="js/views/works.js"></script>
   <script src="js/views/calculators.js"></script>
   <script src="js/views/sources.js"></script>
+  <script src="js/views/about.js"></script>
   <script src="js/views/settings.js"></script>
   <script src="js/views/more.js"></script>
   <script src="js/app.js"></script>
+  <!-- /build -->
+  <script>
+    // 起動の見張り(2/2): 読み込めなかったスクリプトがある・本体が動かない(古いブラウザなど)ときは、読み込み中のままにせず案内を出す
+    if (window.__bootFailed || !window.Router || !window.Views) {
+      (function () {
+        var showErr = function () {
+          if (window.ErrorScreen) { ErrorScreen.showBootError((window.__bootFailed || []).join('\n')); return; }
+          var root = document.getElementById('view-root');
+          if (root) root.innerHTML = '<p style="padding:16px">読み込みに失敗しました。通信状態を確認して、再読み込みしてください。</p>';
+          document.body.className += ' app-ready';
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showErr); else showErr();
+      })();
+    }
+  </script>
 </body>
 </html>

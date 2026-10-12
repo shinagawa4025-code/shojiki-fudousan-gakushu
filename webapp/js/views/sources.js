@@ -1,4 +1,4 @@
-// 情報源ビュー: 不動産学習における一次情報源をカテゴリ別に一覧表示
+// 情報源ビュー: 解説の根拠にしている一次情報源(公的機関・公的団体の資料)をカテゴリ別に一覧表示
 window.Views = window.Views || {};
 window.Views.sources = (function () {
   // 表示するカテゴリの順番(データにない名前のカテゴリは最後に、出てきた順で並べる)
@@ -22,7 +22,7 @@ window.Views.sources = (function () {
     wrap.className = `view sources-view`;
     wrap.innerHTML = `
       <h2>情報源</h2>
-      <p class="view-desc">不動産学習で「正しい知識」を確認したいときに参照すべき公式・公的な一次情報源です。各用語・基礎知識カードの出典リンクもここに紐づいています。</p>
+      <p class="view-desc">このアプリが解説の根拠にしている、公的機関・公的団体の一次情報源です。各用語・基礎知識の「出典」のリンク先もここに挙げた資料です。内容を確認した時点や考え方は<a href="#about/sources">このアプリについて</a>にまとめています。</p>
       <div data-role="source-groups"></div>
     `;
     root.appendChild(wrap);

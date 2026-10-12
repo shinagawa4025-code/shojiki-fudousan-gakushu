@@ -1,4 +1,5 @@
-// 情報源: 不動産学習において「正しい一次情報」を確認できる公式機関のリスト(2026年10月時点でURL確認済み)
+// 情報源: 解説・問題の根拠となる一次情報を確認できる公的機関などのリスト(2026年10月時点でURL確認済み)
+// 分野ごとの追加の出典(src30〜)は data/content/*.js の ContentPack で足している
 window.APP_DATA = window.APP_DATA || {};
 window.APP_DATA.sources = [
   { id: `src01`, category: `宅建業法・取引ルール`, orgName: `国土交通省(不動産業課)`,

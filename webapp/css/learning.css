@@ -1,16 +1,43 @@
-/* 学習画面(トピック・用語集・図解・ブックマーク・情報源・動画一覧)の追加スタイル */
+/* 学習画面(トピック・用語集・図解・ブックマーク・情報源)の追加スタイル */
 /* 色は style.css のトークンだけを使う(ライト/ダーク両対応) */
 
+/* ---------- 見出し + ⓘ(画面の説明はシートで読む) ---------- */
+.learn-head { display: flex; align-items: center; gap: var(--sp-1); margin: 0 0 var(--sp-3); }
+.learn-head h2 { margin: 0; min-width: 0; }
+.learn-info-btn { flex-shrink: 0; color: var(--color-text-muted); }
+@media (hover: hover) { .learn-info-btn:hover { color: var(--color-primary); } }
+.learn-info-text { margin: 0; font-size: var(--fs-base); line-height: var(--lh-body); }
+
 /* ---------- トピック一覧 ---------- */
-.topics-stat-grid { margin-bottom: var(--sp-2); }
-.topic-card-main { min-width: 0; }
-.topic-card-tags { margin-top: var(--sp-1); }
+.topics-view > .view-desc { margin-bottom: var(--sp-3); }
+.topic-tracks { margin: 0 0 var(--sp-2); }
+.topic-tracks .segmented-item { flex: 1 1 0; min-width: 0; min-height: 40px; padding: 0 var(--sp-2); }
+.topics-view .topic-group { margin-bottom: var(--sp-4); }
+.topics-view .topic-group-head { margin: var(--sp-5) 0 var(--sp-2); }
+.topics-view .topic-group-head h3 { font-size: var(--fs-base); }
+.topics-view .topic-grid { gap: var(--sp-2); }
+.topic-card { gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
+.topic-card-head { align-items: flex-start; }
+.topic-card-main { min-width: 0; flex: 1; }
+.topic-card-desc {
+  margin: 2px 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  color: var(--color-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.topic-card .topic-progress-row > .topic-progress-label { width: auto; }
+.topic-card .topic-progress-row > span:last-child { width: auto; min-width: 40px; }
+.topic-card-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
 
 /* ---------- トピック詳細: 見出しまわり ---------- */
 .topic-hero-main { min-width: 0; }
 .topic-practice { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: 0 0 var(--sp-2); }
 .topic-practice .btn { flex: 0 1 auto; white-space: nowrap; gap: 6px; }
-.topic-practice-count { font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; }
+.topic-practice-count { font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (max-width: 479px) {
   .topic-practice .btn { flex: 1 1 140px; min-width: 0; padding-left: var(--sp-2); padding-right: var(--sp-2); }
 }
@@ -25,6 +52,23 @@
 .topic-rail-card { margin: 0; }
 .topic-rail-bar { margin-top: var(--sp-2); }
 .topic-rail-heading { padding: 0 0 var(--sp-2); }
+
+/* 作品で学ぶ(任意のコーナー)への控えめな入口 */
+.topic-works-link {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-6) 0 0;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--color-surface-muted);
+  box-shadow: none;
+  color: var(--color-text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+.topic-works-link > span { flex: 1 1 auto; min-width: 0; }
+@media (hover: hover) { .topic-works-link:hover { color: var(--color-primary); } }
 
 /* ---------- 基礎知識: 進捗・次の未学習・絞り込み ---------- */
 .basics-progress { display: flex; flex-direction: column; gap: var(--sp-3); margin: calc(var(--sp-1) * -1) 0 var(--sp-4); }
@@ -57,7 +101,7 @@
 .basics-section-head .chevron { display: inline-flex; color: var(--color-text-muted); transform: rotate(-90deg); transition: transform var(--dur-2) var(--ease-std); }
 .basics-section > details[open] > .basics-section-head .chevron { transform: none; }
 .basics-section-name { flex: 1 1 auto; min-width: 0; line-height: var(--lh-snug); }
-.basics-section-count { flex-shrink: 0; display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); font-weight: 500; color: var(--color-text-muted); white-space: nowrap; }
+.basics-section-count { flex-shrink: 0; display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); font-weight: 600; color: var(--color-text-muted); white-space: nowrap; }
 .basics-section-count.is-done { color: var(--color-success); font-weight: 700; }
 .basics-section > details > .basics-checklist { margin: var(--sp-1) 0 var(--sp-3); }
 .basics-section-head:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
@@ -70,36 +114,40 @@
   gap: 0;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-1);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 /* 区切り線は各項目の上辺に引き、1px 上へずらして先頭の線を枠の内側で隠す(「未学習のみ」で先頭が非表示でも線が二重にならない) */
 .basics-checklist > .basics-item { margin: -1px 0 0; border: 0; border-top: 1px solid var(--color-border); border-radius: 0; box-shadow: none; background: transparent; }
 .basics-checklist > li:not(.basics-item) { border: 0; }
 
-/* 学習済みチェックは開閉(summary)の外に置き、左の列に並べる */
-.basics-item {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  column-gap: var(--sp-1);
-  align-items: start;
-  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-1);
-}
-.basics-item > .basics-check-wrap { grid-column: 1; align-self: start; }
-.basics-item > details { grid-column: 2; min-width: 0; }
+/* 学習済みチェックは開閉(summary)の外に置き、見出しの左に重ねる。開いた本文はカードの幅いっぱいに使う */
+.basics-item { display: block; position: relative; padding: 0 var(--sp-3) 0 var(--sp-1); }
+.basics-item > .basics-check-wrap { position: absolute; left: var(--sp-1); top: 2px; z-index: 1; }
+.basics-item > details { min-width: 0; }
 .basics-item details > :not(summary) { margin-left: 0; }
-.basics-item summary { min-height: 44px; padding: var(--sp-2) 0; }
+.basics-item summary { min-height: 48px; padding: var(--sp-2) 0 var(--sp-2) 48px; }
+.basics-item .basics-name { font-size: var(--fs-base); font-weight: 600; color: var(--color-heading); line-height: var(--lh-snug); font-feature-settings: "palt"; }
 .basics-item.is-learned .basics-name { color: var(--color-text-muted); }
-.basics-item.highlighted { outline: 2px solid var(--color-primary); outline-offset: -2px; background: var(--color-primary-soft); transition: background var(--dur-3) var(--ease-out); }
-.basics-body { padding: 0 0 var(--sp-2); }
+.basics-item details[open] { padding-bottom: 0; }
+/* 直リンク・次へで開いた項目の目印(背景は塗らない: 根拠のチップや囲みが背景に溶けるため) */
+.basics-item.highlighted { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.basics-body { padding: var(--sp-1) var(--sp-2) var(--sp-4) var(--sp-3); }
+.basics-body > * { max-width: 40em; }
+.basics-body > .basics-actions { max-width: 32em; }
+.basics-item .basics-body .term-simple { margin-top: 0; }
 .basics-body .figure { margin-top: var(--sp-3); }
 
-/* 開いた項目の下部の操作 */
-.basics-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px dashed var(--color-border); }
-.basics-actions .btn { min-height: 40px; }
-.basics-actions .bookmark-toggle { color: var(--color-text-muted); }
+/* 開いた項目の下部の操作: 1段目「学習済みにして次へ」、2段目「確認問題」「ブックマーク」 */
+.basics-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); margin-top: var(--sp-4); }
+.basics-actions-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--sp-2); }
+.basics-actions-row:empty { display: none; }
+.basics-actions .btn { min-height: 44px; white-space: nowrap; }
+.basics-actions .basics-learn-btn.btn-lg { min-height: 52px; }
+.basics-actions .bookmark-toggle { color: var(--color-text); }
 .basics-actions .bookmark-toggle.is-bookmarked { color: var(--color-primary); }
+.basics-body > .item-meta { margin-top: var(--sp-3); }
 
 /* 「未学習のみ」: 学習済みの項目と、すべて学習済みの小見出しを隠す(表示中にチェックした項目はその場に残す) */
 .basics-only-unlearned .basics-item.is-learned:not(.keep-visible),
@@ -113,16 +161,47 @@
   margin: 0 0 var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   color: var(--color-primary);
-  font-weight: 500;
+  font-weight: 600;
   font-size: var(--fs-md);
   text-decoration: none;
 }
 .basics-card-hint > span { flex: 1 1 auto; min-width: 0; }
 .card-grid[hidden] { display: none; }
 
-/* 具体例: リンクを1行目、チェック2つを2行目に */
-.ep-link { flex: 1 0 100%; }
-.ep-check { flex: 0 0 auto; }
+/* ---------- 読む本文の部品(基礎知識・カードの裏・用語シート) ---------- */
+/* 深掘りの見出し(試験のポイントなど)のアイコン */
+.term-deep > strong:first-child { display: flex; align-items: center; gap: 4px; }
+.term-deep > strong:first-child .icon { flex-shrink: 0; }
+/* 根拠条文: 法令ごとのチップ */
+.law-ref { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 var(--sp-2); }
+.law-ref .icon { margin-top: 0; }
+.law-ref-label { flex-shrink: 0; }
+.law-chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+/* 法令上の決まりではない目安の注記 */
+.practice-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  margin: 0 0 var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-bg);
+  color: var(--color-text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+.practice-note .icon { flex-shrink: 0; margin-top: .15em; color: var(--color-warning); }
 
 /* ---------- 出典: 1件ずつ改行 ---------- */
 .term-citation { display: flex; align-items: flex-start; gap: var(--sp-1); }
@@ -138,6 +217,7 @@
 /* ---------- 用語フリップカード ---------- */
 /* 裏面の見出し(用語名) */
 .flip-back-title { margin: 0 0 var(--sp-2); font-size: var(--fs-md); font-weight: 700; line-height: var(--lh-snug); color: var(--color-primary); font-feature-settings: "palt"; overflow-wrap: anywhere; }
+.flip-card-back > .item-meta { margin-top: var(--sp-3); }
 
 /* 裏面の内容に合わせてカードの高さを伸ばす(今日の復習 .review-view は別の担当のため対象外) */
 :is(.glossary-view, .topic-detail-view, .bookmarks-view) .card-grid { align-items: start; }
@@ -148,9 +228,44 @@
 /* 見えていない面は重ねて置くだけ(高さはカードに合わせて切る) */
 :is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card:not(.flipped) .flip-card-back,
 :is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card.flipped .flip-card-front { position: absolute; inset: 0; overflow: hidden; }
+/* 止まっているカードは平面で描く(立体表示は cardUi.js がめくる間だけ .is-turning を付けて使う)。
+   一覧の全カードを立体のまま置くと、描画の層がカードの数だけ増えて重くなるため */
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card:not(.is-turning) { perspective: none; }
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card:not(.is-turning) .flip-card-inner { transform: none; transform-style: flat; transition: none; }
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card:not(.is-turning) :is(.flip-card-front, .flip-card-back) { transform: none; backface-visibility: visible; -webkit-backface-visibility: visible; }
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card:not(.is-turning):not(.flipped) .flip-card-back,
+:is(.glossary-view, .topic-detail-view, .bookmarks-view) .flip-card:not(.is-turning).flipped .flip-card-front { visibility: hidden; }
 
 /* ---------- 用語集 ---------- */
 .glossary-view .card-grid > .glossary-empty { grid-column: 1 / -1; }
+.gl-toolbar { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.gl-toolbar > * { min-width: 0; }
+.gl-search-row { display: flex; gap: var(--sp-2); align-items: stretch; }
+.gl-search-row .search-input { flex: 1 1 auto; min-width: 0; margin: 0; }
+.gl-filter-btn { flex: 0 0 auto; min-height: 44px; gap: 6px; padding: 0 var(--sp-3); }
+.gl-filter-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-fill);
+  color: var(--color-on-primary);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+}
+.gl-filter-badge[hidden] { display: none; }
+.gl-active-filters[hidden] { display: none; }
+.gl-active-chip { gap: 4px; }
+.gl-active-chip .icon { flex-shrink: 0; }
+.glossary-view .progress-text { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); }
+/* 絞り込みのシート */
+.gl-filter-label { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-heading); }
+.gl-filter-sheet .chip-row { flex-wrap: wrap; margin: 0 0 var(--sp-4); }
+.gl-filter-sheet [data-role="topic-chips"] { margin-bottom: 0; }
+.gl-filter-actions { display: grid; gap: var(--sp-1); }
+.gl-filter-actions .link-btn { justify-self: center; }
 
 /* ---------- 図解 ---------- */
 /* シートの見出しに図のタイトルが出るので、図の中のタイトルは出さない */
@@ -158,10 +273,12 @@
 .fig-sheet .figure { margin-top: 0; }
 .fig-sheet-link { margin-top: var(--sp-2); }
 .fig-help { margin-top: var(--sp-6); }
+/* 一覧の小さな図: 枠の大きさは決まっているので、中の描画を外へ広げない(後から描いても位置がずれない) */
+.figures-view .fig-preview { contain: strict; }
+.fig-detail .fig-report { justify-content: flex-end; margin-top: var(--sp-2); }
 
 /* ---------- 情報源 ---------- */
 .source-use { font-size: var(--fs-xs); color: var(--color-text-muted); }
 
 /* ---------- 文中のリンクボタン(行の高さを乱さない) ---------- */
 .view-desc .link-btn, .episode-empty-state .link-btn { display: inline; min-height: 0; vertical-align: baseline; }
-

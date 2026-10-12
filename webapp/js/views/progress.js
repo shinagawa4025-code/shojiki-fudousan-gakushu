@@ -1,6 +1,8 @@
 // 学習の進捗: 弱点分析(次にやること・苦手なポイント・分野別の習熟度)を先頭に、模擬試験の推移・
 // 学習のまとめ(学習済み・連続・復習)・記憶の定着度・学習カレンダー・トピック別
-// ルート: #progress / #progress/weak(弱点分析までスクロール)
+// 学ぶ目的が「暮らし・仕事」(learnerProfile の goal が life / work)で試験日の登録がない人には、宅建の分野ではなく
+// 「テーマ別の進捗」(気になるテーマごとの学習済み・次に読む基礎知識・○×)を先頭に出す(テーマ表示)
+// ルート: #progress / #progress/weak(弱点分析までスクロール) / #progress/exam(テーマ表示の人も試験の分野別の分析を見る)
 // 言葉の使い分け: 「学習済み」= 記憶済み(★)・学習済み(✓)にしたもの / 「着手」= 一度でも学習・出題したもの
 window.Views = window.Views || {};
 window.Views.progress = (function () {
@@ -10,9 +12,53 @@ window.Views.progress = (function () {
   const GUIDE_PCT = 70;
   const ACTION_LIMIT = 4;
   const WEAK_LIMIT = 8;
+  const THEME_WEAK_LIMIT = 5;
+  // 暮らし・取引のテーマの並び(トピック一覧の「暮らし・取引」と同じ順。まだないトピックは飛ばす)
+  const LIFE_ORDER = [`topicI`, `topicA`, `topicB`, `topicC`, `topicD`, `topicP`, `topicQ`, `topicE`, `topicH`, `topicG`, `topicF`];
+  // Stats.interestTopicIds がないときの予備(Stats.INTEREST_TOPICS と同じ対応)
+  const INTEREST_FALLBACK = {
+    rent: [`topicI`, `topicA`], buy: [`topicB`, `topicC`, `topicD`], sell: [`topicP`, `topicB`, `topicH`],
+    inherit: [`topicQ`, `topicH`, `topicE`], landlord: [`topicA`, `topicH`], trouble: [`topicG`, `topicF`],
+  };
 
   // 画面内で選んだ試験(再描画しても保持)
   let selectedType = null;
+
+  // ---- 学ぶ目的(learnerProfile。Stats.getProfile がない版では使わない) ----
+  function learnerProfile() {
+    try {
+      const p = window.Stats && typeof Stats.getProfile === `function` ? Stats.getProfile() : null;
+      return p && typeof p === `object` && typeof p.goal === `string` ? p : null;
+    } catch (e) { return null; }
+  }
+
+  function topicExists(id) {
+    return typeof id === `string` && !!AppIndex.topicsById && Object.prototype.hasOwnProperty.call(AppIndex.topicsById, id);
+  }
+
+  // 気になるテーマのトピック(選んだ順・重複なし)
+  function interestTopicIds(profile) {
+    let ids = [];
+    try {
+      if (typeof Stats.interestTopicIds === `function`) ids = Stats.interestTopicIds(profile) || [];
+      else {
+        (Array.isArray(profile.interests) ? profile.interests : []).forEach((k) => {
+          (INTEREST_FALLBACK[k] || []).forEach((id) => { if (!ids.includes(id)) ids.push(id); });
+        });
+      }
+    } catch (e) { ids = []; }
+    return (Array.isArray(ids) ? ids : []).filter((id, i, a) => topicExists(id) && a.indexOf(id) === i);
+  }
+
+  function hasExamTargets() {
+    try { return Stats.listTargets().length > 0; } catch (e) { return false; }
+  }
+
+  // テーマ表示にするか: 暮らし・仕事のために学ぶ人で、試験日を登録していない(#progress/exam のときは試験の表示)
+  function useThemeView(profile, param) {
+    if (param === `exam` || !profile) return false;
+    return (profile.goal === `life` || profile.goal === `work`) && !hasExamTargets();
+  }
 
   // ---- 試験の切替 ----
   function examTypeOptions() {
@@ -20,27 +66,34 @@ window.Views.progress = (function () {
     Stats.listTargets().forEach((t) => {
       if (Stats.examType(t.examTypeId) && !ids.includes(t.examTypeId)) ids.push(t.examTypeId);
     });
+    // 税理士試験の対策として学ぶ人は、試験日を登録していなくても税理士の分析を選べるようにする
+    const profile = learnerProfile();
+    if (profile && profile.goal === `zeirishi` && !ids.includes(`zeirishi`) && Stats.examType(`zeirishi`)) ids.push(`zeirishi`);
     if (!ids.includes(`takken`) && Stats.examType(`takken`)) ids.push(`takken`);
     return ids.map((id) => Stats.examType(id));
   }
 
   // 最初に表示する試験: ホーム(Analysis の既定)と同じく、主目標の試験に分野の区分があればそれ、なければ宅建士
+  // (主目標がなく、学ぶ目的が税理士試験なら税理士)
   function defaultType(options) {
     const ids = options.map((t) => t.id);
     if (selectedType && ids.includes(selectedType)) return selectedType;
     const p = Stats.primaryTarget();
     const pt = p ? Stats.examType(p.examTypeId) : null;
     if (pt && Array.isArray(pt.categories) && ids.includes(pt.id)) return pt.id;
+    const profile = learnerProfile();
+    if (!p && profile && profile.goal === `zeirishi` && ids.includes(`zeirishi`)) return `zeirishi`;
     if (ids.includes(`takken`)) return `takken`;
     return ids[0] || `takken`;
   }
 
   // ---- 学習のまとめ(1行) ----
-  function summaryCard() {
+  // scope: テーマ表示では、選んだテーマの項目だけで「学習済み」を数える({done, total, pct})
+  function summaryCard(scope) {
     const card = document.createElement(`section`);
     card.className = `prog-summary`;
     card.setAttribute(`aria-label`, `学習のまとめ`);
-    const ov = Stats.overall();
+    const ov = scope || Stats.overall();
     const current = Streak.getCurrentStreak();
     const longest = Streak.getLongestStreak();
     const due = Stats.dueReviewCount();
@@ -51,7 +104,7 @@ window.Views.progress = (function () {
           <span class="prog-strip-value num">${ov.pct}<small>%</small></span>
           <span class="prog-strip-sub num">${ov.done}/${ov.total}項目</span>
         </div>
-        <div class="prog-strip-item">
+        <div class="prog-strip-item is-streak">
           <span class="prog-strip-label">${ic(`flame`, 14)}連続学習</span>
           <span class="prog-strip-value num">${current}<small>日</small></span>
           <span class="prog-strip-sub num">最長 ${longest}日</span>
@@ -187,14 +240,14 @@ window.Views.progress = (function () {
     return parts.map((p) => `<span class="ana-seg">${esc(p)}</span>`).join(`・`);
   }
 
-  function weakHtml(items, typeId) {
+  // scope: ボタンに添える範囲の注記(宅建士以外の試験では「(全分野)」。テーマ表示では付けない)
+  function weakHtml(items, scope) {
     if (!items.length) {
       return `<p class="prog-note prog-note-flush">今のところ苦手なポイントはありません。クイズや○×で間違えた問題・用語がここに集まります。</p>`;
     }
     const hasTerm = items.some((w) => w.kind === `term`);
     const hasStmt = items.some((w) => w.kind === `statement`);
-    // 下のボタンは全分野が対象。宅建士以外ではそう明示する
-    const all = typeId !== `takken` ? `(全分野)` : ``;
+    const all = scope || ``;
     return `
       <ul class="ana-weak">
         ${items.map((w) => `
@@ -325,7 +378,7 @@ window.Views.progress = (function () {
             <h4 class="ana-sub">${ic(`flag`, 18)}次にやること</h4>
             ${actionsHtml(actions, snap, weak.length)}
             <h4 class="ana-sub ana-sub-weak">${ic(`alert`, 18)}苦手なポイント</h4>
-            ${weakHtml(weak, snap.examTypeId)}
+            ${weakHtml(weak, snap.examTypeId !== `takken` ? `(全分野)` : ``)}
           </div>
           <div class="ana-col">${catBlock}</div>
         </div>
@@ -607,7 +660,138 @@ window.Views.progress = (function () {
     return card;
   }
 
+  // ---- テーマ別の進捗(テーマ表示) ----
+  function readObj(key) {
+    const v = Storage.get(key, {});
+    return v && typeof v === `object` && !Array.isArray(v) ? v : {};
+  }
+
+  // 学習済み(記憶済み★・学習済み✓)か
+  function learnedFn() {
+    const known = readObj(`flashcards`);
+    const bp = readObj(`basicsProgress`);
+    return (id) => !!known[id] || !!(bp[id] && typeof bp[id] === `object` && bp[id].learned);
+  }
+
+  // トピックで次に読む基礎知識(トピック画面の並び順で、まだ学習済みにしていない最初のもの)
+  function nextBasic(topic, isLearned) {
+    const order = (AppIndex.topicBasicOrder && AppIndex.topicBasicOrder[topic.id]) || topic.basicIds || [];
+    const id = order.find((x) => AppIndex.termsById[x] && !isLearned(x));
+    return id ? AppIndex.termsById[id] : null;
+  }
+
+  // テーマの項目数と学習済みの数(Analysis の集計がなければ用語の一覧から数える)
+  function topicRowFor(snap, id, isLearned) {
+    const fromSnap = snap && Array.isArray(snap.topics) ? snap.topics.find((t) => t.id === id) : null;
+    if (fromSnap) return fromSnap;
+    const ids = (AppIndex.topicTermIndex && AppIndex.topicTermIndex[id]) || [];
+    return { id, total: ids.length, learned: ids.filter(isLearned).length, attempts: 0, accuracy: null };
+  }
+
+  // 選んだテーマの項目(重複なし)で数えた学習済み
+  function themeScope(ids, isLearned) {
+    const set = new Set();
+    ids.forEach((id) => ((AppIndex.topicTermIndex && AppIndex.topicTermIndex[id]) || []).forEach((t) => set.add(t)));
+    const total = set.size;
+    const done = Array.from(set).filter(isLearned).length;
+    return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
+  }
+
+  function themeRowHtml(topic, r, next, stmtCount) {
+    const pct = r.total ? Math.round(((r.learned || 0) / r.total) * 100) : 0;
+    const href = next ? `#topics/${encodeURIComponent(topic.id)}/${encodeURIComponent(next.id)}` : `#topics/${encodeURIComponent(topic.id)}`;
+    const ox = stmtCount >= 10 ? { nav: `#ox/topic/${encodeURIComponent(topic.id)}/10`, label: `○×で10問` }
+      : stmtCount > 0 ? { nav: `#ox/topic/${encodeURIComponent(topic.id)}`, label: `○×で腕試し` } : null;
+    return `
+      <li class="prog-theme">
+        <a class="prog-theme-main" href="${href}">
+          <span class="topic-icon">${ic(topic.icon || `book-open`)}</span>
+          <span class="prog-theme-body">
+            <span class="prog-theme-head"><span class="prog-theme-name">${esc(topic.name)}</span><span class="cat-bar-meta num"><span class="sr-only">学習済み</span>${r.learned || 0}/${r.total}</span></span>
+            <span class="progress-bar" aria-hidden="true"><span class="progress-bar-fill${pct === 100 ? ` fill-success` : ``}" style="width:${pct}%"></span></span>
+            <span class="prog-theme-next">${next ? `次に読む: <strong>${esc(next.name)}</strong>` : `基礎知識はすべて学習済みです`}</span>
+          </span>
+          ${ic(`chevron-right`, 18)}
+        </a>
+        <div class="prog-theme-meta">
+          ${r.attempts ? `<span class="num">正答率 <strong>${r.accuracy}%</strong><span class="text-muted">(${r.attempts}問)</span></span>` : `<span class="text-muted">まだ問題を解いていません</span>`}
+          ${ox ? `<a class="link-btn prog-theme-ox" href="${ox.nav}">${ox.label}${ic(`chevron-right`, 14)}</a>` : ``}
+        </div>
+      </li>`;
+  }
+
+  function themeCard(snap, ids, hasInterests, isLearned) {
+    const card = document.createElement(`section`);
+    card.className = `card span-all prog-theme-card`;
+    card.id = `progress-themes`;
+    card.setAttribute(`aria-labelledby`, `prog-theme-title`);
+    const byTopic = (snap && snap.ctx && snap.ctx.statementsByTopic) || {};
+    const rows = ids.map((id) => {
+      const topic = AppIndex.topicsById[id];
+      return themeRowHtml(topic, topicRowFor(snap, id, isLearned), nextBasic(topic, isLearned), byTopic[id] || 0);
+    });
+    card.innerHTML = `
+      <div class="recommend-head">
+        <h3 class="card-title prog-theme-title" id="prog-theme-title">${ic(`target`)}テーマ別の進捗</h3>
+        <a class="link-btn" href="#settings/profile">${hasInterests ? `テーマを変更` : `テーマを選ぶ`}</a>
+      </div>
+      <p class="prog-note">${hasInterests
+        ? `設定で選んだ「気になるテーマ」ごとの学習済みの数です。「次に読む」から続きを読めます。`
+        : `暮らし・取引の基本テーマごとの学習済みの数です。気になるテーマを選ぶと、そのテーマだけを表示します。`}</p>
+      <ul class="prog-theme-list">${rows.join(``)}</ul>`;
+    return card;
+  }
+
+  // 苦手なポイント(テーマ表示。分野で絞らず、間違えた問題・用語をそのまま出す)
+  function themeWeakCard(snap) {
+    const items = snap && Array.isArray(snap.weakPoints) ? snap.weakPoints.slice(0, THEME_WEAK_LIMIT) : [];
+    if (!items.length) return null;
+    const card = document.createElement(`section`);
+    card.className = `card prog-weak-card`;
+    card.id = `progress-weak`;
+    card.setAttribute(`aria-labelledby`, `prog-weak-title`);
+    card.innerHTML = `
+      <h3 class="card-title ana-title" id="prog-weak-title">${ic(`alert`)}苦手なポイント</h3>
+      <p class="prog-note">間違えた問題・用語です。タップすると解き直し・読み直しができます。</p>
+      ${weakHtml(items, ``)}`;
+    return card;
+  }
+
+  // テーマ表示の下: ほかの暮らし・取引のテーマと、試験向けの表示への入口
+  function otherThemesCard(excluded) {
+    const ids = LIFE_ORDER.filter((id) => topicExists(id) && !excluded.includes(id));
+    const card = document.createElement(`section`);
+    card.className = `card span-all prog-other-card`;
+    card.innerHTML = `
+      ${ids.length ? `<h3 class="card-title">ほかの暮らし・取引のテーマ</h3>` : ``}
+      <div data-role="list"></div>
+      <div class="prog-more-links">
+        <a class="link-btn" href="#topics">${ic(`book-open`, 16)}すべてのトピック(宅建士・税理士試験も)${ic(`chevron-right`, 16)}</a>
+        <a class="link-btn" href="#progress/exam">${ic(`chart`, 16)}試験の分野別の分析を見る${ic(`chevron-right`, 16)}</a>
+      </div>`;
+    if (ids.length) card.querySelector(`[data-role="list"]`).appendChild(topicListEl(ids));
+    return card;
+  }
+
   // ---- トピック別 ----
+  // only: このトピックだけを出す(テーマ表示の「ほかのテーマ」)
+  function topicListEl(only) {
+    const wrapEl = document.createElement(`div`);
+    wrapEl.className = `prog-topic-list`;
+    const rows = Stats.byTopic().filter((r) => !only || only.includes(r.topic.id));
+    if (only) rows.sort((a, b) => only.indexOf(a.topic.id) - only.indexOf(b.topic.id));
+    wrapEl.innerHTML = rows.map((r) => `
+          <a class="prog-topic" href="#topics/${r.topic.id}">
+            <span class="topic-icon">${ic(r.topic.icon || `book-open`)}</span>
+            <span class="prog-topic-main">
+              <span class="prog-topic-head"><span class="prog-topic-name">${esc(r.topic.name)}</span><span class="cat-bar-meta">${r.done}/${r.total}</span></span>
+              <span class="progress-bar"><span class="progress-bar-fill${r.pct === 100 ? ` fill-success` : ``}" style="width:${r.pct}%"></span></span>
+            </span>
+            ${ic(`chevron-right`, 18)}
+          </a>`).join(``);
+    return wrapEl;
+  }
+
   function topicCard() {
     const card = document.createElement(`section`);
     card.className = `card span-all`;
@@ -635,15 +819,36 @@ window.Views.progress = (function () {
     return p;
   }
 
+  // テーマ表示: テーマ別の進捗 → まとめ → 苦手なポイント → 定着度 → カレンダー → (模擬試験を受けていれば)推移 → ほかのテーマ
+  function renderThemes(wrap, grid, profile, param) {
+    const chosen = interestTopicIds(profile);
+    const ids = chosen.length ? chosen : LIFE_ORDER.filter(topicExists);
+    const isLearned = learnedFn();
+    const snap = safeAnalyze(`other`);
+    const theme = themeCard(snap, ids, chosen.length > 0, isLearned);
+    const weak = themeWeakCard(snap);
+    const cards = [theme, summaryCard(themeScope(ids, isLearned)), weak, srsCard(), heatmapCard()];
+    if (examPoints().length) cards.push(examCard());
+    cards.push(otherThemesCard(chosen.length ? ids : LIFE_ORDER), dataNote());
+    cards.filter(Boolean).forEach((el) => grid.appendChild(el));
+    if (param === `weak`) {
+      const target = weak || theme;
+      requestAnimationFrame(() => target.scrollIntoView({ block: `start`, behavior: `auto` }));
+    }
+  }
+
   function render(root, param) {
+    const profile = learnerProfile();
+    const themes = useThemeView(profile, param);
     const wrap = document.createElement(`div`);
-    wrap.className = `view progress-view`;
+    wrap.className = `view progress-view${themes ? ` is-themes` : ``}`;
     wrap.innerHTML = `
       <h2>学習の進捗</h2>
-      <p class="view-desc">分野ごとの得意・苦手と、次にやることを確認できます。</p>
+      <p class="view-desc">${themes ? `気になるテーマごとの進み具合と、次に読むところを確認できます。` : `分野ごとの得意・苦手と、次にやることを確認できます。`}</p>
       <div class="prog-grid" data-role="grid"></div>`;
     root.appendChild(wrap);
     const grid = wrap.querySelector(`[data-role="grid"]`);
+    if (themes) { renderThemes(wrap, grid, profile, param); return; }
     const state = createTypeState();
     const analysis = analysisCard(state);
     // 並び: 弱点分析 → 模擬試験の推移 → まとめ → 定着度 → カレンダー → トピック別

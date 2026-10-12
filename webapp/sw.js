@@ -1,13 +1,24 @@
-// Service Worker: オフライン閲覧対応(同一オリジンのみプリキャッシュ+ネットワークフォールバック)
-// ファイルを追加したら PRECACHE_URLS に追記し、デプロイ毎に CACHE_NAME を上げること
-// (1件でも存在しないURLがあるとインストールが失敗し、古いキャッシュのままになる)
-const CACHE_NAME = `shojiki-gakushu-v9`;
+// Service Worker: オフラインで使えるように、アプリ本体を端末に保存(プリキャッシュ)して、そこから返す
+//
+// 公開時は GitHub Actions(tools/build.js)が、このファイルを元に次の3つを自動で書き換えた sw.js を作る:
+//   CACHE_NAME(内容のハッシュ)・BUILD_ID(index.html と組で確かめる目印)・PRECACHE_URLS(まとめたファイルの一覧)
+// 下の一覧は、ビルドに失敗して元のファイルのまま公開するとき(とローカルでの確認)に使う。
+// ファイルを追加・削除したら、この一覧も直す(node tools/check.js webapp が index.html との食い違いを知らせる)。
+//
+// 方針(A4 S4):
+// - 保存済みのファイルは保存済みのものだけを返す(裏での取り直しはしない)。更新は新しい sw.js が来たときにまとめて行う
+// - インストールは全部そろったときだけ成功させる(途中まで作ったキャッシュは残さない。古い版のまま動き続ける)
+// - 消すのは自分の接頭辞(shojiki-gakushu-)のキャッシュだけ(同じ github.io の別のアプリのキャッシュは消さない)
+// - ローカル開発(localhost・127.0.0.1 で、ビルドしていないこのファイルのまま)では、編集がすぐ反映されるようネットワーク優先
+const CACHE_PREFIX = `shojiki-gakushu-`;
+const CACHE_NAME = `shojiki-gakushu-v10`;
+const BUILD_ID = ``;
 
 const PRECACHE_URLS = [
-  `./`,
   `./index.html`,
   `./manifest.json`,
   `./css/style.css`,
+  `./css/shell.css`,
   `./css/calculators.css`,
   `./css/exam.css`,
   `./css/features.css`,
@@ -15,6 +26,7 @@ const PRECACHE_URLS = [
   `./css/practice.css`,
   `./css/home.css`,
   `./css/learning.css`,
+  `./js/siteConfig.js`,
   `./data/episodes.js`,
   `./data/specials.js`,
   `./data/terms.js`,
@@ -24,6 +36,7 @@ const PRECACHE_URLS = [
   `./data/quiz.js`,
   `./data/sources.js`,
   `./data/exams.js`,
+  `./data/changelog.js`,
   `./data/contentPack.js`,
   `./data/content/kenri.js`,
   `./data/content/horei.js`,
@@ -32,10 +45,19 @@ const PRECACHE_URLS = [
   `./data/content/shohizei.js`,
   `./data/content/quizmc_a.js`,
   `./data/content/quizmc_b.js`,
+  `./data/content/q2_gyoho_a.js`,
+  `./data/content/q2_gyoho_b.js`,
+  `./data/content/q2_kenri.js`,
+  `./data/content/q2_horei.js`,
+  `./data/content/q2_zei_menjo.js`,
+  `./data/content/q2_life.js`,
+  `./data/content/q2_fix.js`,
   `./js/storage.js`,
   `./js/dates.js`,
   `./js/icons.js`,
   `./js/ui.js`,
+  `./js/errorScreen.js`,
+  `./js/report.js`,
   `./js/dataIndex.js`,
   `./js/search.js`,
   `./js/router.js`,
@@ -52,7 +74,6 @@ const PRECACHE_URLS = [
   `./js/diagrams.js`,
   `./js/cardUi.js`,
   `./js/onboarding.js`,
-  `./js/app.js`,
   `./js/views/home.js`,
   `./js/views/topics.js`,
   `./js/views/glossary.js`,
@@ -63,35 +84,53 @@ const PRECACHE_URLS = [
   `./js/views/exam.js`,
   `./js/views/ox.js`,
   `./js/views/progress.js`,
-  `./js/views/summary.js`,
+  `./js/views/works.js`,
   `./js/views/calculators.js`,
   `./js/views/sources.js`,
+  `./js/views/about.js`,
   `./js/views/settings.js`,
   `./js/views/more.js`,
+  `./js/app.js`,
   `./icons/logo.svg`,
   `./icons/icon-192.png`,
-  `./icons/icon-512.png`,
-  `./icons/icon-maskable-512.png`,
   `./icons/apple-touch-icon.png`,
 ];
 
+// ファイル名に内容のハッシュが入ったもの(assets/app.0123456789.js など)は中身が変わらないので、ブラウザのキャッシュを使ってよい
+const HASHED = /\/assets\/[^/]+\.[0-9a-f]{10}\.(?:js|css)$/;
+const DEV = !BUILD_ID && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(self.location.hostname);
+
 self.addEventListener(`install`, (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => Promise.all(
-        PRECACHE_URLS.map((url) => fetch(url, { cache: `reload` }).then((res) => {
-          if (!res.ok) throw new Error(`precache failed: ${url} (${res.status})`);
-          return cache.put(url, res);
-        }))
-      ))
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil((async () => {
+    // no-cache = ブラウザのキャッシュを使う前にサーバーへ確認する(変わっていなければ 304 で中身は送られない)
+    const get = async (url) => {
+      const res = await fetch(url, { cache: HASHED.test(new URL(url, self.location).pathname) ? `default` : `no-cache` });
+      if (!res.ok) throw new Error(`precache failed: ${url} (${res.status})`);
+      return [url, res];
+    };
+    // 1) 先に index.html を取り、この sw.js と同じビルドのものか確かめる
+    //    (配信の切り替わり途中で古い index.html を掴んだときは、大きなファイルを取る前にやめて次の起動でやり直す)
+    const shell = await get(`./index.html`);
+    if (BUILD_ID && !(await shell[1].clone().text()).includes(BUILD_ID)) throw new Error(`index.html does not match build ${BUILD_ID}`);
+    // 2) 残りを全部取得してから保存する(1件でも失敗したら何も保存しない)
+    const responses = [shell, ...(await Promise.all(PRECACHE_URLS.filter((url) => url !== `./index.html`).map(get)))];
+    // 3) 保存。途中で失敗したら作りかけのキャッシュを消す(端末に取り残されないように)
+    const cache = await caches.open(CACHE_NAME);
+    try {
+      await Promise.all(responses.map(([url, res]) => cache.put(url, res)));
+    } catch (err) {
+      await caches.delete(CACHE_NAME);
+      throw err;
+    }
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener(`activate`, (event) => {
   event.waitUntil(
     caches.keys()
-      .then((names) => Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))))
+      // 自分の古い版だけを消す(同じ github.io の別アプリのキャッシュは消さない)
+      .then((names) => Promise.all(names.filter((n) => n.startsWith(CACHE_PREFIX) && n !== CACHE_NAME).map((n) => caches.delete(n))))
       .then(() => self.clients.claim())
   );
 });
@@ -101,17 +140,35 @@ self.addEventListener(`fetch`, (event) => {
   if (req.method !== `GET`) return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-
-  event.respondWith(
-    caches.match(req, { ignoreSearch: true }).then((cached) => {
-      const networkFetch = fetch(req).then((res) => {
-        if (res && res.status === 200) {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-        }
-        return res;
-      }).catch(() => cached);
-      return cached || networkFetch;
-    })
-  );
+  const scope = new URL(self.registration.scope).pathname;
+  // アプリの入口(/ と /index.html。?utm=… などが付いていても)を開くときは、保存済みの index.html
+  const isShell = req.mode === `navigate` && (url.pathname === scope || url.pathname === `${scope}index.html`);
+  event.respondWith((async () => {
+    if (DEV) {
+      // ローカル開発: ネットワーク優先(つながらないときだけ保存済みのもの)
+      try { return await fetch(req); } catch (err) {
+        const hit = await caches.match(isShell ? `./index.html` : req, { ignoreSearch: true });
+        if (hit) return hit;
+        throw err;
+      }
+    }
+    const cache = await caches.open(CACHE_NAME);
+    if (isShell) {
+      const shell = await cache.match(`./index.html`);
+      if (shell) return shell;
+    }
+    // 保存済みのファイルは保存済みのものだけを返す(裏での取り直しはしない)
+    const hit = await cache.match(req, { ignoreSearch: true });
+    if (hit) return hit;
+    try {
+      return await fetch(req);
+    } catch (err) {
+      // オフラインで、アプリの中の別のページを開いたとき
+      if (req.mode === `navigate`) {
+        const shell = await cache.match(`./index.html`);
+        if (shell) return shell;
+      }
+      throw err;
+    }
+  })());
 });

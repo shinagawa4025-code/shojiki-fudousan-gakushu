@@ -40,6 +40,8 @@ window.Views.bookmarks = (function () {
     // 回答・裏返しでカードの背が伸びるため、戻る・再読み込み・種類の切り替えのあとも同じ表示にする(履歴エントリごとに保存)
     const hs = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
     const saved = Storage.isPlainObject(hs.bState) ? hs.bState : null;
+    // 種類の切り替えもこの履歴エントリの表示に合わせる(再読み込みで「すべて」に戻ると、保存した位置と内容がずれるため)
+    if (saved && [`all`, `term`, `quiz`].includes(saved.filter)) filter = saved.filter;
     const answeredMap = {};
     if (saved && Storage.isPlainObject(saved.answered)) {
       Object.keys(saved.answered).forEach((id) => {
@@ -48,6 +50,10 @@ window.Views.bookmarks = (function () {
       });
     }
     const flippedIds = new Set(saved && Array.isArray(saved.flipped) ? saved.flipped.filter((id) => typeof id === `string`) : []);
+    // 表示している件数(「もっと見る」で増やした分。戻ったときは最初からその件数を描く)
+    const savedShown = saved && Storage.isPlainObject(saved.shown) ? saved.shown : {};
+    let initialShown = { term: Number(savedShown.term) || 0, quiz: Number(savedShown.quiz) || 0 };
+    const pagers = {};
     const myHash = location.hash;
     let saveTimer = null;
     function saveState() {
@@ -57,9 +63,39 @@ window.Views.bookmarks = (function () {
         if (location.hash !== myHash || !document.body.contains(wrap)) return;
         try {
           const st = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
-          window.history.replaceState(Object.assign({}, st, { bState: { answered: Object.assign({}, answeredMap), flipped: Array.from(flippedIds) } }), ``);
+          const shown = { term: pagers.term ? pagers.term.shown() : 0, quiz: pagers.quiz ? pagers.quiz.shown() : 0 };
+          window.history.replaceState(Object.assign({}, st, { bState: { answered: Object.assign({}, answeredMap), flipped: Array.from(flippedIds), shown, filter } }), ``);
         } catch (e) { /* 履歴の保存に失敗しても表示には影響しない */ }
       }, 120);
+    }
+
+    // 件数の多い一覧は一定数ずつ表示して「もっと見る」で末尾に追加する(作り直さないのでスクロール位置が飛ばない)
+    function renderPaged(container, items, build, page, unit, initial) {
+      let shown = 0;
+      let btn = null;
+      function more(count) {
+        const next = Math.min(items.length, shown + (count || page));
+        const fragment = document.createDocumentFragment();
+        items.slice(shown, next).forEach((it) => { const el = build(it); if (el) fragment.appendChild(el); });
+        container.appendChild(fragment);
+        shown = next;
+        if (shown >= items.length) { if (btn) { btn.remove(); btn = null; } return; }
+        if (!btn) {
+          btn = document.createElement(`button`);
+          btn.type = `button`;
+          btn.className = `btn load-more-btn`;
+          btn.addEventListener(`click`, () => {
+            more();
+            // 足した問題の前の回答済みのカードにも「次の問題」を付ける
+            if (window.Views.quiz && Views.quiz.ensureNextButtons) Views.quiz.ensureNextButtons(container);
+            saveState();
+          });
+          container.insertAdjacentElement(`afterend`, btn);
+        }
+        btn.textContent = `もっと見る(残り${items.length - shown}${unit})`;
+      }
+      more(Math.max(page, Number(initial) || 0));
+      return { shown: () => shown };
     }
     function onResult(result, card, picked, restored) {
       if (restored) return;
@@ -80,8 +116,10 @@ window.Views.bookmarks = (function () {
       filterEl.hidden = !(data.terms.length + data.quizzes.length);
       filterEl.innerHTML = opts.map((o) => `<button type="button" class="segmented-item" data-filter="${o.id}" aria-pressed="${o.id === filter}">${o.label}<span class="bm-count num">${o.n}</span></button>`).join(``);
       filterEl.querySelectorAll(`[data-filter]`).forEach((b) => b.addEventListener(`click`, () => {
+        if (filter === b.dataset.filter) return;
         filter = b.dataset.filter;
         paint();
+        saveState();
       }));
     }
 
@@ -93,10 +131,37 @@ window.Views.bookmarks = (function () {
       return sec;
     }
 
+    // 種類ごとの一覧を「もっと見る」付きで作る(戻ったとき以外は最初のページから)
+    // 「すべて」で用語の下に並ぶ問題の欄は、初めて開いたときは画面に近づいてから作る
+    // (近づいたとき=まだ画面の下の外なので、作っても見えている内容は動かない。戻ってきたときは位置を戻せるよう最初から作る)
+    const returning = Number(hs.y) > 0;
+    let nearObserver = null;
+    function pagedSection(kind, title, icon, count, list, items, build, page, unit, lazy) {
+      const holder = document.createElement(`div`);
+      holder.appendChild(list);
+      const target = filter === `all` ? section(title, icon, count, holder) : holder;
+      body.appendChild(target);
+      const initial = initialShown[kind];
+      const make = () => { pagers[kind] = renderPaged(list, items, build, page, unit, initial); };
+      if (!lazy || returning || initial > 0 || !(`IntersectionObserver` in window)) { make(); return; }
+      const io = new IntersectionObserver((entries) => {
+        if (!entries.some((en) => en.isIntersecting)) return;
+        io.disconnect();
+        if (!list.isConnected) return;
+        make();
+        saveState();
+      }, { rootMargin: `1200px 0px` });
+      io.observe(list);
+      nearObserver = io;
+    }
+
     function paint() {
       const data = collect();
       paintFilter(data);
       body.innerHTML = ``;
+      pagers.term = null;
+      pagers.quiz = null;
+      if (nearObserver) { nearObserver.disconnect(); nearObserver = null; }
       const total = data.terms.length + data.quizzes.length;
       if (!total) {
         body.appendChild(UI.emptyState({
@@ -120,8 +185,9 @@ window.Views.bookmarks = (function () {
           const known = obj(`flashcards`);
           const grid = document.createElement(`div`);
           grid.className = `card-grid`;
-          data.terms.forEach(({ item }) => grid.appendChild(CardUi.buildFlipCard(item, { known, flipped: flippedIds.has(item.id), onFlip })));
-          body.appendChild(filter === `all` ? section(`用語`, `layers`, data.terms.length, grid) : grid);
+          // 用語カードは軽いので30枚ずつ、問題カードは1枚が大きいので10問ずつ
+          pagedSection(`term`, `用語`, `layers`, data.terms.length, grid, data.terms,
+            ({ item }) => CardUi.buildFlipCard(item, { known, bookmarked: true, flipped: flippedIds.has(item.id), onFlip }), 30, `語`);
         } else if (filter === `term`) {
           body.appendChild(UI.emptyState({ icon: `layers`, title: `保存した用語はありません`, body: `用語カードの右上にあるしおりマークで保存できます。`, cta: { label: `用語集を見る`, nav: `#glossary` } }));
         }
@@ -131,12 +197,14 @@ window.Views.bookmarks = (function () {
         if (data.quizzes.length) {
           const list = document.createElement(`div`);
           list.className = `quiz-list`;
-          data.quizzes.forEach(({ item }) => list.appendChild(Views.quiz.buildFixedCard(item, { restoreChoice: answeredMap[item.id], onResult })));
-          body.appendChild(filter === `all` ? section(`問題`, `pencil-check`, data.quizzes.length, list) : list);
+          pagedSection(`quiz`, `問題`, `pencil-check`, data.quizzes.length, list, data.quizzes,
+            ({ item }) => Views.quiz.buildFixedCard(item, { restoreChoice: answeredMap[item.id], onResult }), 10, `問`, filter === `all` && data.terms.length > 0);
         } else if (filter === `quiz`) {
           body.appendChild(UI.emptyState({ icon: `pencil-check`, title: `保存した問題はありません`, body: `確認問題のカードの右上にあるしおりマークで保存できます。`, cta: { label: `確認問題を見る`, nav: `#quiz` } }));
         }
       }
+      // 保存した件数で描くのは戻ってきた最初の1回だけ(種類の切り替えなどで作り直すときは最初のページから)
+      initialShown = { term: 0, quiz: 0 };
     }
 
     // しおりを外したカードだけを一覧から外す(他のカードの裏返し・回答状態を保つため、全体は作り直さない)
@@ -170,10 +238,15 @@ window.Views.bookmarks = (function () {
         btn.innerHTML = UI.icon(on ? `bookmark-fill` : `bookmark`, { size: 20 });
       });
     }
+    // 一覧を作り直すときも、「もっと見る」で広げた件数は保つ(縮むと位置が飛ぶため)
+    function repaintKeep() {
+      initialShown = { term: pagers.term ? pagers.term.shown() : 0, quiz: pagers.quiz ? pagers.quiz.shown() : 0 };
+      paint();
+    }
     function onChange(e) {
       if (!document.body.contains(wrap)) { detach(); return; }
       const detail = (e && e.detail) || {};
-      if (!detail.key) { paint(); return; }
+      if (!detail.key) { repaintKeep(); return; }
       if (detail.on === false) {
         const el = cardFor(detail.key);
         if (el) {
@@ -183,7 +256,7 @@ window.Views.bookmarks = (function () {
         const data = refreshCounts();
         // 種類ごとの一覧が空になったら空表示に切り替える(失うものがないので作り直してよい)
         const kind = detail.key.slice(0, detail.key.indexOf(`:`));
-        if (!(data.terms.length + data.quizzes.length) || (kind === `term` && !data.terms.length) || (kind === `quiz` && !data.quizzes.length)) paint();
+        if (!(data.terms.length + data.quizzes.length) || (kind === `term` && !data.terms.length) || (kind === `quiz` && !data.quizzes.length)) repaintKeep();
         UI.toast(`ブックマークを外しました`, `default`, {
           action: { label: `元に戻す`, onClick: () => { if (!Bookmarks.has(detail.key)) Bookmarks.restore(detail.key, detail.prevAt); } },
           duration: 4000,
@@ -196,7 +269,7 @@ window.Views.bookmarks = (function () {
           paintBookmarkBtn(r.el, true);
           refreshCounts();
         } else {
-          paint();
+          repaintKeep();
         }
       }
     }
@@ -204,6 +277,7 @@ window.Views.bookmarks = (function () {
       if (!document.body.contains(wrap)) detach();
     }
     function detach() {
+      if (nearObserver) { nearObserver.disconnect(); nearObserver = null; }
       window.removeEventListener(`bookmarks:change`, onChange);
       window.removeEventListener(`hashchange`, onHash);
     }
@@ -211,6 +285,8 @@ window.Views.bookmarks = (function () {
     window.addEventListener(`hashchange`, onHash);
 
     paint();
+    // 前に選んだ種類(用語・問題)で開いたときは、この履歴エントリにも残す(再読み込みで同じ表示に戻すため)
+    if (filter !== `all` && !(saved && saved.filter === filter)) saveState();
   }
 
   return { render };

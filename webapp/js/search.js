@@ -1,11 +1,13 @@
-// サイト全体検索: 画面/トピック/用語/基礎知識/図解/動画/クイズ/情報源を横断検索
+// サイト全体検索: 画面/トピック/用語/基礎知識/図解/クイズ/情報源/作品で学ぶ(動画)を横断検索
 // 全角・半角(NFKC)とカタカナ・ひらがなの違い、中黒・空白の有無(クーリング・オフ = クーリングオフ)を吸収して照合する
 window.GlobalSearch = (function () {
   let index = null;
   let indexKey = null;
 
-  // 同じ順位のときの並び: 学ぶ内容(画面・トピック・基礎知識・用語) > 図解 > クイズ > 動画・情報源
-  const TYPE_ORDER = { 画面: 0, トピック: 0, 基礎知識: 0, 用語: 0, 図解: 1, クイズ: 2, 動画: 3, 情報源: 3 };
+  // 同じ順位のときの並び: 学ぶ内容(画面・トピック・基礎知識・用語) > 図解 > クイズ > 情報源
+  const TYPE_ORDER = { 画面: 0, トピック: 0, 基礎知識: 0, 用語: 0, 図解: 1, クイズ: 2, 情報源: 3 };
+  // 任意のコーナー(作品で学ぶ)の動画は、一致の度合いにかかわらず最後に出す
+  const LAST_TYPES = new Set([`作品で学ぶ`]);
 
   // 画面そのものを探せるようにする(「バックアップ」で設定、「模試」で模擬試験など)
   const SCREEN_KEYWORDS = {
@@ -15,7 +17,8 @@ window.GlobalSearch = (function () {
     glossary: { desc: `用語カードの一覧`, words: [`用語集`, `用語カード`, `フラッシュカード`] },
     figures: { desc: `図で理解する重要論点`, words: [`図解`, `図`] },
     bookmarks: { desc: `保存した用語・問題`, words: [`ブックマーク`, `保存`, `お気に入り`] },
-    summary: { desc: `「正直不動産」のエピソード一覧`, words: [`動画`, `エピソード`, `正直不動産`] },
+    works: { desc: `『正直不動産』の動画をテーマ別に紹介(任意コーナー)`, words: [`作品`, `動画`, `エピソード`, `正直不動産`, `ドラマ`, `マンガ`] },
+    about: { desc: `運営者・プライバシー・免責事項・更新履歴`, words: [`このアプリについて`, `運営者`, `プライバシー`, `免責`, `更新履歴`, `お問い合わせ`, `誤り`, `報告`] },
     review: { desc: `間隔反復で用語を復習する`, words: [`復習`, `今日の復習`, `間隔反復`, `SRS`] },
     quiz: { desc: `確認問題・4択・自動生成クイズ`, words: [`クイズ`, `4択`, `確認問題`, `問題`] },
     ox: { desc: `1問数秒の○×問題。間違えた文だけ解き直せる`, words: [`一問一答`, `○×`, `まるばつ`, `OX`, `マルバツ`] },
@@ -24,6 +27,9 @@ window.GlobalSearch = (function () {
     sources: { desc: `公的機関の一次情報・出典`, words: [`情報源`, `出典`, `一次情報`] },
     settings: { desc: `試験日・今日の復習・テーマ・読み上げ・バックアップ`, words: [`設定`, `バックアップ`, `エクスポート`, `インポート`, `復元`, `テーマ`, `ダークモード`, `試験日`, `目標`, `読み上げ`, `新しい用語の数`] },
   };
+
+  // メニュー(Nav.ITEMS)に無いときに使う画面名
+  const SCREEN_FALLBACK_LABELS = { works: `作品で学ぶ`, about: `このアプリについて` };
 
   function norm(s) {
     return String(s || ``)
@@ -85,13 +91,21 @@ window.GlobalSearch = (function () {
 
   function buildIndex(primaryId) {
     const idx = [];
+    const screens = new Set();
     if (window.Nav && Array.isArray(Nav.ITEMS)) {
       Nav.ITEMS.forEach((it) => {
         const k = SCREEN_KEYWORDS[it.view];
-        if (!k) return;
+        if (!k || screens.has(it.view)) return;
+        screens.add(it.view);
         idx.push(entry(`画面`, it.label, k.desc, `#${it.view}`, k.words));
       });
     }
+    // メニューに項目が無い画面も探せるようにする
+    Object.keys(SCREEN_FALLBACK_LABELS).forEach((view) => {
+      if (screens.has(view) || !SCREEN_KEYWORDS[view]) return;
+      const k = SCREEN_KEYWORDS[view];
+      idx.push(entry(`画面`, SCREEN_FALLBACK_LABELS[view], k.desc, `#${view}`, k.words));
+    });
     window.APP_DATA.topics.forEach((t) => {
       idx.push(entry(`トピック`, t.name, t.description, `#topics/${t.id}`));
     });
@@ -108,7 +122,7 @@ window.GlobalSearch = (function () {
       });
     }
     window.APP_DATA.episodes.forEach((e) => {
-      idx.push(entry(`動画`, `${e.displayLabel} ${e.theme}`, e.summary, `#summary/${e.id}`, [], (e.terms || []).map((x) => x.term).join(` `)));
+      idx.push(entry(`作品で学ぶ`, `${e.displayLabel} ${e.theme}`, e.summary, `#works/${e.id}`, [], (e.terms || []).map((x) => x.term).join(` `)));
     });
     window.APP_DATA.quiz.forEach((q) => {
       idx.push(entry(`クイズ`, q.question, q.answer || q.explanation || ``, `#quiz/q/${q.id}`, [], (q.choices || []).join(` `)));
@@ -131,6 +145,10 @@ window.GlobalSearch = (function () {
     return item.type in TYPE_ORDER ? TYPE_ORDER[item.type] : 4;
   }
 
+  function isLast(item) {
+    return LAST_TYPES.has(item.type) ? 1 : 0;
+  }
+
   function search(query, limit) {
     // 主目標の試験が変わったら、基礎知識の案内先が変わるため索引を作り直す
     const key = primaryTypeId();
@@ -140,7 +158,7 @@ window.GlobalSearch = (function () {
     return index
       .filter((item) => item.haystack.includes(q))
       .map((item) => ({ item, rank: rankOf(item, q) }))
-      .sort((a, b) => (a.rank - b.rank) || (typeOrder(a.item) - typeOrder(b.item)) || (a.item.title.length - b.item.title.length))
+      .sort((a, b) => (isLast(a.item) - isLast(b.item)) || (a.rank - b.rank) || (typeOrder(a.item) - typeOrder(b.item)) || (a.item.title.length - b.item.title.length))
       .slice(0, limit || 8)
       .map((e) => e.item);
   }

@@ -518,7 +518,9 @@ window.Views.calculators = (function () {
   // ===== 表示用ヘルパー =====
 
   function yen(n) {
-    return Math.round(n).toLocaleString(`ja-JP`);
+    // 浮動小数の誤差でわずかにマイナスになった値(例: 利息 −0.0000001円)を「-0円」と出さない
+    const v = Math.round(n);
+    return (v === 0 ? 0 : v).toLocaleString(`ja-JP`);
   }
   function pct(rate) {
     return `${parseFloat((rate * 100).toFixed(4))}%`;
@@ -684,7 +686,7 @@ window.Views.calculators = (function () {
   // 計算式の途中の値: 1円未満があれば小数第2位まで(四捨五入)示す
   function yen2(n) {
     const r = Math.round(n * 100) / 100;
-    return r.toLocaleString(`ja-JP`, { maximumFractionDigits: 2 });
+    return (r === 0 ? 0 : r).toLocaleString(`ja-JP`, { maximumFractionDigits: 2 });
   }
   function allFinite(list) {
     return list.every((n) => typeof n === `number` && isFinite(n));
@@ -697,7 +699,9 @@ window.Views.calculators = (function () {
   }
 
   // ===== 計算機の定義 =====
-  const ERA_OPTIONS = USED_ERAS.map((e) => [e.id, `${e.label}: ${(e.ded / 10000).toLocaleString(`ja-JP`)}万円`]);
+  // 起動時に toLocaleString を呼ぶと重いため、3桁区切りは自前で付ける(表示は同じ: 1,200 / 1,000 / 450 …)
+  const comma = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, `,`);
+  const ERA_OPTIONS = USED_ERAS.map((e) => [e.id, `${e.label}: ${comma(e.ded / 10000)}万円`]);
   const HINT_VALUE = `固定資産税の課税明細書の「価格」欄`;
   const HINT_TAKUCHI = `住宅・マンションの敷地なら通常該当`;
 
@@ -1126,6 +1130,8 @@ window.Views.calculators = (function () {
       compute: (s) => transfer(s),
       summary: (v) => `譲渡所得税(住民税込み) ${yen(v.tax)}円`,
       render: (v, s, today) => {
+        // ほかの計算機と同じく、主な入力が空(0)のときは「税額0円」ではなく入力を促す
+        if (!(v.transferPrice > 0)) return promptHtml(`譲渡価額を入力してください。`);
         const keys = [v.isLong ? `trLong` : `trShort`];
         if (v.estimatedAcquisition) keys.push(`trEstimatedCost`);
         if (v.useSpecial) keys.push(`trSpecial3000`);
@@ -1274,6 +1280,10 @@ window.Views.calculators = (function () {
   function parseInput(v, unit) {
     return checkInput(v, unit).value;
   }
+  // 入力の上限(どの単位でも 100億 以上は桁の誤り。表の数字が画面からはみ出したり、1e+23 のような表示になったりしないように)
+  const MAX_INPUT = 1e10;
+  const ERR_NOT_NUMBER = `数字だけで入力してください`;
+  const ERR_TOO_LARGE = `値が大きすぎます。桁数を確認してください`;
 
   function taxSplitHtml() {
     return `<span class="calc-helper">
@@ -1297,7 +1307,7 @@ window.Views.calculators = (function () {
     const desc = [hintId, convId].filter(Boolean).join(` `);
     return `<div class="calc-field" data-field="${f.key}"><label class="calc-field-label" for="${fid}">${f.label}<span class="calc-field-unit">(${f.unit})</span></label>
       <span class="calc-input-wrap"><input id="${fid}" type="text" inputmode="${f.mode || `numeric`}" autocomplete="off" data-key="${f.key}" data-desc="${desc}" value="${UI.escapeHtml(String(val))}"${f.value === `` ? ` placeholder="0"` : ``}${desc ? ` aria-describedby="${desc}"` : ``}><span class="calc-unit" aria-hidden="true">${f.unit}</span></span>
-      <span class="calc-err" id="calc-e-${f.key}" hidden>${UI.icon(`alert`, { size: 14 })}数字だけで入力してください</span>
+      <span class="calc-err" id="calc-e-${f.key}" hidden>${UI.icon(`alert`, { size: 14 })}<span data-role="err-text">${ERR_NOT_NUMBER}</span></span>
       ${hint}
       ${convId ? `<span class="calc-conv" id="${convId}" data-conv="${f.key}"></span>` : ``}
       ${f.helper === `taxSplit` ? taxSplitHtml() : ``}
@@ -1317,6 +1327,16 @@ window.Views.calculators = (function () {
       <h4 class="calc-terms-title" id="calc-terms-title">${UI.icon(`book-open`, { size: 16 })}関連する用語</h4>
       <div class="chip-row">${list.map((t) => `<a class="chip chip-small calc-term-chip" href="#glossary/${encodeURIComponent(t.id)}" title="${UI.escapeHtml(t.name)}">${UI.escapeHtml(shortTermName(t.name))}</a>`).join(``)}</div>
     </section>`;
+  }
+
+  // 計算・税率の誤りの報告リンク(報告フォームが設定されているときだけ。Report は js/report.js)
+  function reportHtml(def) {
+    if (!window.Report || typeof Report.linkHtml !== `function`) return ``;
+    let link = ``;
+    try {
+      link = Report.linkHtml({ kind: `calc`, id: def.id, title: def.title, location: `#calculators/${def.id}` }, `計算・税率の誤りを報告`);
+    } catch (e) { link = ``; }
+    return link ? `<p class="item-meta calc-report">${link}</p>` : ``;
   }
 
   // 答え合わせモード: 主要な結果・合計・控除額・計算式を「?」や非表示にする
@@ -1360,7 +1380,7 @@ window.Views.calculators = (function () {
     wrap.innerHTML = `
       <h2>不動産計算機</h2>
       <p class="view-desc">住宅ローン、買うとき・持っているとき・売るときの税金や費用をその場で概算できます。税率と特例は根拠条文・適用期限つきで表示します(2026年10月時点で確認)。</p>
-      <div class="segmented calc-groups" role="group" aria-label="計算機の分類" data-role="groups"></div>
+      <div class="calc-tabs calc-groups" role="group" aria-label="計算機の分類" data-role="groups"></div>
       <div class="chip-row chip-row-scroll calc-chips" role="group" aria-label="計算機を選ぶ" data-role="chips"></div>
       <div data-role="panel"></div>
     `;
@@ -1370,7 +1390,8 @@ window.Views.calculators = (function () {
     const chipsEl = wrap.querySelector(`[data-role="chips"]`);
     const panel = wrap.querySelector(`[data-role="panel"]`);
 
-    groupsEl.innerHTML = GROUPS.map((g) => `<button type="button" class="segmented-item" data-group="${g.id}">${UI.icon(g.icon, { size: 16 })}${g.label}</button>`).join(``);
+    // 分類は下線のタブ(上の「学ぶ」メニューの切り替えと見た目を分ける)
+    groupsEl.innerHTML = GROUPS.map((g) => `<button type="button" class="calc-tab" data-group="${g.id}">${UI.icon(g.icon, { size: 16 })}<span>${g.label}</span></button>`).join(``);
     groupsEl.addEventListener(`click`, (e) => {
       const btn = e.target.closest(`[data-group]`);
       if (!btn) return;
@@ -1597,6 +1618,7 @@ window.Views.calculators = (function () {
           </div>
           ${termsHtml(def)}
           <p class="calc-disclaimer">${UI.icon(`info`, { size: 14 })}<span>※ ${def.disclaimer || DISCLAIMER}${def.extraNote ? ` ${def.extraNote}` : ``}</span></p>
+          ${reportHtml(def)}
           <p class="sr-only" aria-live="polite" data-role="live"></p>
         </section>
       `;
@@ -1723,13 +1745,15 @@ window.Views.calculators = (function () {
       return { raw, parsed, invalid };
     }
 
-    function markInvalid(key, bad) {
+    function markInvalid(key, bad, msg) {
       const input = panel.querySelector(`[data-key="${key}"]`);
       const err = panel.querySelector(`#calc-e-${key}`);
       if (!input || !err) return;
       if (bad) input.setAttribute(`aria-invalid`, `true`);
       else input.removeAttribute(`aria-invalid`);
       err.hidden = !bad;
+      const errText = err.querySelector(`[data-role="err-text"]`);
+      if (bad && errText && errText.textContent !== (msg || ERR_NOT_NUMBER)) errText.textContent = msg || ERR_NOT_NUMBER;
       const desc = [bad ? err.id : ``, input.dataset.desc].filter(Boolean).join(` `);
       if (desc) input.setAttribute(`aria-describedby`, desc);
       else input.removeAttribute(`aria-describedby`);
@@ -1746,18 +1770,22 @@ window.Views.calculators = (function () {
       const def = CALC_BY_ID[currentId];
       const { raw, parsed, invalid } = readState(def);
       const invalidFields = [];
+      const largeFields = [];
       def.fields.forEach((f) => {
         const holder = panel.querySelector(`[data-field="${f.key}"]`);
         if (holder && f.showIf) holder.hidden = !f.showIf(parsed);
-        if (f.unit === `万円`) {
-          const conv = panel.querySelector(`[data-conv="${f.key}"]`);
-          if (conv) conv.textContent = parsed[f.key] > 0 ? `= ${yen(manToYen(parsed[f.key]))}円` : ``;
-        }
         if (f.type !== `check` && f.type !== `select`) {
-          // 数字として読めない入力は 0 扱いにせず、欄に注意を出して結果も出さない
-          const bad = invalid.includes(f.key) && !(holder && holder.hidden);
+          // 数字として読めない入力は 0 扱いにせず、欄に注意を出して結果も出さない(大きすぎる値も同じ)
+          const shown = !(holder && holder.hidden);
+          const bad = invalid.includes(f.key) && shown;
+          const large = !bad && shown && parsed[f.key] >= MAX_INPUT;
           if (bad) invalidFields.push(f);
-          markInvalid(f.key, bad);
+          if (large) largeFields.push(f);
+          markInvalid(f.key, bad || large, large ? ERR_TOO_LARGE : ERR_NOT_NUMBER);
+          if (f.unit === `万円`) {
+            const conv = panel.querySelector(`[data-conv="${f.key}"]`);
+            if (conv) conv.textContent = parsed[f.key] > 0 && !large ? `= ${yen(manToYen(parsed[f.key]))}円` : ``;
+          }
         }
       });
 
@@ -1765,8 +1793,11 @@ window.Views.calculators = (function () {
       let vm = null;
       let html;
       let summary = ``;
-      if (invalidFields.length) {
-        html = promptHtml(`${invalidFields.map((f) => `「${f.label}」`).join(`・`)}は数字だけで入力してください。`);
+      if (invalidFields.length || largeFields.length) {
+        html = promptHtml([
+          invalidFields.length ? `${invalidFields.map((f) => `「${f.label}」`).join(`・`)}は数字だけで入力してください。` : ``,
+          largeFields.length ? `${largeFields.map((f) => `「${f.label}」`).join(`・`)}の値が大きすぎます。桁数を確認してください。` : ``,
+        ].join(``));
         summary = `入力を確認してください`;
       } else {
         // 監査済みの3計算機は元の入力処理(Number(値))と同じ値を渡す

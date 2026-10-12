@@ -2,3 +2,6 @@
 desktop.ini
 Claude Code 引継ぎプロンプト*.md
 shojiki_comicanime チャンネル 全動画要約.md
+# 公開用ビルドの出力(CI が作る。tools/build.js)
+_site/
+_site.tmp-*/

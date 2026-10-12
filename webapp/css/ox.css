@@ -1,7 +1,9 @@
 /* ○×一問一答(js/views/ox.js 専用) */
 
-/* スマホは全幅、PCは中央寄せの1カラム */
-.ox-view { max-width: 680px; margin-inline: auto; }
+/* スマホ・タブレットは全幅(上の「4択 / ○× / 模擬試験」の切り替えと左右をそろえる)、PCは中央寄せの1カラム */
+@media (min-width: 1024px) {
+  .ox-view { max-width: 680px; margin-inline: auto; }
+}
 
 /* ○×の記号(SVG)。○は success、×は danger */
 .ox-view .ox-glyph { display: inline-block; flex-shrink: 0; }
@@ -16,7 +18,7 @@
 /* 前回の条件で開始(1タップで始める) */
 .ox-view .ox-quick { justify-content: flex-start; gap: var(--sp-3); margin-bottom: var(--sp-4); text-align: left; }
 .ox-quick-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ox-quick-meta { font-size: var(--fs-sm); font-weight: 500; opacity: .9; }
+.ox-quick-meta { font-size: var(--fs-sm); font-weight: 400; opacity: .9; }
 .ox-view .ox-auto-next { margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--color-text-muted); }
 .ox-view .ox-stats .stat-tile { padding: var(--sp-2) var(--sp-3); }
 .ox-view .ox-stats .stat-value { font-size: var(--fs-xl); }
@@ -94,7 +96,7 @@
 .ox-count .segmented-item { flex: 1 1 0; min-height: 40px; }
 
 .ox-setup-note { margin: var(--sp-4) 0 var(--sp-3); font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
-.ox-setup-note.is-empty { color: var(--color-warning); font-weight: 500; }
+.ox-setup-note.is-empty { color: var(--color-warning); font-weight: 600; }
 
 .ox-keys { margin: var(--sp-3) 0 0; text-align: center; font-size: var(--fs-xs); color: var(--color-text-muted); line-height: 2; }
 .ox-keys kbd {
@@ -110,18 +112,18 @@
 @media (hover: none), (pointer: coarse) { .ox-keys { display: none; } }
 
 /* ---------- 出題中 ---------- */
-.ox-run-label { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 500; line-height: var(--lh-snug); }
+.ox-run-label { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 600; line-height: var(--lh-snug); }
 
 .ox-stage { padding: var(--sp-4); border-radius: var(--radius-lg); margin-bottom: 0; }
 .ox-run-head { display: flex; align-items: center; gap: var(--sp-3); }
 .ox-run-count { font-size: var(--fs-lg); font-weight: 700; color: var(--color-heading); white-space: nowrap; line-height: 1; }
-.ox-run-count small { font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 500; }
+.ox-run-count small { font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 400; }
 .ox-view .ox-quit { min-height: 40px; padding: 0 var(--sp-2); margin-right: calc(var(--sp-2) * -1); color: var(--color-text-muted); }
 @media (hover: hover) { .ox-view .ox-quit:hover { color: var(--color-text); background: var(--color-surface-muted); } }
 
 .ox-q-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
 .ox-context { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
-.ox-statement { margin: var(--sp-2) 0 0; font-size: var(--fs-lg); font-weight: 500; line-height: var(--lh-body); color: var(--color-text); }
+.ox-statement { margin: var(--sp-2) 0 0; font-size: var(--fs-lg); font-weight: 400; line-height: var(--lh-body); color: var(--color-text); }
 .ox-statement:focus { outline: none; }
 
 /* ○ / × の大きなボタン(左右に二分) */
@@ -199,16 +201,13 @@
 @keyframes ox-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .ox-auto-bar { display: none; } }
 
-/* 正解・不正解の一瞬の強調(動きを減らす設定では出さない) */
+/* 正解・不正解の一瞬の強調は1つだけ(正解は○×の記号が弾む、不正解は選んだボタンが揺れる)。動きを減らす設定では出さない */
 @media (prefers-reduced-motion: no-preference) {
-  .ox-stage.ox-flash-ok { animation: ox-ring-ok 650ms var(--ease-out); }
-  .ox-stage.ox-flash-ng { animation: ox-ring-ng 650ms var(--ease-out); }
   .ox-stage.ox-flash-ok .ox-btn.is-answer .ox-glyph { animation: ox-pop 360ms var(--ease-out); }
-  .ox-stage.ox-flash-ng .ox-btn.is-wrong { animation: shake-x var(--dur-3) var(--ease-std); }
+  .ox-stage.ox-flash-ng .ox-btn.is-wrong { animation: shake-x 240ms var(--ease-std); }
 }
-@keyframes ox-ring-ok { from { box-shadow: 0 0 0 0 var(--color-success); } to { box-shadow: 0 0 0 14px transparent; } }
-@keyframes ox-ring-ng { from { box-shadow: 0 0 0 0 var(--color-danger); } to { box-shadow: 0 0 0 14px transparent; } }
 @keyframes ox-pop { 0% { transform: scale(.7); } 60% { transform: scale(1.15); } 100% { transform: none; } }
+.ox-result .item-meta { margin: var(--sp-3) 0 0; }
 
 /* ---------- 結果 ---------- */
 .ox-summary { padding: var(--sp-4) var(--sp-4) var(--sp-5); border-radius: var(--radius-lg); }

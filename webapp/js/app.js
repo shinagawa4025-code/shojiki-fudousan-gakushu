@@ -1,10 +1,58 @@
-// 初期化: 画面の登録・ナビ・検索・テーマ・Service Worker
+// 初期化: 画面の登録・ナビ・検索・テーマ・Service Worker・エラーの受け止め
 (function () {
-  [`home`, `topics`, `glossary`, `bookmarks`, `figures`, `review`, `quiz`, `ox`, `exam`, `progress`,
-    `summary`, `calculators`, `sources`, `settings`, `more`].forEach((name) => {
-    if (window.Views[name]) Router.register(name, window.Views[name]);
-    else console.warn(`[app] 画面 ${name} が見つかりません`);
+  // ===== 想定外のエラー(画面の外で起きたもの) =====
+  // 画面が空なら案内の画面を出し、そうでなければ10秒に1回まで通知する(学習の記録は消えていないことを伝える)
+  let lastErrToast = 0;
+  function onGlobalError(err) {
+    const root = document.getElementById(`view-root`);
+    const cur = window.Router && Router.current ? Router.current() || `` : ``;
+    const blank = root && !root.querySelector(`.view`);
+    if (blank && window.ErrorScreen) {
+      root.querySelectorAll(`.boot`).forEach((el) => el.remove());
+      root.appendChild(ErrorScreen.build(err, { view: cur }));
+      document.body.classList.add(`app-ready`);
+      return;
+    }
+    if (window.ErrorScreen) ErrorScreen.info(err, { view: cur });
+    if (Date.now() - lastErrToast > 10000 && window.UI) {
+      lastErrToast = Date.now();
+      UI.toast(`問題が起きました。おかしいときは再読み込みしてください`, `error`, { duration: 6000, action: { label: `再読み込み`, onClick: () => location.reload() } });
+    }
+  }
+  // 拡張機能など、このアプリ以外のスクリプトのエラーは扱わない
+  const ownScript = (file) => !file || String(file).indexOf(location.origin) === 0;
+  window.addEventListener(`error`, (e) => { if (e.error && ownScript(e.filename)) onGlobalError(e.error); });
+  window.addEventListener(`unhandledrejection`, (e) => {
+    const r = e.reason;
+    // 共有シートなどを利用者が閉じた(取り消した)だけのものは扱わない
+    if (r && r.name === `AbortError`) return;
+    onGlobalError(r);
   });
+
+  // ===== アプリとしてのインストール(Chrome・Edge など) =====
+  // ブラウザのミニバーは出さず、イベントを取っておいてホームの「インストール」ボタンから出す
+  window.InstallPrompt = null;
+  window.addEventListener(`beforeinstallprompt`, (e) => {
+    e.preventDefault();
+    window.InstallPrompt = e;
+    window.dispatchEvent(new CustomEvent(`installprompt:change`));
+  });
+  window.addEventListener(`appinstalled`, () => {
+    window.InstallPrompt = null;
+    window.dispatchEvent(new CustomEvent(`installprompt:change`));
+  });
+
+  // ===== 画面の登録 =====
+  // about・works は新しい画面(読み込めなかったときはエラー画面を出す)。#summary は #works の別名(古いURL・リンク用)
+  const Views = window.Views || {};
+  [`home`, `topics`, `glossary`, `bookmarks`, `figures`, `review`, `quiz`, `ox`, `exam`, `progress`,
+    `works`, `calculators`, `sources`, `settings`, `more`, `about`].forEach((name) => {
+    const view = Views[name] || (name === `works` ? Views.summary : null);
+    if (view) { Router.register(name, view); return; }
+    console.warn(`[app] 画面 ${name} が見つかりません`);
+    Router.register(name, { render() { throw new Error(`画面「${name}」を読み込めませんでした`); } });
+  });
+  Router.alias(`summary`, `works`);
 
   function initThemeToggle() {
     const btn = document.getElementById(`theme-toggle-btn`);
@@ -190,36 +238,58 @@
     if (window.visualViewport) window.visualViewport.addEventListener(`resize`, () => { if (!resultsEl.hidden) positionResults(); });
   }
 
+  // 集計を表示する画面(ホーム・進捗)を、見ていた位置のまま描き直す
+  // シートや確認を開いている間は描き直さない(入力中の内容が消えるため)。閉じてから描き直す
+  const hasOverlay = () => !!document.querySelector(`.sheet-backdrop, .modal-overlay, .onb-overlay`);
+  let redrawTimer = null;
+  function redrawSummaryView(opts) {
+    const cur = Router.current();
+    if (cur !== `home` && cur !== `progress`) return;
+    const hash = location.hash || `#home`;
+    const redraw = () => {
+      const y = window.scrollY;
+      Router.navigate(hash);
+      if (opts && opts.keepScroll) window.scrollTo(0, y);
+    };
+    clearInterval(redrawTimer);
+    if (!hasOverlay()) { redraw(); return; }
+    redrawTimer = setInterval(() => {
+      // 別の画面へ移ったら、その画面は新しい内容で描かれるので何もしない
+      if (location.hash !== hash || Router.current() !== cur) { clearInterval(redrawTimer); return; }
+      if (hasOverlay()) return;
+      clearInterval(redrawTimer);
+      const y = window.scrollY;
+      Router.navigate(hash);
+      window.scrollTo(0, y);
+    }, 500);
+  }
+
   // iPhone のホーム画面アプリは、翌日に開いても再読み込みせず前の画面のまま戻ることがある。
   // 日付が変わっていたら復習バッジを更新し、日付で内容が変わる画面(ホーム・進捗)を描き直す
   function initDayRollover() {
     let lastDay = DateUtil.today();
-    let waitTimer = null;
-    const hasOverlay = () => !!document.querySelector(`.sheet-backdrop, .modal-overlay, .onb-overlay`);
     function check() {
       const today = DateUtil.today();
       if (today === lastDay) return;
       lastDay = today;
       if (window.Nav) Nav.refreshBadge();
-      const cur = Router.current();
-      if (cur !== `home` && cur !== `progress`) return;
-      const hash = location.hash || `#home`;
-      if (!hasOverlay()) { Router.navigate(hash); return; }
-      // シートや確認を開いている間は描き直さない(入力中の内容が消えるため)。閉じたら、見ていた位置のまま描き直す
-      clearInterval(waitTimer);
-      waitTimer = setInterval(() => {
-        // 別の画面へ移ったら、その画面は新しい日付で描かれるので何もしない
-        if (location.hash !== hash || Router.current() !== cur) { clearInterval(waitTimer); return; }
-        if (hasOverlay()) return;
-        clearInterval(waitTimer);
-        const y = window.scrollY;
-        Router.navigate(hash);
-        window.scrollTo(0, y);
-      }, 500);
+      redrawSummaryView();
     }
     document.addEventListener(`visibilitychange`, () => { if (document.visibilityState === `visible`) check(); });
     window.addEventListener(`pageshow`, check);
     window.addEventListener(`focus`, check);
+  }
+
+  // 別のタブ・ウィンドウで学習したとき: 復習バッジを合わせ、ホーム・進捗を見ていた位置のまま描き直す(0.5秒まとめて)
+  function initCrossTabSync() {
+    let timer = null;
+    window.addEventListener(`storage`, (e) => {
+      // e.key が null は、別のタブでのデータ全消去
+      if (e.key !== null && String(e.key).indexOf(Storage.PREFIX || `shojikiLearn.v1.`) !== 0) return;
+      if (window.Nav) Nav.refreshBadge();
+      clearTimeout(timer);
+      timer = setTimeout(() => redrawSummaryView({ keepScroll: true }), 500);
+    });
   }
 
   // 記録が消えにくいよう、ブラウザに保存領域の保護(persist)を頼む。
@@ -233,11 +303,22 @@
     window.addEventListener(`srs:change`, onGrade);
   }
 
-  // 設定でインポートしたあと再読み込みした直後に、完了を知らせる
+  // 設定でインポートしたあと再読み込みした直後に、完了を知らせる(形式が合わず読み込まなかった項目があれば、その数も)
   function showImportDoneToast() {
     let flag = null;
     try { flag = sessionStorage.getItem(`importDone`); sessionStorage.removeItem(`importDone`); } catch (e) { /* 無視 */ }
-    if (flag) UI.toast(`バックアップの学習データを読み込みました`, `success`, { duration: 4000 });
+    if (!flag) return;
+    let bad = 0;
+    try { bad = Number(JSON.parse(flag).invalid) || 0; } catch (e) { /* 以前の形式("1") */ }
+    UI.toast(`バックアップの学習データを読み込みました${bad > 0 ? `(形式が合わない${bad}項目は読み込みませんでした)` : ``}`, `success`, { duration: bad > 0 ? 6000 : 4000 });
+  }
+
+  // 「〇年〇月〇日時点」の表示(フッターなど)を、内容の確認日に合わせる
+  function fillAsOf() {
+    const d = window.SITE && SITE.contentAsOf;
+    if (!d) return;
+    const text = window.DateUtil ? DateUtil.toJapanese(d) : d;
+    document.querySelectorAll(`[data-role="as-of"]`).forEach((el) => { el.textContent = text; });
   }
 
   function initServiceWorker() {
@@ -265,18 +346,39 @@
   document.addEventListener(`touchstart`, () => {}, { passive: true });
 
   document.addEventListener(`DOMContentLoaded`, () => {
-    Srs.migrateIfNeeded();
-    Nav.mount();
-    initThemeToggle();
-    initGlobalSearch();
-    // 既存ユーザー判定(onboardingDone の記録)をホーム描画より先に行い、初回から「新しくなりました」カードを出す
-    if (window.Onboarding && Onboarding.maybeShow) Onboarding.maybeShow();
-    Router.init(document.getElementById(`view-root`));
-    initDayRollover();
-    initPersistOnFirstGrade();
-    showImportDoneToast();
-    initServiceWorker();
-    const D = window.Diagrams;
-    console.log(`[データ整合性チェック] 図解=${D && D.defs ? Object.keys(D.defs).length : 0}件`);
+    // 画面の初期化に失敗しても修正版を受け取れるよう、Service Worker は最初に登録する
+    try { initServiceWorker(); } catch (e) { console.error(`[起動] Service Worker`, e); }
+    // 各段階は独立して実行する(1つが失敗しても、残りの機能と画面は動くように)
+    let bootError = null;
+    const step = (label, fn) => {
+      try { fn(); } catch (e) { console.error(`[起動] ${label}`, e); bootError = bootError || e; }
+    };
+    // 既存ユーザー判定(onboardingDone の記録)を、起動時に書き込む記録(保存データの版など)より先・ホーム描画より先に行い、
+    // 初回から「新しくなりました」カードを出す
+    step(`初回ガイド`, () => { if (window.Onboarding && Onboarding.maybeShow) Onboarding.maybeShow(); });
+    step(`保存データの移行`, () => { if (Storage.migrate) Storage.migrate(); else Srs.migrateIfNeeded(); });
+    step(`ナビ`, () => Nav.mount());
+    step(`テーマ`, initThemeToggle);
+    step(`検索`, initGlobalSearch);
+    step(`画面`, () => Router.init(document.getElementById(`view-root`)));
+    step(`日付`, initDayRollover);
+    step(`別のタブ`, initCrossTabSync);
+    step(`保護`, initPersistOnFirstGrade);
+    step(`通知`, showImportDoneToast);
+    step(`基準日`, fillAsOf);
+    // 画面を出せなかった(Router が動かなかった)ときは、読み込み中の表示のままにせず案内を出す
+    const root = document.getElementById(`view-root`);
+    if (root && !root.querySelector(`.view`) && window.ErrorScreen) {
+      root.innerHTML = ``;
+      root.appendChild(ErrorScreen.build(bootError || new Error(`画面を表示できませんでした`), { view: (window.Router && Router.current()) || `` }));
+    }
+    document.body.classList.add(`app-ready`);
+    window.__appBooted = true;
+    // 検索の索引は最初のキー入力の前に、手の空いたときに作っておく(Safari には requestIdleCallback が無いためタイマー)
+    setTimeout(() => { try { if (window.GlobalSearch) GlobalSearch.search(`あ`, 1); } catch (e) { /* 検索時に作り直す */ } }, 2500);
+    if (/debug/.test(location.search) || /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+      const D = window.Diagrams;
+      console.log(`[データ整合性チェック] 図解=${D && D.defs ? Object.keys(D.defs).length : 0}件`);
+    }
   });
 })();

@@ -1,0 +1,138 @@
+/* アプリの枠(エラー画面・保存できないときのお知らせ・シートの開閉・設定とメニューの追加部品)
+   style.css の変数(色・余白・角丸)を使う。新しい変数が無い環境でも崩れないよう、必要な所は代わりの値を書く */
+
+/* ---------- ボタン類は長押しで文字が選択されないように(読む文章は選択できるまま) ---------- */
+:is(.btn, .chip, .segmented, .subnav, .bottom-nav, .side-nav-item, .more-row) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ---------- エラー画面 ---------- */
+.error-card { display: grid; gap: var(--sp-3); }
+.error-lead { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; font-weight: 700; color: var(--color-heading); line-height: var(--lh-snug); }
+.error-lead .icon { flex-shrink: 0; margin-top: 2px; color: var(--color-danger); }
+.error-desc { margin: 0; font-size: var(--fs-md); color: var(--color-text); line-height: var(--lh-snug); }
+.error-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.error-actions .btn { min-height: 44px; }
+.error-details { font-size: var(--fs-sm); color: var(--color-text-muted); }
+.error-details summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.error-details pre { white-space: pre-wrap; word-break: break-all; font-size: var(--fs-sm); color: var(--color-text-muted); margin: var(--sp-2) 0 0; padding: var(--sp-2) var(--sp-3); background: var(--color-surface-muted); border-radius: var(--radius-sm); }
+
+/* ---------- 保存できないときのお知らせ(下部タブの上に固定) ---------- */
+.storage-banner {
+  position: fixed;
+  left: var(--sp-2);
+  right: var(--sp-2);
+  bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--sp-2));
+  z-index: 140;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--color-danger-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
+}
+.storage-banner-text { flex: 1 1 220px; display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; font-size: var(--fs-md); font-weight: 700; line-height: var(--lh-snug); }
+.storage-banner-text .icon { flex-shrink: 0; margin-top: 2px; color: var(--color-danger); }
+.storage-banner-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.storage-banner-actions .btn { min-height: 40px; }
+/* お知らせの下に内容が隠れないよう、ページの末尾に同じ高さの余白を足す */
+body.has-storage-banner::after { content: ""; display: block; height: calc(var(--storage-banner-h, 96px) + var(--sp-3)); }
+body.exam-active .storage-banner { bottom: calc(var(--safe-bottom) + var(--sp-2)); }
+/* 下に出る通知は、お知らせのボタンに重ならないようその上に出す */
+body.has-storage-banner .toast:not(.toast-top) { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--storage-banner-h, 96px) + var(--sp-4)); }
+body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--safe-bottom) + var(--storage-banner-h, 96px) + var(--sp-4)); }
+/* 模擬試験の受験中(スマホ・タブレット)は「前へ・見直し・次へ」が画面の下に固定されているので、お知らせの上に出す
+   (受験中は解答のたびに保存するため、容量不足のお知らせが出やすい) */
+@media (max-width: 1023px) {
+  body.has-storage-banner.exam-active .exam-pager { bottom: calc(var(--storage-banner-h, 96px) + var(--sp-2)); }
+}
+@media (min-width: 1024px) {
+  .storage-banner { left: calc(var(--sidebar-w) + var(--sp-4)); right: var(--sp-4); bottom: var(--sp-4); max-width: 760px; }
+  body.has-storage-banner .toast:not(.toast-top) { bottom: calc(var(--sp-4) + var(--storage-banner-h, 96px) + var(--sp-3)); }
+}
+
+/* ---------- シート: 閉じるアニメーション・つまみで引いて閉じる・下端に固定する操作欄 ---------- */
+@keyframes sheet-down { to { transform: translateY(24px); opacity: 0; } }
+@keyframes shell-fade-out { to { opacity: 0; } }
+.sheet-backdrop.is-closing { pointer-events: none; animation: shell-fade-out 180ms var(--ease-std) forwards; }
+.sheet-backdrop.is-closing .sheet:not(.is-dragged) { animation: sheet-down 180ms var(--ease-std) forwards; }
+/* つまみは小さいので、上下左右に触れる範囲を広げる。ここだけ指の動きをスクロールに使わない */
+.sheet-grip { position: relative; touch-action: none; cursor: grab; }
+.sheet-grip::before { content: ""; position: absolute; inset: -16px -48px -10px; }
+.sheet > .sheet-foot {
+  position: sticky;
+  bottom: calc(-1 * (var(--sp-5) + var(--safe-bottom)));
+  z-index: 1;
+  display: grid;
+  gap: var(--sp-2);
+  margin: var(--sp-4) calc(-1 * var(--sp-4)) calc(-1 * (var(--sp-5) + var(--safe-bottom)));
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + var(--safe-bottom));
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+:root[data-theme="dark"] .sheet > .sheet-foot { background: var(--color-surface-raised); }
+.sheet > .sheet-foot .btn { width: 100%; min-height: 48px; }
+.sheet > .sheet-foot .link-btn { justify-self: center; }
+@media (min-width: 768px) {
+  .sheet > .sheet-foot { bottom: calc(-1 * var(--sp-5)); margin-bottom: calc(-1 * var(--sp-5)); padding-bottom: var(--sp-3); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+}
+
+/* ---------- メニュー(#more) ---------- */
+.more-group-title { margin: var(--sp-5) 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); letter-spacing: .04em; }
+.more-row .more-row-ext { flex-shrink: 0; color: var(--color-text-muted); }
+.more-row-badge { display: inline-block; margin-left: var(--sp-2); padding: 0 6px; border-radius: var(--radius-pill); background: var(--color-surface-muted); color: var(--color-text-muted); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.6; vertical-align: 1px; }
+@media (min-width: 1024px) { .more-group-title { max-width: 640px; } }
+
+/* ---------- 設定: 学ぶ目的 ---------- */
+.profile-goals { display: grid; gap: var(--sp-2); margin: 0; padding: 0; border: 0; }
+.profile-goals legend { padding: 0; margin-bottom: var(--sp-2); font-size: var(--fs-md); font-weight: 700; color: var(--color-heading); }
+.profile-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 56px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+  line-height: var(--lh-snug);
+}
+.profile-option input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.profile-option-icon { width: 36px; height: 36px; flex-shrink: 0; display: grid; place-items: center; border-radius: var(--radius-md); background: var(--color-primary-soft); color: var(--color-primary); }
+.profile-option-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.profile-option-title { font-size: var(--fs-md); font-weight: 700; color: var(--color-heading); }
+.profile-option-desc { font-size: var(--fs-xs); color: var(--color-text-muted); }
+.profile-option-check { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--color-border-strong); display: grid; place-items: center; color: transparent; }
+.profile-option-check .icon { width: 14px; height: 14px; }
+.profile-option:has(input:checked) { border-color: var(--color-primary); background: var(--color-primary-soft); }
+.profile-option:has(input:checked) .profile-option-icon { background: var(--color-surface); }
+.profile-option:has(input:checked) .profile-option-check { border-color: var(--color-primary-fill); background: var(--color-primary-fill); color: var(--color-on-primary, #fff); }
+.profile-option:has(input:focus-visible) { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+@media (hover: hover) { .profile-option:hover { border-color: var(--color-border-strong); } }
+.profile-interests { margin-top: var(--sp-4); }
+.profile-interests[hidden] { display: none; }
+.profile-interests-title { margin: 0 0 var(--sp-1); font-size: var(--fs-md); font-weight: 700; color: var(--color-heading); }
+.profile-interests-desc { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--color-text-muted); }
+.profile-interests .chip-row { flex-wrap: wrap; }
+.profile-interests .chip { min-height: 40px; }
+.profile-note { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); }
+@media (min-width: 768px) {
+  .profile-goals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profile-goals legend { grid-column: 1 / -1; }
+}
+
+/* ---------- 設定: 記録の保護・保存している量 ---------- */
+.settings-protect { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); margin: calc(-1 * var(--sp-2)) 0 var(--sp-3); font-size: var(--fs-sm); color: var(--color-text-muted); }
+.settings-protect[hidden] { display: none; }
+.settings-protect .icon { color: var(--color-text-muted); }
+.settings-protect.is-on .icon { color: var(--color-success); }
+.settings-protect-text { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.settings-usage { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--color-text-muted); }

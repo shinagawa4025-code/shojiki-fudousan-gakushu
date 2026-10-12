@@ -1,5 +1,11 @@
 name: Deploy to GitHub Pages
 
+# master に push すると、確認 → ビルド(まとめて縮小)→ ブラウザでの動作確認 → 公開 の順に動く。
+# - 確認(tools/check.js)が失敗したら何も公開しない(今の公開版がそのまま残る)
+# - ビルドか動作確認が失敗したら、元のファイル(webapp)をそのまま公開する(キャッシュ名だけコミットごとに変える)。
+#   元のファイルでも動作確認が失敗するとき(元のファイル自体の不具合)は、何も公開しない
+# 依存パッケージは使わない(npm install なし。Node の標準機能と、ランナーに入っている Chrome だけ)
+
 on:
   push:
     branches: [master]
@@ -15,16 +21,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+      - name: Check content and raw sources
+        run: node tools/check.js webapp
+      - name: Build bundles and smoke test
+        id: bundle
+        continue-on-error: true
+        run: |
+          node tools/build.js webapp _site
+          node tools/smoke.js _site --raw webapp --require-browser
+      - name: Fallback - deploy raw sources with a unique cache name
+        if: steps.bundle.outcome != 'success'
+        run: |
+          rm -rf _site
+          cp -r webapp _site
+          SHA="${GITHUB_SHA::10}"
+          sed -i -E '/^const CACHE_NAME = /s/shojiki-gakushu-[0-9A-Za-z._-]+/shojiki-gakushu-raw-'"$SHA"'/' _site/sw.js
+          grep -q "shojiki-gakushu-raw-$SHA" _site/sw.js
+          # 元のファイルでも動かなければ(元のファイル自体の不具合)、何も公開しない(今の公開版が残る)
+          node tools/smoke.js _site --raw webapp
+          echo "::warning::Bundle build or smoke test failed; deployed the raw sources (CACHE_NAME shojiki-gakushu-raw-$SHA)"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
   deploy:
+    needs: build
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: webapp
       - id: deployment
         uses: actions/deploy-pages@v4

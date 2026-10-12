@@ -2,14 +2,18 @@
 // ルート: #quiz / #quiz/<topicId> / #quiz/q/<問題ID> / #quiz/auto / #quiz/auto/<topicId> / #quiz/auto/weak / #quiz/auto/<topicId>/weak
 // 戻る・再読み込みで回答の途中から続けられるよう、画面の状態を履歴エントリの state に保存する
 //   qState:    { level, topic, status, shown, answered: { 問題ID: 選んだ番号 } }(確認問題)
-//   autoState: { level, topic, weak, count, lawOnly, condOpen, weakOpen,
+//   autoState: { level, topic, weak, count, lawOnly, weakOpen, weakIds,
 //                questions: [{ termId, type, stem, choices: [{ text, correct }], picked }] }(自動生成クイズ)
 // 確認問題の絞り込みと自動生成クイズの問題数は Storage `quizPrefs` にも保存する(タブから開き直しても同じ条件で表示)
+// 絞り込み・出題の条件は1行のボタンからシートで選ぶ。回答すると、判定と「次の問題」をカードの最後の回答バー
+// (画面の下に固定。スマホでは下部タブの上)に出す
 window.Views = window.Views || {};
 window.Views.quiz = (function () {
   const ALL = `全て`; // 「すべて」を表す内部ID(保存済みの履歴・QuizEngine と合わせるため値は変えない。表示は「すべて」)
   const LEVELS = [ALL, `超入門`, `初級`, `中級`, `上級`];
   const STATUSES = [`all`, `unanswered`, `ng`, `bookmark`];
+  const STATUS_LABELS = { all: `すべて`, unanswered: `未回答`, ng: `苦手`, bookmark: `保存` };
+  const STATUS_ICONS = { ng: `x-circle`, bookmark: `bookmark` };
   const AUTO_COUNTS = [5, 10, 20];
   const DEFAULT_AUTO_COUNT = 10;
   const PASS_PCT = 70; // 合格の目安(○×一問一答と共通)
@@ -90,8 +94,10 @@ window.Views.quiz = (function () {
     const wrap = document.createElement(`div`);
     wrap.className = `view quiz-view`;
     wrap.innerHTML = `
-      <h2>クイズ</h2>
-      <p class="view-desc">確認問題は本試験と同じ4択で、選択肢ごとに○×の理由と根拠条文を確認できます。自動生成クイズは用語集から毎回ちがう4択を出題します。間違えた用語は「今日の復習」に自動で追加されます。</p>
+      <div class="view-head">
+        <h2>4択問題</h2>
+        ${infoBtnHtml(`4択問題について`)}
+      </div>
       <div class="segmented quiz-mode" role="group" aria-label="出題モード" data-role="mode-chips">
         <button type="button" class="segmented-item" data-mode="fixed" aria-pressed="${startMode === `fixed`}">${ic(`list`, 16)}確認問題(${fixedCount}問)</button>
         <button type="button" class="segmented-item" data-mode="auto" aria-pressed="${startMode === `auto`}">${ic(`sparkles`, 16)}自動生成クイズ</button>
@@ -103,6 +109,12 @@ window.Views.quiz = (function () {
 
     const body = wrap.querySelector(`[data-role="quiz-body"]`);
     const ctx = { lastAnswered: null };
+    // 画面の説明は ⓘ のシートで(問題を画面の上の方から始めるため)
+    wireInfo(wrap, `4択問題について`, `
+      <p>確認問題は本試験と同じ4択で、選択肢ごとに○×の理由と根拠条文を確認できます。</p>
+      <p>自動生成クイズは用語集から毎回ちがう4択を出題します。</p>
+      <p>間違えた問題の用語は「<a href="#review">今日の復習</a>」に自動で追加されます。</p>
+      <p class="view-info-keys">キーボード: <kbd>1</kbd>〜<kbd>4</kbd> で画面内の問題に回答 / <kbd>Enter</kbd> で次の問題へ</p>`);
     // 用語のリンクは画面を離れずにシートで開く(長押し・新しいタブ用に href は残す)
     wrap.addEventListener(`click`, onTermLinkClick);
     bindKeys(wrap, body, ctx);
@@ -187,8 +199,9 @@ window.Views.quiz = (function () {
         ${topic ? `<span class="source-tag">${esc(topic.name)}</span>` : ``}
       </div>
       <p class="term-simple">${term.simpleExplanation}</p>
-      ${term.deepDive ? `<p class="term-deep"><strong>${window.CardUi && CardUi.deepDiveLabel ? CardUi.deepDiveLabel(term, topic ? topic.id : null) : `もう一歩踏み込むと`}:</strong> ${term.deepDive}</p>` : ``}
-      ${window.CardUi ? CardUi.buildLawRefHtml(term) + CardUi.buildSourceCitationHtml(term) : ``}
+      ${window.CardUi && CardUi.deepHtml ? CardUi.deepHtml(term, topic ? topic.id : null)
+        : (term.deepDive ? `<p class="term-deep"><strong>${window.CardUi && CardUi.deepDiveLabel ? CardUi.deepDiveLabel(term, topic ? topic.id : null) : `もう一歩踏み込むと`}:</strong> ${term.deepDive}</p>` : ``)}
+      ${window.CardUi ? CardUi.buildLawRefHtml(term) + (CardUi.practiceNoteHtml ? CardUi.practiceNoteHtml(term) : ``) + CardUi.buildSourceCitationHtml(term) : ``}
       ${diagrams.length ? `
         <div class="term-sheet-figure">
           <button type="button" class="btn btn-secondary btn-sm" data-role="figure" aria-expanded="false">${ic(`diagram`, 16)}<span>図解を見る</span></button>
@@ -198,6 +211,7 @@ window.Views.quiz = (function () {
         ${topic ? `<a class="btn btn-secondary btn-sm" href="#topics/${topic.id}/${term.id}">${ic(`book-open`, 16)}トピックで開く</a>` : ``}
         <a class="btn btn-secondary btn-sm" href="#glossary/${term.id}">${ic(`layers`, 16)}用語集で開く</a>
       </div>
+      ${window.CardUi && CardUi.itemMetaHtml ? CardUi.itemMetaHtml(term, `#glossary/${encodeURIComponent(term.id)}`) : ``}
     `;
     const figBtn = content.querySelector(`[data-role="figure"]`);
     if (figBtn) {
@@ -227,6 +241,35 @@ window.Views.quiz = (function () {
   }
 
   // ===== 共通の部品 =====
+
+  // アイコン名の候補から、定義のある最初のものを使う(未定義のアイコンは警告が出るため)
+  function icAny(names, size) {
+    const has = (n) => !!(window.Icons && typeof Icons.has === `function` && Icons.has(n));
+    const name = names.find(has) || names[names.length - 1];
+    return ic(name, size);
+  }
+
+  // 見出し横の ⓘ(画面の説明をシートで開く)
+  function infoBtnHtml(label) {
+    return `<button type="button" class="btn btn-icon view-info-btn" data-role="view-info" aria-label="${esc(label)}" aria-haspopup="dialog">${ic(`info`, 20)}</button>`;
+  }
+
+  function wireInfo(root, title, html) {
+    const btn = root.querySelector(`[data-role="view-info"]`);
+    if (!btn) return;
+    btn.addEventListener(`click`, () => UI.sheet({ title, content: `<div class="view-info">${html}</div>` }));
+  }
+
+  // 「2026年10月時点の法令に基づく」+「誤りを報告」の1行(報告フォームが未設定なら出さない)
+  function reportMetaHtml(o, asOf) {
+    const R = window.Report;
+    try {
+      if (!R || typeof R.enabled !== `function` || !R.enabled()) return ``;
+      if (typeof R.metaHtml === `function`) return R.metaHtml(o, { asOf });
+      const link = typeof R.linkHtml === `function` ? R.linkHtml(o) : ``;
+      return link ? `<p class="item-meta"><span>${esc(typeof R.asOfText === `function` ? R.asOfText(asOf) : ``)}</span>${link}</p>` : ``;
+    } catch (e) { return ``; }
+  }
 
   // セッションの終わりに出す「今日 n問・連続 n日目」(n は今日の学習の記録数)
   function streakLineHtml() {
@@ -311,20 +354,33 @@ window.Views.quiz = (function () {
     });
   }
 
-  // 選択肢のすぐ下に出す判定(正解 / 不正解 — あなたの回答 1/正解 3)と、復習に追加した用語
-  function verdictHtml(ok, picked, correctIdx, term) {
-    const head = ok
-      ? `<p class="quiz-verdict is-ok">${ic(`check-circle`, 20)}<strong>正解</strong></p>`
-      : `<p class="quiz-verdict is-ng">${ic(`x-circle`, 20)}<strong>不正解</strong><span class="quiz-verdict-detail">— あなたの回答 ${picked + 1}/正解 ${correctIdx + 1}</span></p>`;
-    return head + (!ok && term ? reviewAddedHtml(term.name) : ``);
+  // 回答バー(カードの最後。画面の下・親指の届く位置に固定して出す)の判定。
+  // 1行目は「正解!」「不正解」、2行目は短い補足(長いときは … で切る。全文は解説の中の .review-added)
+  // ok: true / false、title: 1行目(省略時は 正解! / 不正解)、sub: 2行目
+  function verdictHtml(ok, sub, title) {
+    return `<p class="quiz-verdict ${ok ? `is-ok` : `is-ng`}">${ic(ok ? `check-circle` : `x-circle`, 28)}<span class="quiz-verdict-text"><strong>${esc(title || (ok ? `正解!` : `不正解`))}</strong>${sub ? `<small>${esc(sub)}</small>` : ``}</span></p>`;
+  }
+
+  // 4択の判定の補足: 「正解は 3・「〇〇」を復習に追加」
+  function mcVerdictSub(ok, correctIdx, term, okSub) {
+    if (ok) return okSub || ``;
+    return `正解は ${correctIdx + 1}${term ? `・「${term.name}」を復習に追加` : ``}`;
+  }
+
+  // 回答した直後の判定を回答バーとして出す(以前の回答バーの「次の問題」は消える)
+  function showVerdict(el, ok, sub, title) {
+    el.classList.add(`quiz-answer-bar`);
+    el.classList.toggle(`is-ok`, !!ok);
+    el.classList.toggle(`is-ng`, !ok);
+    el.innerHTML = verdictHtml(ok, sub, title);
   }
 
   function nextBtnHtml(label) {
-    return `<button type="button" class="btn btn-secondary btn-block quiz-next" data-role="next-q" data-label="${label}">${nextBtnInner(label)}</button>`;
+    return `<button type="button" class="btn quiz-next" data-role="next-q" data-label="${label}">${nextBtnInner(label)}</button>`;
   }
 
   function nextBtnInner(label) {
-    return `<span>${label}</span>${ic(label === `結果を見る` ? `flag` : `chevron-down`, 18)}`;
+    return `<span>${label}</span>${ic(label === `結果を見る` ? `flag` : `arrow-right`, 18)}`;
   }
 
   function followingCard(card) {
@@ -350,12 +406,6 @@ window.Views.quiz = (function () {
     }
   }
 
-  function flashCard(card, ok) {
-    if (UI.prefersReducedMotion()) return;
-    card.classList.add(ok ? `flash-ok` : `flash-ng`);
-    setTimeout(() => card.classList.remove(`flash-ok`, `flash-ng`), 700);
-  }
-
   // ===== 確認問題 =====
 
   // 履歴に保存した確認問題の状態(壊れていれば null)
@@ -371,11 +421,14 @@ window.Views.quiz = (function () {
       });
     }
     const shown = Number(raw.shown);
+    const start = Number(raw.start);
     return {
       level: LEVELS.includes(raw.level) ? raw.level : ALL,
       topic: validTopic(raw.topic) ? raw.topic : ALL,
       status: STATUSES.includes(raw.status) ? raw.status : `all`,
       shown: Number.isInteger(shown) && shown > 0 ? Math.min(shown, total) : 0,
+      // 直リンクで途中から表示した一覧の先頭の位置(0 = 最初から)
+      start: Number.isInteger(start) && start > 0 ? Math.min(start, total - 1) : 0,
       answered,
     };
   }
@@ -402,61 +455,145 @@ window.Views.quiz = (function () {
       statusFilter = prefs.status;
     }
     let restoreShown = saved ? saved.shown : 0;
+    let restoreStart = saved ? saved.start : 0;
     // この一覧で回答したカード(問題ID → 選んだ番号)。戻るで解説ごと再現するために state に保存する
     let answeredMap = saved ? saved.answered : {};
     const doFocus = !!focusQuizId && !saved;
 
+    // 絞り込みは1行(「絞り込み」ボタン + 選んでいる条件のチップ)にまとめ、条件はシートで選ぶ
     body.innerHTML = `
-      <div class="toolbar toolbar-stack">
-        <div class="chip-row" data-role="level-chips" role="group" aria-label="レベル"></div>
-        <div class="chip-row chip-row-scroll" data-role="topic-chips" role="group" aria-label="トピック"></div>
-        <div class="segmented" role="group" aria-label="表示する問題" data-role="status">
-          <button type="button" class="segmented-item" data-status="all" aria-pressed="true">すべて</button>
-          <button type="button" class="segmented-item" data-status="unanswered" aria-pressed="false">未回答</button>
-          <button type="button" class="segmented-item" data-status="ng" aria-pressed="false">${ic(`x-circle`, 14)}苦手</button>
-          <button type="button" class="segmented-item" data-status="bookmark" aria-pressed="false">${ic(`bookmark`, 14)}保存</button>
-        </div>
+      <div class="quiz-filter-row" data-role="filter-row">
+        <button type="button" class="btn btn-secondary btn-sm quiz-filter-btn" data-role="filter-open" aria-haspopup="dialog">
+          ${icAny([`filter`, `sliders`, `list`], 16)}<span>絞り込み</span><span class="quiz-filter-count num" data-role="filter-count" hidden></span>
+        </button>
+        <div class="quiz-filter-chips" data-role="filter-chips"></div>
       </div>
-      <p class="progress-text" data-role="summary"></p>
+      <p class="progress-text quiz-progress" data-role="summary"></p>
       <div class="quiz-list" data-role="quiz-list"></div>
     `;
     const list = body.querySelector(`[data-role="quiz-list"]`);
     const summary = body.querySelector(`[data-role="summary"]`);
-    const statusGroup = body.querySelector(`[data-role="status"]`);
-    const paintStatus = () => statusGroup.querySelectorAll(`[data-status]`).forEach((b) => b.setAttribute(`aria-pressed`, String(b.dataset.status === statusFilter)));
-    paintStatus();
+    const filterRow = body.querySelector(`[data-role="filter-row"]`);
+    const filterBtn = body.querySelector(`[data-role="filter-open"]`);
+    const filterCount = body.querySelector(`[data-role="filter-count"]`);
+    const filterChips = body.querySelector(`[data-role="filter-chips"]`);
 
     // 一覧は絞り込みを変えるまで作り直さないので、PAGE と shownCount は先に用意しておく
+    // 表示しているのは currentQuestions の startIdx 〜 shownCount の手前まで。直リンク(#quiz/q/<id>)で後ろのほうの問題を開いたときは
+    // その問題から表示し(手前の数百問を描くと重いため)、上の「前の問題を表示」で手前を足す
     const PAGE = 30;
     let currentQuestions = [];
     let shownCount = 0;
+    let startIdx = 0;
     let firstList = true;
 
     function saveState() {
-      patchHistoryState({ qState: { level: levelState.value, topic: topicState.value, status: statusFilter, shown: shownCount, answered: answeredMap } });
+      patchHistoryState({ qState: { level: levelState.value, topic: topicState.value, status: statusFilter, shown: shownCount, start: startIdx, answered: answeredMap } });
     }
 
-    // 選択状態の塗り直しは renderList の中で行う
-    const paintLevel = buildChips(body.querySelector(`[data-role="level-chips"]`), levelOptions(), () => levelState.value, (v) => {
-      levelState.value = v;
-      savePrefs({ level: v });
+    const cond = () => ({ level: levelState.value, topic: topicState.value, status: statusFilter });
+
+    // 条件に合う問題(restoring: 戻るで再現する回答済みのカードは、条件から外れていても残す)
+    function filterQuestions(c, restoring) {
+      return window.APP_DATA.quiz.filter((q) => {
+        if (c.level !== ALL && q.level !== c.level) return false;
+        if (c.topic !== ALL && !(q.topicIds || []).includes(c.topic)) return false;
+        if (restoring && answeredMap[q.id] != null) return true;
+        if (c.status === `ng` && qHistory[q.id] !== `ng`) return false;
+        if (c.status === `unanswered` && (qHistory[q.id] === `ok` || qHistory[q.id] === `ng`)) return false;
+        if (c.status === `bookmark` && !(window.Bookmarks && Bookmarks.has(`quiz:${q.id}`))) return false;
+        return true;
+      });
+    }
+
+    // 選んでいる条件: ボタンの件数と、外せるチップ(「宅建業法 ×」)
+    function paintFilterRow() {
+      const parts = [];
+      if (levelState.value !== ALL) parts.push({ key: `level`, label: levelLabel(levelState.value) });
+      if (topicState.value !== ALL) parts.push({ key: `topic`, label: topicLabel(topicState.value) });
+      if (statusFilter !== `all`) parts.push({ key: `status`, label: STATUS_LABELS[statusFilter] });
+      filterCount.hidden = !parts.length;
+      filterCount.textContent = parts.length ? String(parts.length) : ``;
+      filterBtn.setAttribute(`aria-label`, parts.length ? `絞り込み(${parts.length}件の条件)` : `絞り込み`);
+      filterChips.innerHTML = parts.map((p) => `<button type="button" class="chip chip-small quiz-filter-chip" data-clear="${p.key}" aria-label="「${esc(p.label)}」の条件を外す"><span>${esc(p.label)}</span>${ic(`x`, 14)}</button>`).join(``);
+    }
+
+    // 条件を変える(保存して一覧を作り直す)。一覧の途中にいたら、新しい一覧の先頭が見える位置へ戻す
+    function applyFilter(next) {
+      levelState.value = next.level;
+      topicState.value = next.topic;
+      statusFilter = next.status;
+      savePrefs({ level: next.level, topic: next.topic, status: next.status });
       renderList();
-    });
-    const paintTopic = buildChips(body.querySelector(`[data-role="topic-chips"]`), topicOptions(), () => topicState.value, (v) => {
-      topicState.value = v;
-      savePrefs({ topic: v });
-      renderList();
-    });
+      const top = filterRow.getBoundingClientRect().top + window.scrollY - 70;
+      if (window.scrollY > top) window.scrollTo(0, Math.max(0, top));
+    }
 
     function setStatus(s) {
-      statusFilter = s;
-      paintStatus();
-      savePrefs({ status: s });
-      renderList();
+      applyFilter(Object.assign(cond(), { status: s }));
     }
-    statusGroup.querySelectorAll(`[data-status]`).forEach((b) => b.addEventListener(`click`, () => {
-      if (b.dataset.status !== statusFilter) setStatus(b.dataset.status);
-    }));
+
+    filterChips.addEventListener(`click`, (e) => {
+      const b = e.target.closest(`[data-clear]`);
+      if (!b) return;
+      const next = cond();
+      if (b.dataset.clear === `level`) next.level = ALL;
+      else if (b.dataset.clear === `topic`) next.topic = ALL;
+      else next.status = `all`;
+      applyFilter(next);
+      // 外したチップが消えるので、フォーカスは「絞り込み」ボタンへ
+      filterBtn.focus({ preventScroll: true });
+    });
+
+    // 条件のシート: チップを選んでも、「この条件で表示」を押すまで一覧は変えない
+    filterBtn.addEventListener(`click`, () => {
+      const draft = cond();
+      const content = document.createElement(`div`);
+      content.className = `filter-sheet`;
+      content.innerHTML = `
+        <p class="filter-sheet-label" id="qf-level-label">レベル</p>
+        <div class="chip-row" data-role="level-chips" role="group" aria-labelledby="qf-level-label"></div>
+        <p class="filter-sheet-label" id="qf-topic-label">トピック</p>
+        <div class="chip-row filter-sheet-topics" data-role="topic-chips" role="group" aria-labelledby="qf-topic-label"></div>
+        <p class="filter-sheet-label" id="qf-status-label">表示する問題</p>
+        <div class="segmented filter-sheet-status" role="group" aria-labelledby="qf-status-label" data-role="status">
+          ${STATUSES.map((s) => `<button type="button" class="segmented-item" data-status="${s}" aria-pressed="false">${STATUS_ICONS[s] ? ic(STATUS_ICONS[s], 14) : ``}${STATUS_LABELS[s]}</button>`).join(``)}
+        </div>
+        <div class="filter-sheet-foot">
+          <button type="button" class="btn btn-lg btn-block" data-role="filter-apply"></button>
+          <button type="button" class="link-btn" data-role="filter-clear">条件をクリア</button>
+        </div>
+      `;
+      const applyBtn = content.querySelector(`[data-role="filter-apply"]`);
+      const statusEl = content.querySelector(`[data-role="status"]`);
+      const paints = [];
+      function paint() {
+        paints.forEach((p) => p());
+        statusEl.querySelectorAll(`[data-status]`).forEach((b) => b.setAttribute(`aria-pressed`, String(b.dataset.status === draft.status)));
+        applyBtn.textContent = `この条件で表示(${filterQuestions(draft, false).length}問)`;
+      }
+      paints.push(buildChips(content.querySelector(`[data-role="level-chips"]`), levelOptions(), () => draft.level, (v) => { draft.level = v; paint(); }));
+      paints.push(buildChips(content.querySelector(`[data-role="topic-chips"]`), topicOptions(), () => draft.topic, (v) => { draft.topic = v; paint(); }));
+      statusEl.addEventListener(`click`, (e) => {
+        const b = e.target.closest(`[data-status]`);
+        if (!b || b.dataset.status === draft.status) return;
+        draft.status = b.dataset.status;
+        paint();
+      });
+      content.querySelector(`[data-role="filter-clear"]`).addEventListener(`click`, () => {
+        draft.level = ALL;
+        draft.topic = ALL;
+        draft.status = `all`;
+        paint();
+      });
+      paint();
+      const sh = UI.sheet({ title: `問題を絞り込む`, content });
+      applyBtn.addEventListener(`click`, () => {
+        sh.close(false);
+        applyFilter(Object.assign({}, draft));
+        filterBtn.focus({ preventScroll: true });
+      });
+    });
 
     function updateSummary() {
       const all = window.APP_DATA.quiz;
@@ -501,11 +638,9 @@ window.Views.quiz = (function () {
       if (statusFilter === `bookmark`) setStale(card, !on);
     }
 
-    // 「苦手な問題だけ表示」: 絞り込み後、一覧の先頭が見える位置へ戻す
+    // 「苦手な問題だけ表示」: 絞り込み後、一覧の先頭が見える位置へ戻す(applyFilter)
     function gotoNg() {
       setStatus(`ng`);
-      const top = statusGroup.getBoundingClientRect().top + window.scrollY - 70;
-      if (window.scrollY > top) window.scrollTo(0, Math.max(0, top));
     }
 
     // 一度に全問を描画すると端末によっては数秒かかるため、30問ずつ表示して「もっと見る」で末尾に追加する
@@ -538,22 +673,43 @@ window.Views.quiz = (function () {
       list.insertAdjacentElement(`afterend`, btn);
     }
 
+    // 「前の問題を表示」(直リンクで途中から表示したとき、一覧の上に置く)。押すと手前の問題をボタンのすぐ下に足す
+    function renderPrev() {
+      const existing = list.previousElementSibling;
+      if (existing && existing.classList.contains(`load-prev-btn`)) existing.remove();
+      if (startIdx <= 0) return;
+      const btn = document.createElement(`button`);
+      btn.type = `button`;
+      btn.className = `btn load-more-btn load-prev-btn`;
+      btn.textContent = `前の問題を表示(残り${startIdx}問)`;
+      btn.addEventListener(`click`, () => {
+        const from = Math.max(0, startIdx - PAGE);
+        const fragment = document.createDocumentFragment();
+        currentQuestions.slice(from, startIdx).forEach((q) => fragment.appendChild(buildFixedCard(q, {
+          history: qHistory, onResult: handleResult, onGotoNg: gotoNg, onBookmark: handleBookmark, restoreChoice: answeredMap[q.id],
+        })));
+        list.insertBefore(fragment, list.firstChild);
+        startIdx = from;
+        list.querySelectorAll(`.quiz-card.is-answered`).forEach(ensureNextButton);
+        if (startIdx <= 0) {
+          btn.remove();
+          filterBtn.focus({ preventScroll: true });
+        } else {
+          btn.textContent = `前の問題を表示(残り${startIdx}問)`;
+        }
+        saveState();
+      });
+      list.insertAdjacentElement(`beforebegin`, btn);
+    }
+
     // restoring: 戻る・再読み込みで、保存しておいた回答済みのカードを元の位置に出す
     function renderList(restoring) {
       if (!restoring) answeredMap = {};
-      paintLevel();
-      paintTopic();
+      paintFilterRow();
       list.innerHTML = ``;
+      startIdx = 0;
       updateSummary();
-      const questions = window.APP_DATA.quiz.filter((q) => {
-        if (levelState.value !== ALL && q.level !== levelState.value) return false;
-        if (topicState.value !== ALL && !(q.topicIds || []).includes(topicState.value)) return false;
-        if (restoring && answeredMap[q.id] != null) return true;
-        if (statusFilter === `ng` && qHistory[q.id] !== `ng`) return false;
-        if (statusFilter === `unanswered` && (qHistory[q.id] === `ok` || qHistory[q.id] === `ng`)) return false;
-        if (statusFilter === `bookmark` && !(window.Bookmarks && Bookmarks.has(`quiz:${q.id}`))) return false;
-        return true;
-      });
+      const questions = filterQuestions(cond(), restoring);
       if (!questions.length) {
         const map = {
           ng: { icon: `check-circle`, title: `苦手な問題はありません`, body: `4択で間違えた問題がここに集まります。` },
@@ -564,21 +720,27 @@ window.Views.quiz = (function () {
         currentQuestions = [];
         shownCount = 0;
         renderMore();
+        renderPrev();
         saveState();
         return;
       }
       currentQuestions = questions;
-      // 直リンク(#quiz/q/<id>)の初回は、その問題まで表示する
+      // 直リンク(#quiz/q/<id>)の初回は、その問題まで表示する(最初のページより後ろの問題は、その問題から表示する)
       let need = PAGE;
       if (firstList && doFocus) {
         const idx = questions.findIndex((q) => q.id === focusQuizId);
-        if (idx >= 0) need = Math.max(PAGE, idx + 5);
+        if (idx >= PAGE) { startIdx = idx; need = idx + PAGE; }
+        else if (idx >= 0) need = Math.max(PAGE, idx + 5);
       }
       firstList = false;
       if (restoreShown) { need = Math.max(need, restoreShown); restoreShown = 0; }
+      if (restoreStart) { startIdx = restoreStart; restoreStart = 0; }
       shownCount = Math.min(questions.length, need);
-      appendCards(0, shownCount);
+      // 保存した先頭が一覧の範囲外(問題データが変わった等)なら最初から
+      if (startIdx >= shownCount) startIdx = 0;
+      appendCards(startIdx, shownCount);
       renderMore();
+      renderPrev();
       saveState();
     }
 
@@ -588,7 +750,11 @@ window.Views.quiz = (function () {
       const target = list.querySelector(`[data-quiz-id="${CSS.escape(focusQuizId)}"]`);
       if (target) {
         target.classList.add(`highlighted`);
-        requestAnimationFrame(() => UI.scrollIntoView(target));
+        // 遠いとき(画面2枚分より先)はすぐに移す(長い距離をなめらかに動かすと着くまで時間がかかるため)
+        requestAnimationFrame(() => {
+          if (Math.abs(target.getBoundingClientRect().top) > window.innerHeight * 2) target.scrollIntoView({ block: `center`, behavior: `auto` });
+          else UI.scrollIntoView(target);
+        });
         // スクロールに時間がかかる端末でも目に入るよう、強調は長めに残す
         setTimeout(() => target.classList.remove(`highlighted`), 5000);
       } else {
@@ -606,11 +772,26 @@ window.Views.quiz = (function () {
     if (result === `ng` && q.relatedTermId && AppIndex.termsById[q.relatedTermId]) Srs.grade(q.relatedTermId, 1, { silent: true });
   }
 
-  // 「次の問題へ」: 同じ一覧の後ろに問題があるカードだけに付ける(トピック詳細・ブックマークの一覧でも同じ)
+  // 「次の問題」: 同じ一覧の後ろに問題があるカードだけ、回答バーに付ける(トピック詳細・ブックマークの一覧でも同じ)
   function ensureNextButton(card) {
-    const box = card.querySelector(`[data-role="explain"]`);
-    if (!box || !card.isConnected || box.querySelector(`[data-role="next-q"]`) || !followingCard(card)) return;
-    box.insertAdjacentHTML(`beforeend`, nextBtnHtml(`次の問題へ`));
+    const bar = card.querySelector(`.quiz-answer-bar[data-role="verdict"]`);
+    if (!bar || !card.isConnected || bar.querySelector(`[data-role="next-q"]`) || !followingCard(card)) return;
+    bar.insertAdjacentHTML(`beforeend`, nextBtnHtml(`次の問題`));
+  }
+
+  // 一覧に問題を書き足したあと(トピック詳細・ブックマークの「もっと見る」)、回答済みのカードに「次の問題」を付け直す
+  function ensureNextButtons(root) {
+    if (root) root.querySelectorAll(`.quiz-card.is-answered`).forEach(ensureNextButton);
+  }
+
+  // 回答バー(判定)の要素。カードの最後の子にする(画面の下に固定して出すため)
+  function verdictElement() {
+    const el = document.createElement(`div`);
+    el.className = `quiz-feedback`;
+    el.dataset.role = `verdict`;
+    el.setAttribute(`role`, `status`);
+    el.setAttribute(`aria-live`, `polite`);
+    return el;
   }
 
   // 確認問題のカード。topics.js(トピック詳細)・bookmarks.js からも使う
@@ -624,10 +805,6 @@ window.Views.quiz = (function () {
     const card = document.createElement(`div`);
     card.className = `card quiz-card`;
     card.dataset.quizId = q.id;
-    const episodeChips = (q.episodes || []).map((epId) => {
-      const ep = AppIndex.episodesById[epId];
-      return `<a class="chip chip-small" href="#summary/${epId}">${ic(`play-square`, 14)}${esc(ep ? ep.displayLabel : epId)}</a>`;
-    }).join(``);
     const prior = qHistory[q.id];
     const priorTag = prior === `ng` ? `<span class="review-status review-status-ng">${ic(`x-circle`, 12)}前回: 不正解</span>`
       : prior === `ok` ? `<span class="review-status review-status-ok">${ic(`check-circle`, 12)}前回: 正解</span>` : ``;
@@ -664,22 +841,27 @@ window.Views.quiz = (function () {
       if (btn) btn.addEventListener(`click`, () => opts.onGotoNg());
     }
 
-    // 戻るで復元したカードは一覧に入ってから「次の問題へ」の要否を決める
+    // 戻るで復元したカードは一覧に入ってから「次の問題」の要否を決める
     function placeNext(restored) {
       if (restored) requestAnimationFrame(() => ensureNextButton(card));
       else ensureNextButton(card);
     }
+
+    // 誤りの報告(解説の最後。報告フォームが未設定なら出さない)
+    const metaHtml = () => reportMetaHtml({ kind: `quiz`, id: q.id, title: q.question, location: `#quiz/q/${q.id}` }, q.asOf);
+
+    // 判定は回答バーとしてカードの最後に置く(解説の後ろ)
+    const verdictEl = verdictElement();
+    card.appendChild(verdictEl);
 
     if (isMc) {
       const mq = QuizEngine.fromFixedMc(q, { keepOrder: true });
       const correctIdx = mq.choices.findIndex((c) => c.correct);
       bodyEl.innerHTML = `
         <div class="choice-list" role="group" aria-label="選択肢"></div>
-        <div class="quiz-feedback" data-role="verdict" role="status" aria-live="polite"></div>
         <div class="quiz-after" data-role="explain"></div>
       `;
       const choiceList = bodyEl.querySelector(`.choice-list`);
-      const verdictEl = bodyEl.querySelector(`[data-role="verdict"]`);
       const explainEl = bodyEl.querySelector(`[data-role="explain"]`);
       let done = false;
 
@@ -691,16 +873,16 @@ window.Views.quiz = (function () {
         card.classList.add(`is-answered`);
         if (restored) card.classList.add(`is-restored`);
         paintChoices(choiceList, mq.choices, picked);
-        verdictEl.innerHTML = verdictHtml(ok, picked, correctIdx, term);
+        const hasExplain = !!mq.explanation || mq.choices.some((c) => c.note);
+        showVerdict(verdictEl, ok, mcVerdictSub(ok, correctIdx, term, hasExplain ? `解説はこの下にあります` : ``));
         explainEl.innerHTML = `
+          ${!ok && term ? reviewAddedHtml(term.name) : ``}
           ${mq.explanation ? `<div class="quiz-explain"><p class="quiz-explain-title">全体の解説</p><p class="quiz-explain-text">${esc(mq.explanation)}</p></div>` : ``}
           ${afterLinksHtml(ok)}
+          ${metaHtml()}
         `;
         wireGotoNg(explainEl);
-        if (!restored) {
-          recordFixedResult(q, result, qHistory);
-          flashCard(card, ok);
-        }
+        if (!restored) recordFixedResult(q, result, qHistory);
         if (opts.onResult) opts.onResult(result, card, picked, !!restored);
         placeNext(restored);
       }
@@ -717,19 +899,16 @@ window.Views.quiz = (function () {
         <button type="button" class="btn btn-secondary" data-role="reveal">${ic(`eye`)}答えを見る</button>
         <div data-role="answer-area" hidden>
           <p class="quiz-answer"><strong>A.</strong> ${esc(q.answer)}</p>
-          ${episodeChips ? `<div class="episode-chip-row">${episodeChips}</div>` : ``}
           <p class="quiz-self-ask">思い出せましたか?</p>
           <div class="self-report">
             <button type="button" class="btn btn-success" data-result="ok">${ic(`check`)}わかった</button>
             <button type="button" class="btn btn-secondary" data-result="ng">${ic(`x`)}わからなかった</button>
           </div>
         </div>
-        <div class="quiz-feedback" data-role="verdict" role="status" aria-live="polite"></div>
         <div class="quiz-after" data-role="explain"></div>
       `;
       const revealBtn = bodyEl.querySelector(`[data-role="reveal"]`);
       const answerArea = bodyEl.querySelector(`[data-role="answer-area"]`);
-      const verdictEl = bodyEl.querySelector(`[data-role="verdict"]`);
       const explainEl = bodyEl.querySelector(`[data-role="explain"]`);
       revealBtn.addEventListener(`click`, () => {
         answerArea.hidden = false;
@@ -745,13 +924,10 @@ window.Views.quiz = (function () {
         card.classList.add(`is-answered`);
         bodyEl.querySelectorAll(`[data-result]`).forEach((b) => b.classList.toggle(`active`, b.dataset.result === result));
         const ok = result === `ok`;
-        verdictEl.innerHTML = `<p class="quiz-verdict ${ok ? `is-ok` : `is-ng`}">${ic(ok ? `check-circle` : `x-circle`, 20)}<strong>${ok ? `わかった` : `わからなかった`}</strong></p>${!ok && term ? reviewAddedHtml(term.name) : ``}`;
-        explainEl.innerHTML = afterLinksHtml(ok);
+        showVerdict(verdictEl, ok, !ok && term ? `「${term.name}」を復習に追加` : ``, ok ? `わかった` : `わからなかった`);
+        explainEl.innerHTML = `${!ok && term ? reviewAddedHtml(term.name) : ``}${afterLinksHtml(ok)}${metaHtml()}`;
         wireGotoNg(explainEl);
-        if (!restored) {
-          recordFixedResult(q, result, qHistory);
-          flashCard(card, ok);
-        }
+        if (!restored) recordFixedResult(q, result, qHistory);
         if (opts.onResult) opts.onResult(result, card, result, !!restored);
         placeNext(restored);
       }
@@ -804,27 +980,14 @@ window.Views.quiz = (function () {
     const saved = parseAutoState(historyState().autoState);
     if (saved) Object.assign(cond, saved.cond);
 
+    // 条件は1行(タップでシート)。問題を画面の上の方から始めるため、チップの列は画面に並べない
     body.innerHTML = `
       <div class="auto-top">
-        <details class="auto-cond" data-role="cond">
-          <summary class="auto-cond-summary">
-            <span class="auto-cond-key">条件</span>
-            <span class="auto-cond-text" data-role="cond-text"></span>
-            ${ic(`chevron-down`, 16)}
-          </summary>
-          <div class="auto-cond-body">
-            <p class="auto-cond-label" id="auto-level-label">レベル</p>
-            <div class="chip-row" data-role="level-chips" role="group" aria-labelledby="auto-level-label"></div>
-            <p class="auto-cond-label" id="auto-topic-label">トピック</p>
-            <div class="chip-row chip-row-scroll" data-role="topic-chips" role="group" aria-labelledby="auto-topic-label"></div>
-            <p class="auto-cond-label" id="auto-count-label">問題数・出題形式</p>
-            <div class="chip-row" role="group" aria-labelledby="auto-count-label">
-              <span class="chip-row" data-role="count-chips"></span>
-              <button type="button" class="chip chip-small" data-role="law-only" aria-pressed="false">${ic(`library`, 14)}根拠法令だけ</button>
-            </div>
-            <label class="memorize-toggle"><input type="checkbox" data-role="weak-first"> 苦手な用語を優先して出題</label>
-          </div>
-        </details>
+        <button type="button" class="auto-cond-btn" data-role="cond" aria-haspopup="dialog">
+          <span class="auto-cond-key">条件</span>
+          <span class="auto-cond-text" data-role="cond-text"></span>
+          ${ic(`chevron-right`, 16)}
+        </button>
         <details class="weak-terms-panel" data-role="weak-terms" hidden></details>
         <div class="auto-score-row">
           <p class="progress-text" data-role="score"></p>
@@ -834,37 +997,78 @@ window.Views.quiz = (function () {
       <div class="quiz-list" data-role="auto-list"></div>
       <div class="card quiz-summary" data-role="summary" tabindex="-1" hidden></div>
     `;
-    const condEl = body.querySelector(`[data-role="cond"]`);
+    const condBtn = body.querySelector(`[data-role="cond"]`);
     const condText = body.querySelector(`[data-role="cond-text"]`);
     const list = body.querySelector(`[data-role="auto-list"]`);
     const scoreText = body.querySelector(`[data-role="score"]`);
     const weakPanel = body.querySelector(`[data-role="weak-terms"]`);
     const summaryEl = body.querySelector(`[data-role="summary"]`);
-    const weakBox = body.querySelector(`[data-role="weak-first"]`);
-    const lawBtn = body.querySelector(`[data-role="law-only"]`);
 
-    // スマホでは条件を1行にたたむ(PCは最初から開いておく)
-    condEl.open = saved ? saved.condOpen : !!(window.matchMedia && window.matchMedia(`(min-width: 768px)`).matches);
     weakPanel.open = saved ? saved.weakOpen : false;
-    condEl.addEventListener(`toggle`, saveAuto);
     weakPanel.addEventListener(`toggle`, saveAuto);
 
-    const painters = [
-      buildChips(body.querySelector(`[data-role="level-chips"]`), levelOptions(), () => cond.level, (v) => changeCond(() => { cond.level = v; })),
-      buildChips(body.querySelector(`[data-role="topic-chips"]`), topicOptions(), () => cond.topic, (v) => changeCond(() => { cond.topic = v; })),
-      buildChips(body.querySelector(`[data-role="count-chips"]`), AUTO_COUNTS.map((n) => ({ id: String(n), label: `${n}問` })), () => cond.count, (v) => changeCond(() => {
-        cond.count = Number(v);
-        savePrefs({ autoCount: cond.count });
-      })),
-    ];
+    function condLabel(c) {
+      return `${levelLabel(c.level)}・${topicLabel(c.topic)}・${c.count}問${c.weak ? `・苦手優先` : ``}${c.lawOnly ? `・根拠法令だけ` : ``}`;
+    }
 
     function paintConds() {
-      painters.forEach((p) => p());
-      weakBox.checked = cond.weak;
-      lawBtn.setAttribute(`aria-pressed`, String(cond.lawOnly));
-      lawBtn.classList.toggle(`active`, cond.lawOnly);
-      condText.textContent = `${levelLabel(cond.level)}・${topicLabel(cond.topic)}・${cond.count}問${cond.weak ? `・苦手優先` : ``}${cond.lawOnly ? `・根拠法令だけ` : ``}`;
+      condText.textContent = condLabel(cond);
+      condBtn.setAttribute(`aria-label`, `出題の条件: ${condLabel(cond)}(タップで変更)`);
     }
+
+    // 条件のシート: 選んでから「この条件で出題」で作り直す(チップを押すたびに問題が入れ替わらないように)
+    condBtn.addEventListener(`click`, () => {
+      const draft = Object.assign({}, cond);
+      const content = document.createElement(`div`);
+      content.className = `filter-sheet`;
+      content.innerHTML = `
+        <p class="filter-sheet-label" id="auto-level-label">レベル</p>
+        <div class="chip-row" data-role="level-chips" role="group" aria-labelledby="auto-level-label"></div>
+        <p class="filter-sheet-label" id="auto-topic-label">トピック</p>
+        <div class="chip-row filter-sheet-topics" data-role="topic-chips" role="group" aria-labelledby="auto-topic-label"></div>
+        <p class="filter-sheet-label" id="auto-count-label">問題数・出題形式</p>
+        <div class="chip-row" role="group" aria-labelledby="auto-count-label">
+          <span class="chip-row" data-role="count-chips"></span>
+          <button type="button" class="chip chip-small" data-role="law-only" aria-pressed="false">${ic(`library`, 14)}根拠法令だけ</button>
+        </div>
+        <label class="memorize-toggle filter-sheet-check"><input type="checkbox" data-role="weak-first"> 苦手な用語を優先して出題</label>
+        <div class="filter-sheet-foot">
+          <button type="button" class="btn btn-lg btn-block" data-role="filter-apply">この条件で出題</button>
+          <button type="button" class="link-btn" data-role="filter-clear">条件をクリア</button>
+        </div>
+      `;
+      const weakBox = content.querySelector(`[data-role="weak-first"]`);
+      const lawBtn = content.querySelector(`[data-role="law-only"]`);
+      const painters = [
+        buildChips(content.querySelector(`[data-role="level-chips"]`), levelOptions(), () => draft.level, (v) => { draft.level = v; paint(); }),
+        buildChips(content.querySelector(`[data-role="topic-chips"]`), topicOptions(), () => draft.topic, (v) => { draft.topic = v; paint(); }),
+        buildChips(content.querySelector(`[data-role="count-chips"]`), AUTO_COUNTS.map((n) => ({ id: String(n), label: `${n}問` })), () => draft.count, (v) => { draft.count = Number(v); paint(); }),
+      ];
+      function paint() {
+        painters.forEach((p) => p());
+        weakBox.checked = draft.weak;
+        lawBtn.setAttribute(`aria-pressed`, String(draft.lawOnly));
+        lawBtn.classList.toggle(`active`, draft.lawOnly);
+      }
+      weakBox.addEventListener(`change`, () => { draft.weak = weakBox.checked; });
+      lawBtn.addEventListener(`click`, () => { draft.lawOnly = !draft.lawOnly; paint(); });
+      content.querySelector(`[data-role="filter-clear"]`).addEventListener(`click`, () => {
+        Object.assign(draft, { level: ALL, topic: ALL, weak: false, lawOnly: false });
+        paint();
+      });
+      paint();
+      const sh = UI.sheet({ title: `出題の条件`, content });
+      content.querySelector(`[data-role="filter-apply"]`).addEventListener(`click`, () => {
+        sh.close(false);
+        condBtn.focus({ preventScroll: true });
+        const same = [`level`, `topic`, `count`, `weak`, `lawOnly`].every((k) => draft[k] === cond[k]);
+        if (same) return;
+        changeCond(() => {
+          Object.assign(cond, draft);
+          savePrefs({ autoCount: cond.count });
+        });
+      });
+    });
 
     function answeredCount() {
       return items.filter((it) => it.picked != null).length;
@@ -887,11 +1091,6 @@ window.Views.quiz = (function () {
         .then((ok) => { if (ok) go(); else paintConds(); });
     }
 
-    weakBox.addEventListener(`change`, () => {
-      const v = weakBox.checked;
-      changeCond(() => { cond.weak = v; });
-    });
-    lawBtn.addEventListener(`click`, () => changeCond(() => { cond.lawOnly = !cond.lawOnly; }));
     body.querySelector(`[data-role="retry"]`).addEventListener(`click`, () => changeCond(() => {}));
 
     // 開くと上位3語を表示し、残りは「ほか n語」で出す(長い一覧で問題が下に押し出されないように)
@@ -901,7 +1100,8 @@ window.Views.quiz = (function () {
       const weakIds = Array.isArray(fixedIds)
         ? fixedIds.filter((id) => AppIndex.termsById[id] && stats[id])
         : Object.keys(stats)
-          .filter((id) => stats[id].wrong > 0 && stats[id].wrong >= stats[id].correct && AppIndex.termsById[id])
+          // 作品由来の俗語(worksOnly)は出題しないので、以前の成績があっても出さない
+          .filter((id) => stats[id].wrong > 0 && stats[id].wrong >= stats[id].correct && AppIndex.termsById[id] && AppIndex.termsById[id].worksOnly !== true)
           .sort((a, b) => (stats[b].wrong - stats[b].correct) - (stats[a].wrong - stats[a].correct))
           .slice(0, 8);
       weakShownIds = weakIds;
@@ -929,7 +1129,7 @@ window.Views.quiz = (function () {
       patchHistoryState({
         autoState: {
           level: cond.level, topic: cond.topic, weak: cond.weak, count: cond.count, lawOnly: cond.lawOnly,
-          condOpen: condEl.open, weakOpen: weakPanel.open, weakIds: weakShownIds.slice(),
+          weakOpen: weakPanel.open, weakIds: weakShownIds.slice(),
           questions: items.map((it) => ({
             termId: it.q.term.id, type: it.q.type, stem: it.q.stem,
             choices: it.q.choices.map((c) => ({ text: c.text, correct: !!c.correct })), picked: it.picked,
@@ -982,14 +1182,14 @@ window.Views.quiz = (function () {
       if (answeredCount() === items.length) renderSummary();
     }
 
-    // 回答済みのカードの「次の問題へ」の表示を、今の回答状況に合わせる(後ろに未回答がなければ「未回答の問題へ」「結果を見る」)
+    // 回答済みのカードの「次の問題」の表示を、今の回答状況に合わせる(後ろに未回答がなければ「未回答の問題へ」「結果を見る」)
     function refreshNextButtons() {
       const cards = Array.from(list.querySelectorAll(`.quiz-card`));
       const anyLeft = cards.some((c) => !c.classList.contains(`is-answered`));
       cards.forEach((c) => {
         const b = c.querySelector(`[data-role="next-q"]`);
         if (!b) return;
-        const label = nextUnansweredAfter(c) ? `次の問題へ` : anyLeft ? `未回答の問題へ` : `結果を見る`;
+        const label = nextUnansweredAfter(c) ? `次の問題` : anyLeft ? `未回答の問題へ` : `結果を見る`;
         if (b.dataset.label !== label) {
           b.dataset.label = label;
           b.innerHTML = nextBtnInner(label);
@@ -1068,23 +1268,27 @@ window.Views.quiz = (function () {
         </div>
         <p class="quiz-question">${esc(q.stem)}</p>
         <div class="choice-list" role="group" aria-label="選択肢" data-role="choices"></div>
-        <div class="quiz-feedback" data-role="verdict" role="status" aria-live="polite"></div>
         <div class="quiz-after" data-role="after"></div>
       `;
       const choiceList = card.querySelector(`[data-role="choices"]`);
-      const verdictEl = card.querySelector(`[data-role="verdict"]`);
       const afterEl = card.querySelector(`[data-role="after"]`);
+      // 判定は回答バーとしてカードの最後に置く
+      const verdictEl = verdictElement();
+      card.appendChild(verdictEl);
 
       function paint(restored) {
         const ok = it.picked === correctIdx;
         card.classList.add(`is-answered`);
         if (restored) card.classList.add(`is-restored`);
         paintChoices(choiceList, q.choices, it.picked);
-        verdictEl.innerHTML = verdictHtml(ok, it.picked, correctIdx, q.term);
+        showVerdict(verdictEl, ok, mcVerdictSub(ok, correctIdx, q.term, `用語の説明はこの下から開けます`));
+        verdictEl.insertAdjacentHTML(`beforeend`, nextBtnHtml(`次の問題`));
         // 根拠法令・意味を選ぶ問題は、用語の意味も1行で確認できるように
         const meaning = q.type === `law-ref` || q.type === `def-from-name`
           ? `<p class="quiz-meaning"><strong>${esc(q.term.name)}</strong>: ${esc(QuizEngine.truncate(String(q.term.simpleExplanation || ``), 60))}</p>` : ``;
-        afterEl.innerHTML = `${meaning}<div class="quiz-after-links">${termLinkHtml(q.term.id)}</div>${nextBtnHtml(`次の問題へ`)}`;
+        // 自動生成の問題は用語の説明から作るので、誤りの報告は「用語」として送る
+        const meta = reportMetaHtml({ kind: `term`, id: q.term.id, title: q.term.name, location: `#glossary/${q.term.id}` }, q.term.asOf);
+        afterEl.innerHTML = `${!ok ? reviewAddedHtml(q.term.name) : ``}${meaning}<div class="quiz-after-links">${termLinkHtml(q.term.id)}</div>${meta}`;
       }
 
       q.choices.forEach((choice, i) => {
@@ -1095,7 +1299,6 @@ window.Views.quiz = (function () {
           const ok = i === correctIdx;
           recordStat(q.term.id, ok);
           paint(false);
-          flashCard(card, ok);
           ctx.lastAnswered = card;
           updateScore();
           refreshNextButtons();
@@ -1120,5 +1323,5 @@ window.Views.quiz = (function () {
     }
   }
 
-  return { render, buildFixedCard, openTermSheet, streakLineHtml, PASS_PCT };
+  return { render, buildFixedCard, ensureNextButtons, openTermSheet, streakLineHtml, PASS_PCT };
 })();

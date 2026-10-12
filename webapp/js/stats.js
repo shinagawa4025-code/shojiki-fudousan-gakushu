@@ -30,16 +30,21 @@ window.Stats = (function () {
     return Srs.getReviewDueIds().filter((id) => AppIndex.termsById[id]).length;
   }
 
+  // 学習対象の用語(「作品で学ぶ」専用の俗語 worksOnly は、用語集・復習と同じく数えない)
+  function learnTerms() {
+    return AppIndex.allTerms.filter((t) => t.worksOnly !== true);
+  }
+
   function newCount() {
     const cards = Srs.getAllCards();
-    return AppIndex.allTerms.filter((t) => !cards[t.id]).length;
+    return learnTerms().filter((t) => !cards[t.id]).length;
   }
 
   // 新規 / 学習中(間隔7日未満) / 定着しはじめ(21日未満) / 定着(21日以上)
   function srsBuckets() {
     const cards = Srs.getAllCards();
     const b = { new: 0, learning: 0, young: 0, mature: 0 };
-    AppIndex.allTerms.forEach((t) => {
+    learnTerms().forEach((t) => {
       const c = cards[t.id];
       if (!c) b.new += 1;
       else if ((c.interval || 0) < 7) b.learning += 1;
@@ -71,6 +76,11 @@ window.Stats = (function () {
   function categoryOf(item, examTypeId) {
     const type = examType(examTypeId);
     if (!type || !Array.isArray(type.categories)) return null;
+    // 4択・基礎知識に試験分野が明示されていれば最優先(値が null なら「その試験の範囲外」)
+    if (item && item.examCats && Object.prototype.hasOwnProperty.call(item.examCats, examTypeId)) {
+      const cid = item.examCats[examTypeId];
+      return cid ? type.categories.find((c) => c.id === cid) || null : null;
+    }
     const termId = item.relatedTermId || (AppIndex.termsById[item.id] ? item.id : null);
     if (termId) {
       const byId = type.categories.find((c) => (c.termIds || []).includes(termId));
@@ -177,7 +187,7 @@ window.Stats = (function () {
     const known = obj(`flashcards`);
     const bp = obj(`basicsProgress`);
     return window.APP_DATA.topics.map((topic) => {
-      const ids = AppIndex.topicTermIndex[topic.id] || [];
+      const ids = (AppIndex.topicTermIndex[topic.id] || []).filter((id) => AppIndex.termsById[id] && AppIndex.termsById[id].worksOnly !== true);
       const done = ids.filter((id) => isDone(id, known, bp)).length;
       return { topic, total: ids.length, done, pct: ids.length ? Math.round((done / ids.length) * 100) : 0 };
     });
@@ -186,8 +196,9 @@ window.Stats = (function () {
   function overall() {
     const known = obj(`flashcards`);
     const bp = obj(`basicsProgress`);
-    const total = AppIndex.allTerms.length;
-    const done = AppIndex.allTerms.filter((t) => isDone(t.id, known, bp)).length;
+    const terms = learnTerms();
+    const total = terms.length;
+    const done = terms.filter((t) => isDone(t.id, known, bp)).length;
     return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
   }
 
@@ -307,7 +318,7 @@ window.Stats = (function () {
     const today = DateUtil.today();
     const daysLeft = DateUtil.diffDays(today, target.date);
     const type = examType(target.examTypeId);
-    let pool = AppIndex.allTerms;
+    let pool = learnTerms();
     if (type && Array.isArray(type.categories)) pool = pool.filter((t) => categoryOf(t, type.id));
     const known = obj(`flashcards`);
     const bp = obj(`basicsProgress`);
@@ -329,9 +340,120 @@ window.Stats = (function () {
     };
   }
 
+  // ---- 試験の公式日程(試験日の登録フォーム・初回ガイドのワンタップ登録) ----
+  // データ(APP_DATA.exams.officialDates または各試験の officialDates)を優先し、なければ下の既定値を使う
+  // 既定値は 2026-10-18 を過ぎると表示されなくなる(日付が過ぎたものは出さないため)
+  const FALLBACK_OFFICIAL_DATES = [{ date: `2026-10-18`, label: `令和8年度 宅建士試験`, examTypeId: `takken` }];
+  function officialDates(examTypeId) {
+    const exams = window.APP_DATA && window.APP_DATA.exams;
+    const list = [];
+    const add = (o, typeId) => {
+      if (!o || typeof o !== `object` || !DateUtil.isValid(o.date)) return;
+      const tid = typeof o.examTypeId === `string` ? o.examTypeId : typeId;
+      if (!examType(tid)) return;
+      list.push({ date: o.date, label: typeof o.label === `string` && o.label ? o.label : `${examType(tid).shortName}試験`, examTypeId: tid });
+    };
+    if (exams && Array.isArray(exams.officialDates)) exams.officialDates.forEach((o) => add(o, `takken`));
+    examTypes().forEach((t) => { if (Array.isArray(t.officialDates)) t.officialDates.forEach((o) => add(o, t.id)); });
+    if (!list.length) FALLBACK_OFFICIAL_DATES.forEach((o) => add(o, o.examTypeId));
+    const today = DateUtil.today();
+    const seen = new Set();
+    // 試験日の当日以降は出さない(前日まで)
+    return list.filter((o) => o.date > today && (!examTypeId || o.examTypeId === examTypeId))
+      .filter((o) => { const k = `${o.examTypeId}|${o.date}`; if (seen.has(k)) return false; seen.add(k); return true; })
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+  }
+
+  // ---- 学ぶ目的(learnerProfile) ----
+  // { goal: 'takken'|'life'|'work'|'zeirishi', interests: string[], at: number }
+  // 初回ガイド・設定(学ぶ目的)で保存し、ホーム・トピック一覧・今日の復習の並びに使う
+  const GOAL_OPTIONS = [
+    { id: `takken`, icon: `target`, title: `宅建士試験に合格したい`, desc: `4択・○×・本番形式の模擬試験で対策`, examTypeId: `takken` },
+    { id: `life`, icon: `home`, title: `暮らしや取引に役立てたい`, desc: `部屋を借りる・家を買う・売る・相続する前に`, examTypeId: null },
+    { id: `work`, icon: `briefcase`, title: `仕事で使いたい`, desc: `不動産・金融・保険・士業などの基礎として`, examTypeId: null },
+    { id: `zeirishi`, icon: `receipt`, title: `税理士試験(消費税法など)の対策`, desc: `不動産と消費税・不動産の税金`, examTypeId: `zeirishi` },
+  ];
+  // 気になるテーマ → トピック(先頭ほど優先。まだないトピックは使うときに除く)
+  const INTEREST_TOPIC_MAP = Object.freeze({
+    rent: Object.freeze([`topicI`, `topicA`]),
+    buy: Object.freeze([`topicB`, `topicC`, `topicD`]),
+    sell: Object.freeze([`topicP`, `topicB`, `topicH`]),
+    inherit: Object.freeze([`topicQ`, `topicH`, `topicE`]),
+    landlord: Object.freeze([`topicA`, `topicH`]),
+    trouble: Object.freeze([`topicG`, `topicF`]),
+  });
+  const INTEREST_OPTIONS = [
+    { id: `rent`, label: `借りる(賃貸)`, short: `借りる`, icon: `key` },
+    { id: `buy`, label: `買う(購入・ローン)`, short: `買う`, icon: `home` },
+    { id: `sell`, label: `売る`, short: `売る`, icon: `handshake` },
+    { id: `inherit`, label: `相続する`, short: `相続`, icon: `receipt` },
+    { id: `landlord`, label: `貸す(大家)`, short: `貸す`, icon: `building` },
+    { id: `trouble`, label: `トラブルを避けたい`, short: `トラブル対策`, icon: `shield` },
+  ];
+  const GOAL_IDS = GOAL_OPTIONS.map((g) => g.id);
+  const INTEREST_IDS = INTEREST_OPTIONS.map((o) => o.id);
+
+  function topicExists(id) {
+    return !!(window.AppIndex && AppIndex.topicsById && AppIndex.topicsById[id]);
+  }
+
+  // いま存在するトピックだけに絞った対応表(topicP・topicQ はデータに入ってから使われる)
+  function interestTopicsMap() {
+    const out = {};
+    INTEREST_IDS.forEach((k) => { out[k] = INTEREST_TOPIC_MAP[k].filter(topicExists); });
+    return out;
+  }
+
+  function normalizeProfile(v) {
+    if (!v || typeof v !== `object` || Array.isArray(v) || !GOAL_IDS.includes(v.goal)) return null;
+    const interests = Array.isArray(v.interests)
+      ? v.interests.filter((k, i, a) => typeof k === `string` && INTEREST_IDS.includes(k) && a.indexOf(k) === i)
+      : [];
+    const at = typeof v.at === `number` && Number.isFinite(v.at) && v.at > 0 ? v.at : null;
+    return { goal: v.goal, interests, at };
+  }
+
+  // 保存されている学ぶ目的(壊れていれば null)
+  function getProfile() {
+    return normalizeProfile(Storage.get(`learnerProfile`, null));
+  }
+
+  // 学ぶ目的を保存する。goal が不正なら保存しない。戻り値は保存した内容(または null)
+  function setProfile(p) {
+    const n = normalizeProfile(Object.assign({}, p, { at: Date.now() }));
+    if (!n) return null;
+    Storage.set(`learnerProfile`, n);
+    return n;
+  }
+
+  // 気になるテーマのトピック(選んだ順・重複なし・存在するものだけ)
+  // 気になるテーマは暮らし・仕事の目的のときだけ使う(設定で目的を試験に変えても、選んだテーマは残してあるため)
+  const INTEREST_GOALS = [`life`, `work`];
+  function interestTopicIds(profile) {
+    const p = profile === undefined ? getProfile() : normalizeProfile(profile);
+    if (!p || !INTEREST_GOALS.includes(p.goal)) return [];
+    const out = [];
+    p.interests.forEach((k) => (INTEREST_TOPIC_MAP[k] || []).forEach((tid) => {
+      if (topicExists(tid) && !out.includes(tid)) out.push(tid);
+    }));
+    return out;
+  }
+
+  // 目的に対応する試験(宅建士・税理士)。暮らし・仕事は null
+  function goalExamTypeId(profile) {
+    const p = profile === undefined ? getProfile() : normalizeProfile(profile);
+    const g = p ? GOAL_OPTIONS.find((x) => x.id === p.goal) : null;
+    return g && g.examTypeId && examType(g.examTypeId) ? g.examTypeId : null;
+  }
+
   return {
     examTypes, examType, dueReviewCount, newCount, srsBuckets, termStatus, categoryOf, termsInCategory,
     byCategory, byTopic, overall, heatmap, levelOf, weakTerms, examHistory,
     listTargets, addTarget, updateTarget, removeTarget, setPrimary, primaryTarget, pace, newLimit, newAvailableToday,
+    officialDates,
+    getProfile, setProfile, normalizeProfile, interestTopicIds, goalExamTypeId,
+    GOAL_OPTIONS, INTEREST_OPTIONS,
+    // 存在するトピックだけに絞った {rent:[...], buy:[...], ...}(読むたびに作り直す)
+    get INTEREST_TOPICS() { return interestTopicsMap(); },
   };
 })();

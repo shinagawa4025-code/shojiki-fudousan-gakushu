@@ -13,10 +13,22 @@ window.QuizEngine = (function () {
     return a;
   }
 
+  // 一般の出題に使う用語(作品由来の俗語 worksOnly: true は「作品で学ぶ」コーナー用なので、自動生成クイズの出題・ダミーに使わない)
+  // 用語データは読み込み後に変わらないため、元の一覧ごとに結果を覚えておく
+  let generalCache = { src: null, n: -1, list: [] };
+  function generalTerms(allTerms) {
+    const src = allTerms || (window.AppIndex && AppIndex.allTerms) || [];
+    if (generalCache.src !== src || generalCache.n !== src.length) {
+      generalCache = { src, n: src.length, list: src.filter((t) => t && t.worksOnly !== true) };
+    }
+    return generalCache.list;
+  }
+
   // 正解の用語が持つtopicIdsを基準に、関連性の高い順(同トピック×同レベル → 同トピック×他レベル →
   // トピック不問×同レベル → トピック不問×他レベル)にダミー候補を集める。必要数より多めに返し、
   // 選択肢テキストの重複を避けるためのバッファとして使う。
   function pickDistractors(allTerms, correctTerm, want) {
+    allTerms = generalTerms(allTerms);
     const excludeId = correctTerm.id;
     const correctTopics = correctTerm.topicIds || [];
     const shareTopic = (t) => correctTopics.length > 0 && (t.topicIds || []).some((id) => correctTopics.includes(id));
@@ -171,6 +183,7 @@ window.QuizEngine = (function () {
   // (用語データは読み込み後に変わらないため、用語ごとに結果を覚えておく)
   let poolCache = { terms: null, map: new Map() };
   function lawRefPool(allTerms, correctTerm) {
+    allTerms = generalTerms(allTerms);
     if (poolCache.terms !== allTerms) poolCache = { terms: allTerms, map: new Map() };
     const key = `${correctTerm.id}\n${correctTerm.lawRef}`;
     let pool = poolCache.map.get(key);
@@ -408,7 +421,7 @@ window.QuizEngine = (function () {
   // opts.types: 出題形式の候補(例: [`law-ref`] で根拠法令の問題だけ)
   function generateAutoQuiz(level, topicId, count, weakStats, opts) {
     const isAll = (v) => !v || v === `全て` || v === `all` || v === `すべて`;
-    let pool = AppIndex.allTerms.filter((t) => isAll(level) || t.level === level);
+    let pool = generalTerms(AppIndex.allTerms).filter((t) => isAll(level) || t.level === level);
     if (!isAll(topicId)) pool = pool.filter((t) => (t.topicIds || []).includes(topicId));
 
     const orderedPool = weakStats ? orderByWeakness(pool, weakStats) : shuffle(pool);
@@ -499,14 +512,35 @@ window.QuizEngine = (function () {
     }));
   }
 
+  // 全問の○×の文(起動後に何度も呼ばれるので、作った一覧を覚えておく)。
+  // 問題データが変わったら作り直す: 配列の差し替え・件数の変化(ContentPack.add)と、
+  // 追加コンテンツの登録回数(ContentPack.patchQuiz は既存の問題を件数を変えずに書き換える)を目印にする
+  let stmtCache = null;
+  let stmtKey = null;
+  function statementsKey(quiz) {
+    const packs = window.ContentPack && typeof ContentPack.list === `function` ? ContentPack.list().length : 0;
+    return { quiz, n: quiz.length, packs };
+  }
   function allStatements() {
-    return (window.APP_DATA.quiz || []).flatMap(statementsFrom);
+    const quiz = (window.APP_DATA && window.APP_DATA.quiz) || [];
+    const key = statementsKey(quiz);
+    if (!stmtCache || !stmtKey || stmtKey.quiz !== key.quiz || stmtKey.n !== key.n || stmtKey.packs !== key.packs) {
+      stmtCache = quiz.flatMap(statementsFrom);
+      stmtKey = key;
+    }
+    // 呼び出し側が並べ替えても共有の配列は変えない(文のオブジェクト自体は書き換えないこと)
+    return stmtCache.slice();
+  }
+  // 問題データを上の目印に出ない形で書き換えたとき(テスト・将来の読み込み方法)用
+  function clearStatementCache() {
+    stmtCache = null;
+    stmtKey = null;
   }
 
   return {
     QUESTION_TYPES, shuffle, truncate, pickDistractors, pickLawRefDistractors, buildChoiceText, orderByWeakness,
     buildQuestionForTerm, buildQuestionsFromTerms, generateAutoQuiz, isMcItem, fromFixedMc,
-    statementTruths, statementsFrom, allStatements, stemContext, lawRefsOverlap, lawCitations,
+    statementTruths, statementsFrom, allStatements, clearStatementCache, stemContext, lawRefsOverlap, lawCitations,
     nameVariants, maskNames, stripLawNotes, lawRefLeaks, isLawRefEligible,
   };
 })();

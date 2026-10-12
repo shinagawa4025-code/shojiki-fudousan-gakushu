@@ -137,7 +137,7 @@ window.APP_DATA.quiz = [
   { id: `quiz-E-05`, level: `中級`, topicIds: [`topicE`], question: `幅4m未満の道路でも建築が認められる「2項道路」のセットバックとは?`,
     answer: `道路の中心線から2m後退した線を敷地の境界線とみなし、その範囲には建築できないとする規制(建築基準法42条・43条)`, relatedTermId: `basicE08`, episodes: [] },
 
-  // ===== 業界構造・プロの手口(topicF)追加分 =====
+  // ===== 不動産業界のしくみ(topicF)追加分 =====
   { id: `quiz-F-01`, level: `中級`, topicIds: [`topicF`], question: `専属専任媒介契約と専任媒介契約で、業務処理状況の報告頻度はどう違うか?`,
     answer: `専属専任は1週間に1回以上、専任は2週間に1回以上の報告義務がある(宅建業法34条の2第9項)`, relatedTermId: `basicF03`, episodes: [] },
   { id: `quiz-F-02`, level: `中級`, topicIds: [`topicF`], question: `「おとり広告」はどの法律で規制されているか?`,

@@ -12,6 +12,8 @@ window.APP_DATA.exams = {
       minutes: 120,
       targetScore: 35,
       targetNote: `35点はこのアプリ独自の目安です(合格点は毎年変わります)`,
+      // 実施機関が公表した試験日(試験日の入力欄で、過ぎるまでワンタップの候補として出す)
+      officialDates: [{ date: `2026-10-18`, label: `令和8年度 宅建士試験` }],
       mockExam: true,
       categories: [
         { id: `kenri`, name: `権利関係`, questions: 14, topicIds: [`topicL`, `topicB`, `topicA`, `topicD`, `topicE`], termIds: [] },

@@ -1,4 +1,5 @@
-// 読み上げ機能(Web Speech API、オフライン・無料)
+// 読み上げ機能(Web Speech API。端末・ブラウザに備わる音声合成を使う)
+// ブラウザや音声によってはオンラインの音声合成サービスを使い、読み上げる文章がそのサービスに送られることがある(学習の記録は送らない)
 window.TTS = (function () {
   const supported = `speechSynthesis` in window;
   const DEFAULT_RATE = 1;

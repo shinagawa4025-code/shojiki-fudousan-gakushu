@@ -138,22 +138,28 @@ window.UI = (function () {
     requestAnimationFrame(() => el.classList.add(`toast-show`));
     let timer = null;
     let gone = false;
+    // 操作ボタン付き(復習の「元に戻す」など)は、その画面での操作なので画面を移ったら閉じる(×で閉じる通知は残す)
+    const closeOnNav = !!opts.action && !opts.dismissible;
+    function onHashChange() { dismiss(); }
     function dismiss() {
       if (gone) return;
       gone = true;
       clearTimeout(timer);
+      if (closeOnNav) window.removeEventListener(`hashchange`, onHashChange);
       el.classList.remove(`toast-show`);
       const i = activeToasts.indexOf(el);
       if (i >= 0) activeToasts.splice(i, 1);
       layoutToasts();
       setTimeout(() => el.remove(), 300);
     }
+    if (closeOnNav) window.addEventListener(`hashchange`, onHashChange);
     if (opts.duration !== 0) timer = setTimeout(dismiss, opts.duration || 2600);
     return { dismiss };
   }
 
   // 下から出るパネル(PCでは中央のダイアログ)。content は HTML文字列 か Element
-  // 戻り値 { el, body, close }
+  // opts.footer: 下端に固定する操作ボタンの欄(HTML文字列 か Element。フォームの送信ボタンなど)
+  // 戻り値 { el, body, foot, close }
   function sheet(opts) {
     opts = opts || {};
     const backdrop = document.createElement(`div`);
@@ -166,34 +172,96 @@ window.UI = (function () {
           <button type="button" class="btn btn-icon" data-role="sheet-close" aria-label="閉じる">${ic(`x`)}</button>
         </div>
         <div class="sheet-body"></div>
+        ${opts.footer ? `<div class="sheet-foot"></div>` : ``}
       </div>
     `;
-    const body = backdrop.querySelector(`.sheet-body`);
+    const panel = backdrop.querySelector(`.sheet`);
+    const body = panel.querySelector(`:scope > .sheet-body`);
+    const closeBtn = panel.querySelector(`:scope > .sheet-head [data-role="sheet-close"]`);
     if (typeof opts.content === `string`) body.innerHTML = opts.content;
     else if (opts.content) body.appendChild(opts.content);
+    // 本文の中の同じクラスと取り違えないよう、パネル直下の要素だけを探す
+    const foot = opts.footer ? panel.querySelector(`:scope > .sheet-foot`) : null;
+    if (foot) {
+      if (typeof opts.footer === `string`) foot.innerHTML = opts.footer;
+      else foot.appendChild(opts.footer);
+    }
     document.body.appendChild(backdrop);
     document.body.style.overflow = `hidden`;
     let closed = false;
     const release = trapFocus(backdrop, () => close());
 
-    function close(restoreFocus) {
+    // 閉じるときは下へ消えるアニメーション(画面の移動・動きを減らす設定のときはすぐ消す)
+    function close(restoreFocus, instant) {
       if (closed) return;
       closed = true;
       release(restoreFocus === false ? false : undefined);
       document.body.style.overflow = ``;
-      backdrop.remove();
       window.removeEventListener(`hashchange`, onHashChange);
+      if (instant || prefersReducedMotion()) backdrop.remove();
+      else {
+        backdrop.classList.add(`is-closing`);
+        // 指で下へ引いている途中なら、その位置から下へ動かす
+        if (panel.classList.contains(`is-dragged`)) {
+          panel.style.transition = `transform 180ms var(--ease-std), opacity 180ms var(--ease-std)`;
+          panel.style.transform = `translateY(${dragY + 80}px)`;
+          panel.style.opacity = `0`;
+        }
+        setTimeout(() => backdrop.remove(), 180);
+      }
       if (opts.onClose) opts.onClose();
     }
-    function onHashChange() { close(false); }
+    function onHashChange() { close(false, true); }
 
     backdrop.addEventListener(`click`, (e) => { if (e.target === backdrop) close(); });
-    backdrop.querySelector(`[data-role="sheet-close"]`).addEventListener(`click`, () => close());
+    closeBtn.addEventListener(`click`, () => close());
     window.addEventListener(`hashchange`, onHashChange);
+
+    // スマホの下からのパネルは、つまみ(と見出し)を下へ引いて閉じられる。80px 以上か、素早く引いたら閉じる
+    let dragY = 0;
+    let drag = null;
+    const isBottomSheet = () => !(window.matchMedia && window.matchMedia(`(min-width: 768px)`).matches);
+    function onDown(e) {
+      if (closed || drag || !isBottomSheet() || (e.pointerType === `mouse` && e.button !== 0)) return;
+      if (e.target.closest(`button, a, input, select, textarea`)) return;
+      drag = { id: e.pointerId, y0: e.clientY, t0: performance.now(), lastY: e.clientY, lastT: performance.now(), v: 0 };
+      dragY = 0;
+      panel.style.transition = `none`;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* 無視 */ }
+    }
+    function onMove(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      dragY = Math.max(0, e.clientY - drag.y0);
+      const now = performance.now();
+      if (now > drag.lastT) drag.v = (e.clientY - drag.lastY) / (now - drag.lastT);
+      drag.lastY = e.clientY;
+      drag.lastT = now;
+      panel.style.transform = dragY ? `translateY(${dragY}px)` : ``;
+      panel.classList.toggle(`is-dragged`, dragY > 0);
+    }
+    function onUp(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      const fast = drag.v > 0.6 && dragY > 24;
+      drag = null;
+      if (e.type === `pointerup` && (dragY > 80 || fast)) { close(); return; }
+      // 戻す
+      panel.style.transition = `transform 160ms var(--ease-out)`;
+      panel.style.transform = ``;
+      panel.classList.remove(`is-dragged`);
+      dragY = 0;
+      setTimeout(() => { if (!closed) panel.style.transition = ``; }, 170);
+    }
+    panel.querySelectorAll(`:scope > .sheet-grip, :scope > .sheet-head`).forEach((h) => {
+      h.addEventListener(`pointerdown`, onDown);
+      h.addEventListener(`pointermove`, onMove);
+      h.addEventListener(`pointerup`, onUp);
+      h.addEventListener(`pointercancel`, onUp);
+    });
+
     // 最初のフォーカスは閉じるボタンへ(本文末尾のリンクにフォーカスするとシートが下までスクロールしてしまうため)
-    const firstFocusable = backdrop.querySelector(`[data-role="sheet-close"]`) || body.querySelector(FOCUSABLE);
+    const firstFocusable = closeBtn || body.querySelector(FOCUSABLE);
     if (firstFocusable) firstFocusable.focus({ preventScroll: true });
-    return { el: backdrop, body, close };
+    return { el: backdrop, body, foot, close: (restoreFocus) => close(restoreFocus) };
   }
 
   // 空状態: { icon, title, body, cta: { label, nav | onClick } } → Element

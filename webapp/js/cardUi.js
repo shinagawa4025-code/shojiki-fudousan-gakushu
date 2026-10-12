@@ -11,6 +11,13 @@ window.CardUi = (function () {
     return (term.topicIds || []).some((id) => EXAM_TOPIC_IDS.includes(id)) ? `試験のポイント` : `もう一歩踏み込むと`;
   }
 
+  // 深掘り(試験のポイント / もう一歩踏み込むと)の囲み。見出しはコロンを付けずに1行目に置く(読み上げ用に区切りだけ入れる)
+  function deepHtml(term, topicId) {
+    if (!term.deepDive) return ``;
+    const label = deepDiveLabel(term, topicId);
+    return `<p class="term-deep"><strong>${ic(label === `試験のポイント` ? `target` : `lightbulb`, 14)}${label}<span class="sr-only">:</span></strong>${term.deepDive}</p>`;
+  }
+
   // 出典は1件ずつ改行して並べる(「、」区切りだと外部リンクのアイコンの後で改行され、行頭に「、」が来るため)
   function buildSourceCitationHtml(term) {
     const sourceIds = term.sources || [];
@@ -26,8 +33,51 @@ window.CardUi = (function () {
     return items.length ? `<div class="term-citation"><span class="term-citation-label">出典:</span><ul class="term-citation-list">${items.join(``)}</ul></div>` : ``;
   }
 
+  // 根拠条文を法令ごとのチップに分ける(括弧・かぎ括弧の中の「、」では分けない)
+  const OPEN = [`(`, `（`, `「`];
+  const CLOSE = [`)`, `）`, `」`];
+  function splitLawRef(ref) {
+    const parts = [];
+    let depth = 0;
+    let cur = ``;
+    Array.from(String(ref || ``)).forEach((ch) => {
+      if (OPEN.includes(ch)) depth += 1;
+      else if (CLOSE.includes(ch) && depth > 0) depth -= 1;
+      if (ch === `、` && depth === 0) {
+        if (cur.trim()) parts.push(cur.trim());
+        cur = ``;
+        return;
+      }
+      cur += ch;
+    });
+    if (cur.trim()) parts.push(cur.trim());
+    return parts;
+  }
+
+  // 根拠: 法令ごとのチップ(コピーしたときに区切りが残るよう、見えない「、」を挟む)
   function buildLawRefHtml(term) {
-    return term.lawRef ? `<p class="law-ref">${ic(`library`, 14)}<span>根拠: ${term.lawRef}</span></p>` : ``;
+    if (!term.lawRef) return ``;
+    const chips = splitLawRef(term.lawRef).map((p) => `<span class="law-chip">${p}</span>`).join(`<span class="sr-only">、</span>`);
+    return `<p class="law-ref">${ic(`library`, 14)}<span class="law-ref-label">根拠<span class="sr-only">:</span></span>${chips}</p>`;
+  }
+
+  // 法令上の決まりではない目安(相場・一般的な手順など)の注記
+  function practiceNoteHtml(term) {
+    return term.kind === `practice` && !term.lawRef ? `<p class="practice-note">${ic(`info`, 14)}<span>実務上の目安です(法令上の決まりではありません)</span></p>` : ``;
+  }
+
+  // 「◯年◯月時点の法令に基づく」+「誤りを報告」(報告フォームが未設定なら報告リンクは出さない)
+  // loc: 報告フォームに入れる画面の場所(省略時は今のハッシュ)
+  function itemMetaHtml(term, loc) {
+    if (!window.Report) return ``;
+    let asOf = ``;
+    let link = ``;
+    try {
+      if (term.lawRef && typeof Report.asOfText === `function`) asOf = Report.asOfText(term.asOf);
+      if (typeof Report.linkHtml === `function`) link = Report.linkHtml({ kind: term.source === `general` ? `basic` : `term`, id: term.id, title: term.name, location: loc || location.hash });
+    } catch (e) { return ``; }
+    if (!asOf && !link) return ``;
+    return `<p class="item-meta">${asOf ? `<span>${asOf}</span>` : ``}${link || ``}</p>`;
   }
 
   // 用語に関係する計算機(計算機ビューが対応表を持っていれば)へのリンク
@@ -79,9 +129,10 @@ window.CardUi = (function () {
   }
 
   // ---- ブックマーク ----
-  function bookmarkBtnHtml(termId) {
+  // on: 保存済みかどうか(呼び出し側で分かっていれば渡す。省略時は保存内容を読む)
+  function bookmarkBtnHtml(termId, on) {
     if (!window.Bookmarks) return ``;
-    const on = Bookmarks.has(`term:${termId}`);
+    if (typeof on !== `boolean`) on = Bookmarks.has(`term:${termId}`);
     return `<button type="button" class="btn btn-icon bookmark-toggle${on ? ` is-bookmarked` : ``}" data-role="bookmark" aria-pressed="${on}" aria-label="${on ? `ブックマークを外す` : `ブックマークする`}">${ic(on ? `bookmark-fill` : `bookmark`)}</button>`;
   }
 
@@ -102,19 +153,44 @@ window.CardUi = (function () {
     return `<button type="button" class="btn btn-icon known-toggle${isKnown ? ` is-known` : ``}" data-role="known-toggle" aria-pressed="${isKnown}" aria-label="${isKnown ? `記憶済みを取り消す` : `記憶済みにする`}">${ic(isKnown ? `star-fill` : `star`)}</button>`;
   }
 
-  // opts: { known, onToggleKnown(term), onToggleBookmark(term, on), episodeChips(html), showGrading, onGrade(term, grade), gradeHints, topicId(深掘りの見出しの判定用),
-  //         flipped(最初から裏面を出す: 戻るで復元するとき), onFlip(term, flipped)(タップ・キーでめくったとき) }
+  // 裏面の中身(初めてめくるときに作る。一覧に並ぶカードの大半は裏を見ないため)
+  function backHtml(term, opts, isKnown, bmOn) {
+    const diagrams = diagramsFor(term.id);
+    const ttsSupported = window.TTS && window.TTS.supported;
+    return `
+      <div class="flip-face-head">
+        <div class="flip-face-tags"><span class="badge badge-${term.level}">${term.level}</span></div>
+        <div class="flip-face-actions">
+          <button type="button" class="btn btn-icon flip-toggle" data-role="flip" aria-expanded="true" aria-label="表に戻す">${ic(`refresh`)}</button>
+          ${ttsSupported ? `<button type="button" class="btn btn-icon tts-btn" aria-label="読み上げ" data-role="tts-btn">${ic(`volume`)}</button>` : ``}
+          ${bookmarkBtnHtml(term.id, bmOn)}${knownBtnHtml(isKnown)}
+        </div>
+      </div>
+      <p class="flip-back-title">${term.name}</p>
+      <p class="term-simple">${term.simpleExplanation}</p>
+      ${deepHtml(term, opts.topicId)}
+      ${buildLawRefHtml(term)}
+      ${practiceNoteHtml(term)}
+      ${buildSourceCitationHtml(term)}
+      ${diagrams.length ? `<div><button type="button" class="btn btn-secondary btn-sm figure-btn" data-role="figure" data-diagram="${diagrams[0]}">${ic(`diagram`, 16)}図解を見る</button></div>` : ``}
+      ${calcLinksHtml(term.id)}
+      ${itemMetaHtml(term, opts.reportLocation || `#glossary/${encodeURIComponent(term.id)}`)}`;
+  }
+
+  // opts: { known, bookmarked(保存済みか。省略時は保存内容を読む), onToggleKnown(term), onToggleBookmark(term, on),
+  //         topicId(深掘りの見出しの判定用), flipped(最初から裏面を出す: 戻るで復元するとき), onFlip(term, flipped)(タップ・キーでめくったとき),
+  //         reportLocation(誤りの報告に入れる画面。省略時はその用語を開く #glossary/<id>) }
+  // (今日の復習の評価ボタンはカードの外のトレイ。review.js が作る)
+  // 戻り値の要素には card.flip(viaKeyboard)(めくる)と card.setFlipped(on)(表裏を指定。onFlip は呼ばない)がある
   function buildFlipCard(term, opts) {
     opts = opts || {};
     const known = opts.known || {};
     const card = document.createElement(`div`);
-    card.className = `flip-card` + (opts.showGrading ? ` flip-card-tall` : ``) + (opts.flipped ? ` flipped` : ``);
+    card.className = `flip-card` + (opts.flipped ? ` flipped` : ``);
     card.dataset.termId = term.id;
     const isKnown = !!known[term.id];
-    const sourceLabel = term.source === `general` ? `基礎知識` : `作品より`;
-    const ttsSupported = window.TTS && window.TTS.supported;
-    const diagrams = diagramsFor(term.id);
-    const hints = opts.gradeHints || {};
+    const bmOn = typeof opts.bookmarked === `boolean` ? opts.bookmarked : (window.Bookmarks ? Bookmarks.has(`term:${term.id}`) : false);
+    const hasDiagram = diagramsFor(term.id).length > 0;
 
     card.innerHTML = `
       <div class="flip-card-inner">
@@ -122,57 +198,67 @@ window.CardUi = (function () {
           <div class="flip-face-head">
             <div class="flip-face-tags">
               <span class="badge badge-${term.level}">${term.level}</span>
-              <span class="source-tag source-tag-${term.source}">${sourceLabel}</span>
-              ${diagrams.length ? `<span class="source-tag">${ic(`diagram`, 12)} 図解</span>` : ``}
+              ${hasDiagram ? `<span class="source-tag">${ic(`diagram`, 12)} 図解</span>` : ``}
             </div>
-            <div class="flip-face-actions">${bookmarkBtnHtml(term.id)}${knownBtnHtml(isKnown)}</div>
+            <div class="flip-face-actions">${bookmarkBtnHtml(term.id, bmOn)}${knownBtnHtml(isKnown)}</div>
           </div>
           <div class="term-name">${term.name}</div>
           <button type="button" class="flip-hint flip-toggle" data-role="flip" aria-expanded="false" aria-label="「${term.name}」の意味を見る">${ic(`refresh`, 14)}タップで意味を見る</button>
         </div>
-        <div class="flip-card-back card">
-          <div class="flip-face-head">
-            <div class="flip-face-tags"><span class="badge badge-${term.level}">${term.level}</span></div>
-            <div class="flip-face-actions">
-              <button type="button" class="btn btn-icon flip-toggle" data-role="flip" aria-expanded="true" aria-label="表に戻す">${ic(`refresh`)}</button>
-              ${ttsSupported ? `<button type="button" class="btn btn-icon tts-btn" aria-label="読み上げ" data-role="tts-btn">${ic(`volume`)}</button>` : ``}
-              ${bookmarkBtnHtml(term.id)}${knownBtnHtml(isKnown)}
-            </div>
-          </div>
-          <p class="flip-back-title">${term.name}</p>
-          <p class="term-simple">${term.simpleExplanation}</p>
-          <p class="term-deep"><strong>${deepDiveLabel(term, opts.topicId)}:</strong> ${term.deepDive}</p>
-          ${buildLawRefHtml(term)}
-          ${buildSourceCitationHtml(term)}
-          ${diagrams.length ? `<div><button type="button" class="btn btn-secondary btn-sm figure-btn" data-role="figure" data-diagram="${diagrams[0]}">${ic(`diagram`, 16)}図解を見る</button></div>` : ``}
-          ${calcLinksHtml(term.id)}
-          ${opts.episodeChips ? `<div class="episode-chip-row">${opts.episodeChips}</div>` : ``}
-          ${opts.showGrading ? `
-            <div class="grade-row" data-role="grade-row">
-              <button type="button" class="btn grade-btn grade-again" data-grade="1">もう一度${hints[1] ? `<small>${hints[1]}</small>` : ``}</button>
-              <button type="button" class="btn grade-btn grade-hard" data-grade="2">難しい${hints[2] ? `<small>${hints[2]}</small>` : ``}</button>
-              <button type="button" class="btn grade-btn grade-good" data-grade="3">普通${hints[3] ? `<small>${hints[3]}</small>` : ``}</button>
-              <button type="button" class="btn grade-btn grade-easy" data-grade="4">簡単${hints[4] ? `<small>${hints[4]}</small>` : ``}</button>
-            </div>
-          ` : ``}
-        </div>
+        <div class="flip-card-back card"></div>
       </div>
     `;
 
-    const interactive = `[data-role="known-toggle"], [data-role="tts-btn"], [data-role="bookmark"], [data-role="figure"], [data-grade], [data-nav], a, button`;
-    // 見えていない面は inert にして、Tabで裏側のボタンに移動しないようにする
-    // (外部から .flipped を付け外ししても同期されるよう、class属性の変化を監視)
+    const inner = card.querySelector(`.flip-card-inner`);
     const front = card.querySelector(`.flip-card-front`);
     const back = card.querySelector(`.flip-card-back`);
+    let backBuilt = false;
+    function ensureBack() {
+      if (backBuilt) return;
+      backBuilt = true;
+      const bmNow = window.Bookmarks ? Bookmarks.has(`term:${term.id}`) : false;
+      back.innerHTML = backHtml(term, opts, !!known[term.id], bmNow);
+    }
+    if (opts.flipped) ensureBack();
+
+    // 見えていない面は inert にして、Tabで裏側のボタンに移動しないようにする
+    // (外部から .flipped を付け外ししても同期されるよう、class属性の変化を監視)
     function syncFaces() {
       const flipped = card.classList.contains(`flipped`);
+      if (flipped) ensureBack();
       front.inert = flipped;
       back.inert = !flipped;
       card.querySelectorAll(`[data-role="flip"]`).forEach((b) => b.setAttribute(`aria-expanded`, String(flipped)));
     }
-    function toggleFlip(viaKeyboard) {
-      card.classList.toggle(`flipped`);
+    // めくる動き: 動いている間だけ立体表示(is-turning)にする。止まっているカードは平面で描く
+    // (一覧の全カードを立体のまま置くと、描画の層が増えて重くなるため。立体にする瞬間は動きを止めて切り替える)
+    let turnTimer = null;
+    function endTurn() {
+      clearTimeout(turnTimer);
+      turnTimer = null;
+      card.classList.remove(`is-turning`);
+    }
+    function setFlipped(on) {
+      on = !!on;
+      if (on === card.classList.contains(`flipped`)) return;
+      if (on) ensureBack();
+      if (!UI.prefersReducedMotion() && card.isConnected) {
+        if (!card.classList.contains(`is-turning`)) {
+          inner.style.transition = `none`;
+          card.classList.add(`is-turning`);
+          // いまの向き(表/裏)を確定させてから動きを戻す
+          void getComputedStyle(inner).transform;
+          inner.style.transition = ``;
+        }
+        clearTimeout(turnTimer);
+        turnTimer = setTimeout(endTurn, 450);
+      }
+      card.classList.toggle(`flipped`, on);
       syncFaces();
+    }
+    inner.addEventListener(`transitionend`, (e) => { if (e.target === inner && e.propertyName === `transform` && turnTimer) endTurn(); });
+    function toggleFlip(viaKeyboard) {
+      setFlipped(!card.classList.contains(`flipped`));
       if (opts.onFlip) opts.onFlip(term, card.classList.contains(`flipped`));
       if (viaKeyboard) {
         const face = card.classList.contains(`flipped`) ? back : front;
@@ -182,85 +268,66 @@ window.CardUi = (function () {
     }
     syncFaces();
     if (window.MutationObserver) new MutationObserver(syncFaces).observe(card, { attributes: true, attributeFilter: [`class`] });
+
+    function toggleKnown() {
+      // 別のタブでの変更を消さないよう、最新の値に反映してから保存する
+      const latest = Storage.get(`flashcards`, {});
+      latest[term.id] = !known[term.id];
+      if (!latest[term.id]) delete latest[term.id];
+      Object.keys(known).forEach((k) => { if (!(k in latest)) delete known[k]; });
+      Object.assign(known, latest);
+      if (!latest[term.id]) delete known[term.id];
+      Storage.set(`flashcards`, latest);
+      if (window.Streak) Streak.recordToday();
+      // 星はその場で塗り替える(一覧を作り直すとスクロール位置が飛ぶため、呼び出し側には通知だけする)
+      const on = !!known[term.id];
+      card.querySelectorAll(`[data-role="known-toggle"]`).forEach((b) => {
+        b.classList.toggle(`is-known`, on);
+        b.setAttribute(`aria-pressed`, String(on));
+        b.setAttribute(`aria-label`, on ? `記憶済みを取り消す` : `記憶済みにする`);
+        b.innerHTML = ic(on ? `star-fill` : `star`);
+      });
+      if (opts.onToggleKnown) opts.onToggleKnown(term, on);
+    }
+
+    // ボタンの操作はカードでまとめて受ける(裏面はあとから作るため。しおり・星は表と裏の両方にある)
+    const interactive = `[data-role="known-toggle"], [data-role="tts-btn"], [data-role="bookmark"], [data-role="figure"], [data-nav], a, button`;
     // 作った直後のタップは裏返さない(前のカードの評価ボタンを2回押したとき、次のカードの答えが見えてしまうため)
     const createdAt = Date.now();
     card.addEventListener(`click`, (e) => {
-      if (Date.now() - createdAt < 400) return;
-      const flipBtn = e.target.closest(`[data-role="flip"]`);
-      if (flipBtn) { e.stopPropagation(); toggleFlip(e.detail === 0); return; }
-      if (e.target.closest(interactive)) return;
-      toggleFlip(false);
-    });
-    card.flip = toggleFlip;
-
-    card.querySelectorAll(`[data-role="known-toggle"]`).forEach((btn) => {
-      btn.addEventListener(`click`, (e) => {
+      const t = e.target;
+      if (!t || !t.closest) return;
+      const flipBtn = t.closest(`[data-role="flip"]`);
+      if (flipBtn) {
         e.stopPropagation();
-        // 別のタブでの変更を消さないよう、最新の値に反映してから保存する
-        const latest = Storage.get(`flashcards`, {});
-        latest[term.id] = !known[term.id];
-        if (!latest[term.id]) delete latest[term.id];
-        Object.keys(known).forEach((k) => { if (!(k in latest)) delete known[k]; });
-        Object.assign(known, latest);
-        if (!latest[term.id]) delete known[term.id];
-        Storage.set(`flashcards`, latest);
-        if (window.Streak) Streak.recordToday();
-        // 星はその場で塗り替える(一覧を作り直すとスクロール位置が飛ぶため、呼び出し側には通知だけする)
-        const on = !!known[term.id];
-        card.querySelectorAll(`[data-role="known-toggle"]`).forEach((b) => {
-          b.classList.toggle(`is-known`, on);
-          b.setAttribute(`aria-pressed`, String(on));
-          b.setAttribute(`aria-label`, on ? `記憶済みを取り消す` : `記憶済みにする`);
-          b.innerHTML = ic(on ? `star-fill` : `star`);
-        });
-        if (opts.onToggleKnown) opts.onToggleKnown(term, on);
-      });
-    });
-
-    // しおりは表と裏の両方にある(押したら両方を塗り替える)
-    card.querySelectorAll(`[data-role="bookmark"]`).forEach((bmBtn) => {
-      bmBtn.addEventListener(`click`, (e) => {
+        if (Date.now() - createdAt >= 400) toggleFlip(e.detail === 0);
+        return;
+      }
+      if (t.closest(`[data-role="known-toggle"]`)) { e.stopPropagation(); toggleKnown(); return; }
+      if (t.closest(`[data-role="bookmark"]`)) {
         e.stopPropagation();
         const on = Bookmarks.toggle(`term:${term.id}`);
         paintBookmarkButtons(card, on);
         if (opts.onToggleBookmark) opts.onToggleBookmark(term, on);
-      });
+        return;
+      }
+      if (t.closest(`[data-role="tts-btn"]`)) { e.stopPropagation(); window.TTS.speak(`${term.name}。${term.simpleExplanation}`); return; }
+      const figBtn = t.closest(`[data-role="figure"]`);
+      if (figBtn) { e.stopPropagation(); openFigure(figBtn.dataset.diagram); return; }
+      const navBtn = t.closest(`[data-nav]`);
+      if (navBtn) { e.stopPropagation(); Router.navigate(navBtn.dataset.nav); return; }
+      if (t.closest(interactive)) return;
+      if (Date.now() - createdAt < 400) return;
+      toggleFlip(false);
     });
-
-    const ttsBtn = card.querySelector(`[data-role="tts-btn"]`);
-    if (ttsBtn) {
-      ttsBtn.addEventListener(`click`, (e) => {
-        e.stopPropagation();
-        window.TTS.speak(`${term.name}。${term.simpleExplanation}`);
-      });
-    }
-
-    const figBtn = card.querySelector(`[data-role="figure"]`);
-    if (figBtn) {
-      figBtn.addEventListener(`click`, (e) => {
-        e.stopPropagation();
-        openFigure(figBtn.dataset.diagram);
-      });
-    }
-
-    if (opts.showGrading) {
-      card.querySelectorAll(`[data-grade]`).forEach((btn) => {
-        btn.addEventListener(`click`, (e) => {
-          e.stopPropagation();
-          if (opts.onGrade) opts.onGrade(term, Number(btn.dataset.grade));
-        });
-      });
-    }
-
-    card.querySelectorAll(`[data-nav]`).forEach((btn) => {
-      btn.addEventListener(`click`, (e) => {
-        e.stopPropagation();
-        Router.navigate(btn.dataset.nav);
-      });
-    });
+    card.flip = toggleFlip;
+    card.setFlipped = setFlipped;
 
     return card;
   }
 
-  return { buildSourceCitationHtml, buildLawRefHtml, buildFlipCard, diagramsFor, figureHtml, openFigure, deepDiveLabel, calcLinksHtml, bookmarkBtnHtml, paintBookmarkButtons, EXAM_TOPIC_IDS };
+  return {
+    buildSourceCitationHtml, buildLawRefHtml, buildFlipCard, diagramsFor, figureHtml, openFigure, deepDiveLabel, deepHtml, practiceNoteHtml, itemMetaHtml,
+    splitLawRef, calcLinksHtml, bookmarkBtnHtml, paintBookmarkButtons, EXAM_TOPIC_IDS,
+  };
 })();

@@ -69,5 +69,23 @@ window.Streak = (function () {
     return Object.keys(log).filter((d) => countOf(log[d]) && DateUtil.isValid(d)).length;
   }
 
-  return { recordToday, getCurrentStreak, getLongestStreak, getLastNDays, getLast14Days, totalActiveDays, countOf };
+  // 今日の学習アクション回数
+  function todayCount() {
+    return countOf(getLog()[DateUtil.today()]);
+  }
+
+  // 今週(日曜はじまり)の7日分 [{date, count, active, isToday, isFuture}]
+  function getWeek() {
+    const log = getLog();
+    const today = DateUtil.today();
+    const d = DateUtil.parse(today);
+    const start = DateUtil.addDays(today, -(d ? d.getDay() : 0));
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = DateUtil.addDays(start, i);
+      const count = date > today ? 0 : countOf(log[date]);
+      return { date, count, active: count > 0, isToday: date === today, isFuture: date > today };
+    });
+  }
+
+  return { recordToday, getCurrentStreak, getLongestStreak, getLastNDays, getLast14Days, totalActiveDays, todayCount, getWeek, countOf };
 })();
