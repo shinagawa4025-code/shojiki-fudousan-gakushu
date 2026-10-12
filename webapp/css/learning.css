@@ -138,6 +138,11 @@
 .basics-body > .basics-actions { max-width: 32em; }
 .basics-item .basics-body .term-simple { margin-top: 0; }
 .basics-body .figure { margin-top: var(--sp-3); }
+/* スマホでは、基礎知識の中の図解の枠を本文の左右の余白まで広げ、枠の内側の余白も詰める
+   (図は幅に合わせて縮むので、広いほど図の中の文字が大きくなる。iPhone 13 で約9px → 約10px) */
+@media (max-width: 480px) {
+  .basics-body .figure { margin-left: calc(var(--sp-2) * -1); margin-right: calc((var(--sp-2) + var(--sp-1)) * -1); padding-left: var(--sp-2); padding-right: var(--sp-2); }
+}
 
 /* 開いた項目の下部の操作: 1段目「学習済みにして次へ」、2段目「確認問題」「ブックマーク」 */
 .basics-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); margin-top: var(--sp-4); }
@@ -271,11 +276,19 @@
 /* シートの見出しに図のタイトルが出るので、図の中のタイトルは出さない */
 .fig-sheet .figure-title { display: none; }
 .fig-sheet .figure { margin-top: 0; }
+@media (max-width: 480px) {
+  .fig-sheet .figure { padding-left: var(--sp-2); padding-right: var(--sp-2); }
+}
 .fig-sheet-link { margin-top: var(--sp-2); }
 .fig-help { margin-top: var(--sp-6); }
 /* 一覧の小さな図: 枠の大きさは決まっているので、中の描画を外へ広げない(後から描いても位置がずれない) */
 .figures-view .fig-preview { contain: strict; }
 .fig-detail .fig-report { justify-content: flex-end; margin-top: var(--sp-2); }
+/* スマホでは図解の詳細の枠の左右の余白を詰める(図は幅に合わせて縮むので、図の中の文字を少しでも大きく。
+   iPhone 13 で図の中の小さい文字が約9.9px → 約10.4px)。features.css の .fig-detail-figure .figure より優先する */
+@media (max-width: 480px) {
+  .fig-detail .fig-detail-figure .figure { padding-left: var(--sp-2); padding-right: var(--sp-2); }
+}
 
 /* ---------- 情報源 ---------- */
 .source-use { font-size: var(--fs-xs); color: var(--color-text-muted); }

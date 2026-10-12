@@ -3,19 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>まなぶ不動産|宅建・賃貸・売買・相続を基礎から学べる無料アプリ</title>
+  <title>ふどまな|宅建・賃貸・売買・相続を基礎から学べる無料アプリ</title>
   <meta name="description" content="宅建士試験の4択・○×・模擬試験と、賃貸・購入・売却・相続の基礎知識、ローンや税金の計算機をひとつに。登録不要・無料で、学習記録は端末の中だけに保存されます。">
   <link rel="canonical" href="https://shinagawa4025-code.github.io/shojiki-fudousan-gakushu/">
   <meta name="robots" content="index,follow">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="まなぶ不動産">
-  <meta property="og:title" content="まなぶ不動産|宅建の合格にも、暮らしの安心にも。">
+  <meta property="og:site_name" content="ふどまな">
+  <meta property="og:title" content="ふどまな|宅建の合格にも、暮らしの安心にも。">
   <meta property="og:description" content="宅建士試験の対策から、賃貸・購入・売却・相続の基礎まで。4択・○×・模擬試験・計算機つき。登録不要・無料。">
   <meta property="og:url" content="https://shinagawa4025-code.github.io/shojiki-fudousan-gakushu/">
   <meta property="og:image" content="https://shinagawa4025-code.github.io/shojiki-fudousan-gakushu/icons/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="まなぶ不動産 — 宅建の合格にも、暮らしの安心にも。">
+  <meta property="og:image:alt" content="ふどまな — 宅建の合格にも、暮らしの安心にも。">
   <meta property="og:locale" content="ja_JP">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" type="image/svg+xml" href="icons/logo.svg">
@@ -28,7 +28,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="まなぶ不動産">
+  <meta name="apple-mobile-web-app-title" content="ふどまな">
   <!-- ホーム画面から起動したときの iPhone の起動画面(ライト・ダーク) -->
   <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)" href="icons/splash-1170x2532-light.png">
   <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="icons/splash-1170x2532-dark.png">
@@ -38,12 +38,13 @@
   <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" href="icons/splash-1290x2796-dark.png">
   <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)" href="icons/splash-750x1334-light.png">
   <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)" href="icons/splash-750x1334-dark.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"まなぶ不動産","url":"https://shinagawa4025-code.github.io/shojiki-fudousan-gakushu/","applicationCategory":"EducationalApplication","operatingSystem":"Web","inLanguage":"ja","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"JPY"},"description":"宅建士試験の4択・○×・模擬試験と、賃貸・購入・売却・相続の基礎知識、ローンや税金の計算機をひとつにした無料の学習アプリ"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"ふどまな","url":"https://shinagawa4025-code.github.io/shojiki-fudousan-gakushu/","applicationCategory":"EducationalApplication","operatingSystem":"Web","inLanguage":"ja","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"JPY"},"description":"宅建士試験の4択・○×・模擬試験と、賃貸・購入・売却・相続の基礎知識、ローンや税金の計算機をひとつにした無料の学習アプリ"}</script>
   <script>
     // 起動の見張り(1/2): 読み込めなかったスクリプト(404・通信断)を記録する(2/2 は body の最後)。古いブラウザでも動くよう ES5 で書く
+    // 公開版であとから読み込む詳細の束(data-lazy 付き)は js/appData.js が再試行と案内をするので、ここでは数えない
     window.addEventListener('error', function (e) {
       var t = e.target;
-      if (t && t.tagName === 'SCRIPT') (window.__bootFailed = window.__bootFailed || []).push(t.src);
+      if (t && t.tagName === 'SCRIPT' && !t.hasAttribute('data-lazy')) (window.__bootFailed = window.__bootFailed || []).push(t.src);
     }, true);
   </script>
   <script>
@@ -76,11 +77,11 @@
 </head>
 <body>
   <header class="app-header" id="app-header">
-    <h1 class="sr-only">まなぶ不動産</h1>
+    <h1 class="sr-only">ふどまな</h1>
     <div class="app-bar">
-      <a class="brand" href="#home" aria-label="まなぶ不動産 ホームへ">
+      <a class="brand" href="#home" aria-label="ふどまな ホームへ">
         <img class="brand-mark" src="icons/logo.svg" alt="" width="28" height="28">
-        <span class="brand-name">まなぶ不動産</span>
+        <span class="brand-name">ふどまな</span>
       </a>
       <div class="app-bar-actions">
         <button type="button" class="btn btn-icon" id="search-toggle-btn" aria-label="検索を開く" aria-expanded="false" aria-controls="global-search-wrap"></button>
@@ -102,7 +103,7 @@
     <!-- 起動するまでの表示(最初の画面の描画で置き換わる) -->
     <div class="boot">
       <img class="boot-logo" src="icons/logo.svg" alt="" width="64" height="64">
-      <p class="boot-name">まなぶ不動産</p>
+      <p class="boot-name">ふどまな</p>
       <p class="boot-tagline">宅建の合格にも、暮らしの安心にも。</p>
       <p class="boot-status" role="status">読み込み中…</p>
     </div>
@@ -117,6 +118,8 @@
       <a href="#about/terms">免責事項</a>
       <a href="#about/changelog">更新履歴</a>
       <a href="#about/report">誤りを報告</a>
+      <!-- 検索エンジン向けの静的ページ(公開時に tools/static_pages.js が作る。ローカルの webapp にはない) -->
+      <a href="learn/">学べるテーマの一覧</a>
     </nav>
   </footer>
 
@@ -148,10 +151,14 @@
   <script src="data/content/q2_horei.js"></script>
   <script src="data/content/q2_zei_menjo.js"></script>
   <script src="data/content/q2_life.js"></script>
+  <script src="data/content/q3_shohizei.js"></script>
   <!-- 既存・新規の問題と基礎知識の修正(新規の問題を上書きすることがあるので、追加パックの最後に読む) -->
   <script src="data/content/q2_fix.js"></script>
   <!-- /build -->
-  <!-- build:js app : 公開時は tools/build.js がこの範囲(アプリ本体)を1つのファイルにまとめる。JS を追加するときはこの範囲の中に書く -->
+  <!-- build:js app : 公開時は tools/build.js がこの範囲(アプリ本体)を1つのファイルにまとめる。JS を追加するときはこの範囲の中に書く。
+       data-bundle="detail" を付けたファイル(ホーム以外の画面・図解など)は、公開時は「詳細」の束に入り、ホームを描いたあとに読み込まれる
+       (js/appData.js。ローカルではほかと同じく順に読み込む)。ホームと起動時に使うファイルには付けない -->
+  <script src="js/appData.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/dates.js"></script>
   <script src="js/icons.js"></script>
@@ -165,31 +172,32 @@
   <script src="js/theme.js"></script>
   <script src="js/tts.js"></script>
   <script src="js/srs.js"></script>
+  <script src="js/drill.js"></script>
   <script src="js/streak.js"></script>
   <script src="js/stats.js"></script>
   <script src="js/recommend.js"></script>
   <script src="js/analysis.js"></script>
   <script src="js/bookmarkStore.js"></script>
   <script src="js/quizEngine.js"></script>
-  <script src="js/diagrams.js"></script>
-  <script src="js/cardUi.js"></script>
+  <script src="js/diagrams.js" data-bundle="detail"></script>
+  <script src="js/cardUi.js" data-bundle="detail"></script>
   <script src="js/onboarding.js"></script>
   <script src="js/views/home.js"></script>
-  <script src="js/views/topics.js"></script>
-  <script src="js/views/glossary.js"></script>
-  <script src="js/views/bookmarks.js"></script>
-  <script src="js/views/figures.js"></script>
-  <script src="js/views/review.js"></script>
-  <script src="js/views/quiz.js"></script>
-  <script src="js/views/exam.js"></script>
-  <script src="js/views/ox.js"></script>
-  <script src="js/views/progress.js"></script>
-  <script src="js/views/works.js"></script>
-  <script src="js/views/calculators.js"></script>
-  <script src="js/views/sources.js"></script>
-  <script src="js/views/about.js"></script>
-  <script src="js/views/settings.js"></script>
-  <script src="js/views/more.js"></script>
+  <script src="js/views/topics.js" data-bundle="detail"></script>
+  <script src="js/views/glossary.js" data-bundle="detail"></script>
+  <script src="js/views/bookmarks.js" data-bundle="detail"></script>
+  <script src="js/views/figures.js" data-bundle="detail"></script>
+  <script src="js/views/review.js" data-bundle="detail"></script>
+  <script src="js/views/quiz.js" data-bundle="detail"></script>
+  <script src="js/views/exam.js" data-bundle="detail"></script>
+  <script src="js/views/ox.js" data-bundle="detail"></script>
+  <script src="js/views/progress.js" data-bundle="detail"></script>
+  <script src="js/views/works.js" data-bundle="detail"></script>
+  <script src="js/views/calculators.js" data-bundle="detail"></script>
+  <script src="js/views/sources.js" data-bundle="detail"></script>
+  <script src="js/views/about.js" data-bundle="detail"></script>
+  <script src="js/views/settings.js" data-bundle="detail"></script>
+  <script src="js/views/more.js" data-bundle="detail"></script>
   <script src="js/app.js"></script>
   <!-- /build -->
   <script>

@@ -1,7 +1,9 @@
 // ホーム: 学ぶ目的(learnerProfile)と試験日で2種類の表示にする
-//  試験向け(宅建士・税理士の目的、または試験日を登録済み): 今日の学習リング・残り日数・今日の復習・次にやること・分野別の習熟度
+//  どちらも一番上に「今日のメニュー(約15分)」(Recommend.todayMenu: 復習 → 解き直し → 苦手の○× → 新しい基礎知識)
+//  試験向け(宅建士・税理士の目的、または試験日を登録済み): 今日の学習リング・残り日数・次にやること・分野別の習熟度
 //  暮らし・仕事向け: 今日の1テーマ・目的から選ぶ・続きから・次にやること(気になるテーマの基礎知識)
 // 「次にやること」は弱点分析(Analysis)の優先順を基準にし、同じリンク先のボタンは画面の中で1回だけ出す
+// (今日のメニューに出したリンクは、ヒーロー・次にやることでは重ねない。メニューが終わるまではヒーローの主ボタンも出さない)
 window.Views = window.Views || {};
 window.Views.home = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 20 });
@@ -443,10 +445,12 @@ window.Views.home = (function () {
     }
 
     // 主ボタンは今日の復習(はじめての人は最初の用語)、残っていなければ弱点分析の最優先。小さいタイルは○×と次の学習
+    // 今日のメニューを出しているときは、メニューが終わるまで主ボタンを出さない(メニューの手順と重ねない)
     const ox = oxLink(ctx);
     const acts = studyActions(ctx);
     const work = ctx.due + ctx.newAvail;
-    let primary;
+    const withMenu = used.has(`menu`);
+    let primary = null;
     let doneLine = ``;
     if (ctx.cards === 0 && ctx.newAvail > 0) {
       const n = Math.min(ctx.newAvail, 10);
@@ -454,14 +458,15 @@ window.Views.home = (function () {
     } else if (work > 0) {
       primary = { nav: `#review`, title: `今日の復習をはじめる`, sub: `${work}枚・約${minutesFor(work)}分` };
     } else {
-      doneLine = `<p class="hero-done">${ic(`check-circle`, 16)}<span>今日の復習は完了${ctx.newLeft && ctx.limit === 0 ? `(新しい用語は出さない設定)` : ``}</span></p>`;
-      const first = acts.find((a) => a.nav !== ox.nav) || null;
+      if (!withMenu) doneLine = `<p class="hero-done">${ic(`check-circle`, 16)}<span>今日の復習は完了${ctx.newLeft && ctx.limit === 0 ? `(新しい用語は出さない設定)` : ``}</span></p>`;
+      const first = acts.find((a) => a.nav !== ox.nav && !used.has(a.nav)) || null;
       if (first) primary = { nav: first.nav, title: verbTitle(ctx, first), sub: first.detail || `` };
       else primary = { nav: ox.nav, title: `○×一問一答で確認`, sub: `1問数秒。間違えた文だけ解き直せます` };
     }
-    used.add(primary.nav);
+    if (primary && (used.has(primary.nav) || used.has(`menu-open`))) primary = null;
+    if (primary) used.add(primary.nav);
     const tiles = [];
-    if (primary.nav !== ox.nav) {
+    if ((!primary || primary.nav !== ox.nav) && !used.has(ox.nav)) {
       tiles.push(quickHtml(ox.nav, `o-x`, ox.label, ox.scope));
       used.add(ox.nav);
       // ○×のタイルを出したら、次にやることの「○×で腕試し」は重ねない
@@ -495,7 +500,7 @@ window.Views.home = (function () {
       </div>
       ${afterMeta}
       ${doneLine}
-      ${ctaHtml(primary)}
+      ${primary ? ctaHtml(primary) : ``}
       ${tiles.length ? `<div class="hero2-quick${tiles.length === 1 ? ` is-single` : ``}">${tiles.join(``)}</div>` : ``}
       ${notes.length ? `<div class="hero2-notes">${notes.join(``)}</div>` : ``}
       ${others.length ? `<div class="chip-row hero-others">${others.map((t) => {
@@ -531,7 +536,7 @@ window.Views.home = (function () {
     const topic = id ? AppIndex.topicsById[id] : null;
     const label = ctx.interests.length ? `○×で腕試し` : `暮らしの○×`;
     if (!topic) return { nav: `#ox`, label, scope: `1問数秒` };
-    return { nav: `#ox/topic/${topic.id}/10`, label, scope: `${topic.name}・1問数秒` };
+    return { nav: `#ox/topic/${topic.id}/10`, label, scope: `${topic.name}・1問数秒`, name: topic.name };
   }
 
   function generalHero(ctx, plan, used) {
@@ -539,9 +544,13 @@ window.Views.home = (function () {
     card.setAttribute(`aria-label`, `今日の1テーマ`);
     const theme = plan.theme;
     const labels = interestLabels(ctx);
-    let body;
-    let primary;
-    if (theme) {
+    let body = ``;
+    let primary = null;
+    if (theme && used.has(`#topics/${theme.topic.id}/${theme.basicId}`)) {
+      // 今日の1テーマは今日のメニューの「新しい基礎知識」で案内しているので、ここでは○×・計算機のタイルだけにする
+      card.setAttribute(`aria-label`, `すぐに使える機能`);
+      card.classList.add(`is-compact`);
+    } else if (theme) {
       const topic = theme.topic;
       body = `
         <div class="theme-card">
@@ -565,7 +574,9 @@ window.Views.home = (function () {
         </div>`;
       primary = { nav: `#quiz`, title: `4択問題で確かめる`, sub: `選択肢ごとの解説つき` };
     }
-    used.add(primary.nav);
+    // 今日のメニューで案内しているリンク・メニューが終わっていない間の主ボタンは重ねない
+    if (primary && (used.has(primary.nav) || (used.has(`menu-open`) && !theme))) primary = null;
+    if (primary) used.add(primary.nav);
     const ox = generalOx(ctx, theme);
     const tiles = [];
     if (!used.has(ox.nav)) { tiles.push(quickHtml(ox.nav, `o-x`, ox.label, ox.scope)); used.add(ox.nav); }
@@ -575,7 +586,7 @@ window.Views.home = (function () {
     card.innerHTML = `
       ${labels.length ? `<p class="hero2-interests"><span>気になるテーマ: <strong>${esc(labels.join(`・`))}</strong></span><a class="link-btn" href="#settings/profile">変更${ic(`chevron-right`, 14)}</a></p>` : ``}
       ${body}
-      ${ctaHtml(primary)}
+      ${primary ? ctaHtml(primary) : ``}
       <div class="hero2-quick${tiles.length === 1 ? ` is-single` : ``}">${tiles.join(``)}</div>`;
     return card;
   }
@@ -780,11 +791,22 @@ window.Views.home = (function () {
     const log = window.APP_DATA && Array.isArray(APP_DATA.changelog) && APP_DATA.changelog[0] && typeof APP_DATA.changelog[0] === `object` ? APP_DATA.changelog[0] : null;
     const isMc = (q) => !!q && (window.QuizEngine && QuizEngine.isMcItem ? QuizEngine.isMcItem(q) : q.format === `mc`);
     const mcCount = window.APP_DATA && Array.isArray(APP_DATA.quiz) ? APP_DATA.quiz.filter(isMc).length : 0;
-    const items = [
+    // 以前から使っている人は学ぶ目的が未設定(ホームは暮らし向けの表示になる)ので、設定の場所を案内する
+    const profileHint = Stats.getProfile && !Stats.getProfile() ? `<a href="#settings/profile">学ぶ目的</a>(宅建士試験・暮らし・仕事・税理士試験)を選ぶと、ホームのおすすめが目的に合わせて変わります` : ``;
+    // v11 以降(onboarding.js の WHATS_NEW を上げたとき)は、苦手を自動で潰す仕組みを中心に案内する
+    const items = version !== `v10` ? [
+      name ? `アプリの名前を「${esc(name)}」に変えました(商標の確認によるものです)。URL・学習の記録はそのままです` : ``,
+      `ホームの一番上に<strong>今日のメニュー(約15分)</strong>を追加しました。復習・解き直し・苦手の○×・新しい基礎知識を順に案内し、終わった手順にチェックが付きます`,
+      `間違えた4択を1→3→7→21日後に出し直す<a href="#quiz/due">解き直し</a>を追加しました(4択・模擬試験・○×で間違えた問題が対象)`,
+      `模擬試験の結果から、間違えた問題の論点を○×で確認できるようになりました`,
+      // 枚数は図解の一覧の「全n点」(学習内容の図。アプリの使い方の図は除く)と合わせる
+      `<a href="#figures">図解</a>を15枚追加しました(全26枚)。4択の解答後に「図解で確認」から開けます`,
+      `<a href="#topics/topicO">不動産と消費税</a>に基礎知識12項目・4択25問を追加しました`,
+      profileHint,
+    ].filter(Boolean) : [
       name ? `アプリの名前を「${esc(name)}」に変えました。URL・学習の記録はそのままです` : ``,
       `<a href="#about">このアプリについて</a>(運営者・プライバシー・免責事項・更新履歴)を追加`,
-      // 以前から使っている人は学ぶ目的が未設定(ホームは暮らし向けの表示になる)ので、設定の場所を案内する
-      Stats.getProfile && !Stats.getProfile() ? `<a href="#settings/profile">学ぶ目的</a>(宅建士試験・暮らし・仕事・税理士試験)を選ぶと、ホームのおすすめが目的に合わせて変わります` : ``,
+      profileHint,
       window.Report && typeof Report.enabled === `function` && Report.enabled() ? `問題や解説の<a href="#about/report">誤りを報告</a>できるようになりました` : ``,
       `これまでの動画一覧は<a href="#works">作品で学ぶ</a>コーナーにまとめました`,
       // 問題数はデータから数える(約50問単位)
@@ -928,16 +950,82 @@ window.Views.home = (function () {
     return [whatsNewCard(), install, install ? null : backupNote()].filter(Boolean);
   }
 
-  // 暮らし・仕事向け: 今日の1テーマ・続きから・次にやることで使うトピックの並び
+  // 暮らし・仕事向け: 今日の1テーマ・続きから・次にやることで使うトピックの並び(Recommend.generalPlan と同じ)
   function generalPlan(ctx) {
-    const order = Recommend.generalTopicOrder(ctx.profile);
-    const lastId = Storage.get(`lastTopic`, null);
-    const cont = typeof lastId === `string` && AppIndex.topicsById[lastId] ? Recommend.topicBasics(lastId) : null;
-    // 続きからに出すトピックは、今日の1テーマでは別のトピックにする(同じ案内を2回出さない)
-    const contShown = !!(cont && cont.nextId);
-    let theme = Recommend.nextTheme({ order, exclude: contShown ? [cont.topic.id] : [] });
-    if (!theme && contShown) theme = Recommend.nextTheme({ order: [cont.topic.id] });
-    return { order, theme, cont: contShown && !(theme && theme.topic.id === cont.topic.id) ? cont : null };
+    return Recommend.generalPlan(ctx.profile);
+  }
+
+  // ---- 今日のメニュー(約15分。両方のホームの一番上) ----
+  // 手順と完了の判定は Recommend.todayMenu。各手順のリンクは used に入れ、下のヒーロー・次にやることでは重ねない
+  function menuOptions(ctx, plan) {
+    const s = ctx.summary;
+    // 分析した試験とホームの試験が同じときだけ、伸ばしたい分野を基礎知識の選び方に使う(違えば使わない)
+    const focusId = s && s.focus && s.examTypeId === ctx.typeId ? s.focus.id : null;
+    const o = { variant: ctx.variant, typeId: ctx.typeId, focusId };
+    // ○×の手順(間違えた文がないとき)の行き先と、手順の補足に出す範囲の名前(「1問数秒」などの補足は付けない)
+    if (ctx.variant === `exam`) {
+      const x = oxLink(ctx);
+      o.oxFallback = { nav: x.nav, scope: x.nav === `#ox` ? `` : x.scope };
+    } else {
+      o.theme = plan ? plan.theme : null;
+      const x = generalOx(ctx, o.theme);
+      o.oxFallback = { nav: x.nav, scope: x.name || `` };
+    }
+    return o;
+  }
+
+  function menuStepHtml(s, isNext) {
+    const label = `${s.no}. ${s.title}(${s.done ? `完了` : `約${s.minutes}分`})`;
+    return `
+      <li>
+        <a class="menu-step${s.done ? ` is-done` : ``}${isNext ? ` is-next` : ``}" href="${esc(s.nav)}" data-step="${esc(s.id)}"${isNext ? ` aria-current="step"` : ``} aria-label="${esc(`${label}・${s.sub || ``}`)}">
+          <span class="menu-step-mark" aria-hidden="true">${s.done ? ic(`check`, 16) : `<span class="num">${s.no}</span>`}</span>
+          <span class="menu-step-main" aria-hidden="true"><span class="menu-step-title">${esc(s.title)}</span>${s.sub ? `<span class="menu-step-sub">${esc(s.sub)}</span>` : ``}</span>
+          <span class="menu-step-meta" aria-hidden="true">${s.done ? `<span class="menu-step-tag">完了</span>` : `<span class="num">約${s.minutes}分</span>`}</span>
+          ${ic(`chevron-right`, 18)}
+        </a>
+      </li>`;
+  }
+
+  function menuCard(ctx, plan, used) {
+    if (!window.Recommend || typeof Recommend.todayMenu !== `function`) return null;
+    let steps;
+    try { steps = Recommend.todayMenu(menuOptions(ctx, plan)); } catch (e) {
+      console.error(`[ホーム] 今日のメニューを作れませんでした`, e);
+      return null;
+    }
+    if (!Array.isArray(steps) || !steps.length) return null;
+    const st = Recommend.menuStatus(steps);
+    used.add(`menu`);
+    if (!st.allDone) used.add(`menu-open`);
+    steps.forEach((s) => {
+      used.add(s.nav);
+      // 同じ画面への別の入口(問題数の有無)も重ねない
+      if (s.nav.startsWith(`#ox/weak`)) used.add(`#ox/weak`);
+      if (s.nav.startsWith(`#quiz/due`)) used.add(`#quiz/due`);
+      if (s.id === `ox`) used.add(`kind:ox`);
+      // 基礎知識の手順と同じトピックの「基礎を読む」(#topics/<id>)も重ねない
+      const m = s.id === `basic` ? /^#topics\/([^/]+)\//.exec(s.nav) : null;
+      if (m) used.add(`#topics/${m[1]}`);
+    });
+    const pct = st.total ? Math.round((st.done / st.total) * 100) : 0;
+    const time = st.allDone ? `${ic(`check-circle`, 16)}<span>完了</span>` : `<span class="num">${st.done ? `残り約${st.minutes}分` : `約${st.minutes}分`}</span>`;
+    const card = el(`section`, `card home-menu${st.allDone ? ` is-done` : ``}`);
+    card.setAttribute(`aria-labelledby`, `home-menu-title`);
+    card.innerHTML = `
+      <div class="home-menu-head">
+        <h3 class="card-title" id="home-menu-title">${ic(`list`, 20)}<span>今日のメニュー</span></h3>
+        <span class="home-menu-time">${time}</span>
+      </div>
+      <div class="home-menu-progress">
+        <div class="progress-bar" role="progressbar" aria-label="今日のメニューの進み具合" aria-valuemin="0" aria-valuemax="${st.total}" aria-valuenow="${st.done}" aria-valuetext="${st.total}手順中${st.done}手順完了">
+          <div class="progress-bar-fill${st.allDone ? ` fill-success` : ``}" style="width:${pct}%"></div>
+        </div>
+        <span class="home-menu-count num" aria-hidden="true">${st.done}/${st.total}</span>
+      </div>
+      <ol class="home-menu-list">${steps.map((s) => menuStepHtml(s, s === st.next)).join(``)}</ol>
+      ${st.allDone ? `<p class="home-menu-done">${ic(`trophy`, 16)}<span>今日のメニューはすべて完了です。おつかれさまでした</span></p>` : ``}`;
+    return card;
   }
 
   function render(root) {
@@ -964,6 +1052,7 @@ window.Views.home = (function () {
     const news = notices(ctx);
     if (ctx.variant === `exam`) {
       const analysis = analysisSection(ctx);
+      place(main, menuCard(ctx, null, used), 0);
       place(main, examHero(ctx, used), 1);
       news.forEach((n) => place(main, n, 2));
       place(side, weekCard(ctx), 3);
@@ -972,6 +1061,7 @@ window.Views.home = (function () {
       place(side, examCard(ctx, used), 6);
     } else {
       const plan = generalPlan(ctx);
+      place(main, menuCard(ctx, plan, used), 0);
       place(main, generalHero(ctx, plan, used), 1);
       news.forEach((n) => place(main, n, 2));
       // 気になるテーマを選んだ人は「続きから・次にやること」を先に、まだの人は「目的から選ぶ」を先に
@@ -983,8 +1073,26 @@ window.Views.home = (function () {
       place(side, topicProgressSection(ctx, plan), 7);
     }
     if (!side.children.length) wrap.querySelector(`.home-layout`).classList.add(`is-single`);
-    live = { wrap, main, ctx };
+    live = { wrap, main, ctx, day: DateUtil.today() };
     watchInstallPrompt();
+    watchDay();
+  }
+
+  // iPhone のホーム画面アプリなどは、翌日に開いても前の日のホームのまま戻ることがある。
+  // 日付が変わっていたら、その日の内容(今日のメニュー・復習の枚数・連続日数)で描き直す(シート・確認を開いている間は待つ)
+  let watchingDay = false;
+  function watchDay() {
+    if (watchingDay) return;
+    watchingDay = true;
+    const onWake = () => {
+      if (!live || !live.wrap.isConnected || document.visibilityState === `hidden` || live.day === DateUtil.today()) return;
+      if (document.querySelector(`.modal-overlay, .sheet-backdrop, .onb-overlay`)) return;
+      live.day = DateUtil.today();
+      if (window.Router) Router.navigate(`#home`);
+    };
+    document.addEventListener(`visibilitychange`, onWake);
+    window.addEventListener(`pageshow`, onWake);
+    window.addEventListener(`focus`, onWake);
   }
 
   // Chrome・Edge の「インストールできる」(beforeinstallprompt)は表示のあとに届くことが多いので、届いたらお知らせを差し込む
@@ -1017,5 +1125,13 @@ window.Views.home = (function () {
     try { return oxLink(buildContext()); } catch (e) { return { nav: `#ox`, label: `○×一問一答`, scope: `` }; }
   }
 
-  return { render, openTargetForm, oxLink: oxLinkNow };
+  // 解き直しの結果などの「次のメニュー」から使う: ホームの今日のメニューと同じ条件(Recommend.todayMenu の opts)。作れなければ undefined
+  function menuOptionsNow() {
+    try {
+      const ctx = buildContext();
+      return menuOptions(ctx, ctx.variant === `exam` ? null : generalPlan(ctx));
+    } catch (e) { return undefined; }
+  }
+
+  return { render, openTargetForm, oxLink: oxLinkNow, menuOptions: menuOptionsNow };
 })();

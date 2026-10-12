@@ -101,7 +101,17 @@ window.Storage = (function () {
 
   // 「古い記録を整理」: 解き直しの結果を消し、模擬試験の古い履歴を小さくしてから、保存できなかった記録を書き直す
   // (模擬試験の履歴そのものが保存できなかったときは、その保存しようとした履歴を小さくして保存してもらう)
-  function compactAndRetry() {
+  function compactAndRetry(e) {
+    // 公開版では模擬試験の画面(Views.exam)が後から読み込まれるため、読み込みを待ってから整理する
+    // (待っている間はボタンを押せなくして「整理しています…」と出す。読み込めなかったら元に戻す。失敗の知らせは AppData が出す)
+    if (window.AppData && typeof AppData.hasDetail === `function` && !AppData.hasDetail()) {
+      const btn = e && e.currentTarget && e.currentTarget.nodeType === 1 ? e.currentTarget : null;
+      const label = btn ? btn.textContent : ``;
+      if (btn) { btn.disabled = true; btn.textContent = `整理しています…`; }
+      const restore = () => { if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = label; } };
+      AppData.whenDetail().then(() => { restore(); compactAndRetry(); }, restore);
+      return;
+    }
     remove(`examRetryResult`);
     try {
       if (window.Views && Views.exam && typeof Views.exam.compactHistory === `function`) {

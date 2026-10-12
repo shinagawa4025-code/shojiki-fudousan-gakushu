@@ -4,7 +4,7 @@
 window.Onboarding = (function () {
   const PREFIX = `shojikiLearn.v1.`;
   // ホームの「アプリが新しくなりました」の版。内容を変えたらここを変えると、既存の利用者に1度だけ表示される
-  const WHATS_NEW = `v10`;
+  const WHATS_NEW = `v11`;
   // 起動時に自動で書き込まれる・ガイド自身が使うキー、学習記録ではないキーは「既存ユーザー」の判定に含めない
   const IGNORE_KEYS = [`themePreference`, `ttsRate`, `oxPrefs`, `quizPrefs`, `srsMigrated`, `schemaVersion`, `onboardingDone`, `seenWhatsNew`,
     `lastBackupAt`, `backupNoteDismissedAt`, `installNoteDismissedAt`, `learnerProfile`, `seenReviewTip`, `glossaryMode`, `audience`];
@@ -443,9 +443,11 @@ window.Onboarding = (function () {
         markDone();
         // 画面の移動(解説のリンク)のときは移動先の画面がそのまま描かれる
         if (reason === `navigate` || !window.Router) return;
-        // 最後まで進んだときはホームへ。スキップのときは今の画面のまま、目的に合わせて描き直す
-        if (reason === `done`) Router.navigate(`#home`);
-        else if (Router.current && Router.current() === `home`) Router.navigate(location.hash || `#home`);
+        // 最後まで進んだときはホームへ。ただし、ホーム以外の画面のリンク(検索から来た静的ページの「アプリで学ぶ」・共有されたリンク)
+        // で開いたときは、その画面に戻る。スキップのときも今の画面のまま。どちらも目的に合わせて描き直す
+        const cur = Router.current ? Router.current() : null;
+        if (reason === `done` && (!cur || cur === `home`)) Router.navigate(`#home`);
+        else Router.navigate(location.hash || `#home`);
       },
     });
   }

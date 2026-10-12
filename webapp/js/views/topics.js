@@ -378,6 +378,9 @@ window.Views.topics = (function () {
       // 別のタブでの記録を消さないよう、最新の値を読み直してから書き込む
       Object.assign(basicsProgress, Storage.get(`basicsProgress`, {}));
       if (!Storage.isPlainObject(basicsProgress[id])) basicsProgress[id] = {};
+      // 学習済みにした日(今日のメニューの「新しい基礎知識」の完了判定に使う。以前の記録には無い)
+      if (value && !basicsProgress[id].learned) basicsProgress[id].learnedAt = DateUtil.today();
+      else if (!value) delete basicsProgress[id].learnedAt;
       basicsProgress[id].learned = value;
       Storage.set(`basicsProgress`, basicsProgress);
       Streak.recordToday();

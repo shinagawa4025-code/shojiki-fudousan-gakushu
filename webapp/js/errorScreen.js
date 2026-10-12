@@ -26,9 +26,11 @@ window.ErrorScreen = (function () {
     } catch (e) { return null; }
   }
 
+  // ctx.network: 公開版で画面のデータを読み込めなかったとき(Router)。不具合ではなく通信の問題として案内する
   function build(err, ctx) {
     const i = info(err, ctx);
-    const url = reportUrl(i);
+    const net = !!(ctx && ctx.network);
+    const url = net ? null : reportUrl(i);
     const esc = (s) => (window.UI ? UI.escapeHtml(s) : String(s).replace(/[<>&"]/g, ``));
     const ic = (n) => (window.UI ? UI.icon(n, { size: 18 }) : ``);
     // ホームが表示できないときは、ホーム以外の入口を案内する
@@ -39,8 +41,8 @@ window.ErrorScreen = (function () {
     el.innerHTML = `
       <h2>画面を表示できませんでした</h2>
       <div class="card error-card" role="alert">
-        <p class="error-lead">${ic(`alert`)}<span>一時的な不具合が起きました。学習の記録はこの端末に保存されたままです。</span></p>
-        <p class="error-desc">${url ? `再読み込みしても直らないときは、お手数ですが不具合を報告してください。` : `再読み込みしても直らないときは、しばらくしてからもう一度開いてください。`}</p>
+        <p class="error-lead">${ic(`alert`)}<span>${net ? `この画面のデータを読み込めませんでした。` : `一時的な不具合が起きました。`}学習の記録はこの端末に保存されたままです。</span></p>
+        <p class="error-desc">${net ? `通信状態を確認して、再読み込みしてください。ほかの画面に移ると、もう一度読み込みます。` : url ? `再読み込みしても直らないときは、お手数ですが不具合を報告してください。` : `再読み込みしても直らないときは、しばらくしてからもう一度開いてください。`}</p>
         <div class="error-actions">
           <button type="button" class="btn" data-role="reload">${window.UI ? UI.icon(`repeat`, { size: 18 }) : ``}再読み込み</button>
           <a class="btn btn-secondary" href="${home.href}">${home.label}</a>

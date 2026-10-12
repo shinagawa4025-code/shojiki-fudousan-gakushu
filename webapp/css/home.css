@@ -110,6 +110,43 @@
   .hero2-days strong { font-size: 1.875rem; }
 }
 
+/* 今日のメニュー(約15分): 両方のホームの一番上。手順の行(終わった手順はチェック、次の手順は淡い主色の地) */
+.home-menu { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4) var(--sp-4) var(--sp-3); border-radius: var(--radius-lg); }
+.home-menu-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.home-menu-head .card-title { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; margin: 0; font-size: var(--fs-lg); }
+.home-menu-head .card-title > .icon { flex-shrink: 0; color: var(--color-primary); }
+.home-menu-time { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; padding: 2px 10px; border-radius: var(--radius-pill); background: var(--color-primary-soft); color: var(--color-primary); font-size: var(--fs-sm); font-weight: 700; line-height: 1.6; white-space: nowrap; }
+.home-menu.is-done .home-menu-time { background: var(--color-success-bg); color: var(--color-success); }
+.home-menu-progress { display: flex; align-items: center; gap: var(--sp-2); }
+.home-menu-progress .progress-bar { flex: 1 1 auto; min-width: 0; max-width: none; height: 6px; }
+.home-menu-count { flex-shrink: 0; font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); }
+.home-menu-list { display: flex; flex-direction: column; gap: 2px; margin: 0 calc(var(--sp-2) * -1); padding: 0; list-style: none; }
+.menu-step { display: flex; align-items: center; gap: var(--sp-3); min-height: 56px; padding: var(--sp-2); border-radius: var(--radius-md); color: var(--color-text); text-decoration: none; transition: box-shadow var(--dur-1); }
+.menu-step:focus-visible { outline-offset: -2px; }
+.menu-step.is-next { background: var(--color-primary-soft); }
+.menu-step:active { box-shadow: inset 0 0 0 100px var(--color-press); }
+@media (hover: hover) { .menu-step:hover { box-shadow: inset 0 0 0 100px var(--color-press); } }
+.menu-step-mark { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; border: 2px solid var(--color-border-strong); border-radius: 50%; color: var(--color-text-muted); font-size: var(--fs-sm); font-weight: 700; line-height: 1; }
+.menu-step.is-next .menu-step-mark { border-color: var(--color-primary-fill); background: var(--color-primary-fill); color: var(--color-on-primary); }
+.menu-step.is-done .menu-step-mark { border-color: var(--color-success-fill); background: var(--color-success-fill); color: var(--color-on-primary); }
+.menu-step-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.4; }
+.menu-step-title { font-size: .9375rem; font-weight: 700; color: var(--color-heading); overflow-wrap: anywhere; word-break: auto-phrase; }
+.menu-step-sub { font-size: var(--fs-sm); color: var(--color-text-muted); overflow-wrap: anywhere; }
+.menu-step.is-done .menu-step-title { color: var(--color-text-muted); }
+.menu-step-meta { flex-shrink: 0; font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); white-space: nowrap; }
+.menu-step.is-next .menu-step-meta { color: var(--color-primary); }
+.menu-step-tag { color: var(--color-success); }
+.menu-step > .icon:last-child { flex-shrink: 0; color: var(--color-text-muted); }
+.home-menu-done { display: flex; align-items: center; gap: var(--sp-2); margin: 0; font-size: var(--fs-sm); font-weight: 700; line-height: var(--lh-snug); color: var(--color-success); }
+.home-menu-done > .icon { flex-shrink: 0; }
+@media (max-width: 359px) {
+  .home-menu { padding: var(--sp-3) var(--sp-3) var(--sp-2); }
+  .menu-step { gap: var(--sp-2); }
+  .menu-step > .icon:last-child { display: none; }
+}
+/* 暮らし向けのヒーロー: 今日の1テーマを今日のメニューで案内しているときは、○×・計算機のタイルだけ */
+.hero2.is-compact { padding: var(--sp-3); }
+
 /* 試験日が過ぎた・残り日数などの補足 */
 .hero-note { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; padding: 6px var(--sp-3); border-radius: var(--radius-sm); background: var(--color-surface-muted); color: var(--color-text); font-size: var(--fs-sm); line-height: var(--lh-snug); text-decoration: none; }
 .hero-note > span { flex: 1; min-width: 0; }

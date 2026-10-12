@@ -323,11 +323,13 @@
 
   function initServiceWorker() {
     if (!(`serviceWorker` in navigator)) return;
-    const hadController = !!navigator.serviceWorker.controller;
+    let hadController = !!navigator.serviceWorker.controller;
     let refreshing = false;
     navigator.serviceWorker.addEventListener(`controllerchange`, () => {
-      // 初回インストール時は通知しない。更新(新しいSWに切り替わった)時だけ再読み込みを促す
-      if (!hadController || refreshing) return;
+      // 初回インストール時(この画面を開いたときは Service Worker がなかった)は通知しない。
+      // 更新(新しいSWに切り替わった)時だけ再読み込みを促す。初めて開いたまま次の版が公開されたときも、2回目の切り替わりで知らせる
+      if (!hadController) { hadController = true; return; }
+      if (refreshing) return;
       // 出しっぱなしの通知なので、解答ボタンや他の通知(下部)に重ならないよう常に画面上部に出す。×で閉じられる
       UI.toast(`新しいバージョンがあります`, `default`, {
         duration: 0,

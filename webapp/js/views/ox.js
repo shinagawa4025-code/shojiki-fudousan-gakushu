@@ -2,7 +2,9 @@
 // ルート: #ox(条件を選ぶトップ) / #ox/cat/<分野ID>(宅建士の分野ID または shohi) / #ox/topic/<topicId> / #ox/weak(間違えた文)
 //         末尾に /<問題数>(10・20・50)を付けると、その問題数で出題する(例: #ox/cat/gyoho/20)
 //         #ox/weak/<文ID>(例: quiz-K-01%232)は、間違えた文のうちその文を最初に出題する
+//         #ox/quiz/<問題ID,問題ID,…>(模擬試験・解き直しの結果から)は、その4択問題の文だけを出題する(問題は12問まで・文は40問まで)
 //         #ox/run(出題中・結果。セッションはメモリ上のみ。再読み込みするとトップに戻る)
+// 間違えた文の元の4択は、解き直しの予定(Drill)にも入れる(翌日から #quiz/due に出る)
 // ディープリンク(cat/topic/weak)は条件を選んだ状態ですぐ出題を始め、URLを #ox/run に置き換える
 // 記録: Storage `oxStats` = { [文ID 'quiz-K-01#2']: { c: 正解回数, w: 不正解回数, last: 'YYYY-MM-DD', lastOk: 直近の正誤 } }
 //       (弱点分析でも読むため、この形を変えないこと)
@@ -20,6 +22,8 @@ window.Views.ox = (function () {
   const SHOHI = `shohi`;
   const PASS_PCT = 70; // 合格の目安(自動生成クイズと共通)
   const AUTO_NEXT_MS = 1200;
+  const QUIZ_SCOPE_MAX = 12; // #ox/quiz/<問題ID,…> で受け付ける問題の数
+  const QUIZ_SCOPE_ITEMS = 40; // そこから出題する文の数の上限
   const ic = (name, size) => UI.icon(name, { size: size || 18 });
   const esc = (s) => UI.escapeHtml(s);
 
@@ -163,7 +167,37 @@ window.Views.ox = (function () {
     if (!scope || scope.type === `all`) return true;
     if (scope.type === `cat`) return s.cats.includes(scope.id);
     if (scope.type === `topic`) return (s.topicIds || []).includes(scope.id);
+    if (scope.type === `quiz`) return Array.isArray(scope.ids) && scope.ids.includes(s.quizId);
     return false;
+  }
+
+  // #ox/quiz/<問題ID,…> の問題ID: ○×の文を作れる(正誤判定型の4択)ものだけ、重複なし・上限まで
+  function quizScopeIds(list) {
+    const src = Array.isArray(list) ? list : String(list || ``).split(`,`);
+    const out = [];
+    src.forEach((raw) => {
+      const id = typeof raw === `string` ? raw.trim() : ``;
+      if (!id || out.includes(id) || out.length >= QUIZ_SCOPE_MAX) return;
+      const q = quizById(id);
+      if (q && QuizEngine.statementTruths(q)) out.push(id);
+    });
+    return out;
+  }
+
+  // ほかの画面から: その4択問題の○×へのリンク(出せる文がなければ null)
+  function quizNav(ids) {
+    const ok = quizScopeIds(ids);
+    return ok.length ? `#ox/quiz/${ok.map(encodeURIComponent).join(`,`)}` : null;
+  }
+
+  // 指定した4択問題の文だけでセッションを作る(条件 prefs は変えない)。出せる文がなければ false
+  function startQuizScope(ids, fromLanding) {
+    const set = new Set(ids);
+    const pool = loadStatements().filter((s) => set.has(s.quizId));
+    if (!pool.length) return false;
+    const items = spreadByQuiz(QuizEngine.shuffle(pool).slice(0, QUIZ_SCOPE_ITEMS));
+    session = createSession(items, { scope: { type: `quiz`, id: null, ids: ids.slice() }, filter: `all`, count: items.length, label: `間違えた問題の論点(${ids.length}問分)`, fromLanding: !!fromLanding });
+    return true;
   }
 
   function matchesFilter(s, filter, stats) {
@@ -244,12 +278,17 @@ window.Views.ox = (function () {
     }
     if (head === `cat` && scopeCategories().some((c) => c.id === id)) return { kind: `start`, scope: { type: `cat`, id }, filter: `all`, count: countParam(parts[2]) };
     if (head === `topic` && AppIndex.topicsById[id]) return { kind: `start`, scope: { type: `topic`, id }, filter: `all`, count: countParam(parts[2]) };
+    if (head === `quiz`) {
+      const ids = quizScopeIds(id);
+      if (ids.length) return { kind: `quiz`, ids };
+    }
     return { kind: `landing`, invalid: true };
   }
 
   function scopeLabel(scope) {
     if (!scope || scope.type === `all`) return `すべての分野`;
     if (scope.type === `cat`) return categoryName(scope.id);
+    if (scope.type === `quiz`) return `間違えた問題の論点`;
     const t = AppIndex.topicsById[scope.id];
     return t ? t.name : `トピック`;
   }
@@ -309,6 +348,10 @@ window.Views.ox = (function () {
       sess.graded[s.termId] = true;
       // 学習記録(ストリーク)は上で付けているので、ここでは数えない
       Srs.grade(s.termId, 1, { silent: true });
+    }
+    // 解き直しの予定: 間違えた文の元の4択を翌日から出し直す(同じ日に何度間違えても登録は1回)
+    if (!ok && window.Drill) {
+      try { Drill.noteWrong(s.quizId, `ox`); } catch (e) { console.error(`[解き直し] 記録できませんでした`, e); }
     }
     return { ok, review: !ok && termOk };
   }
@@ -475,6 +518,17 @@ window.Views.ox = (function () {
       }
       history.replaceState(null, ``, `#ox`);
       renderLanding(wrap, ctx);
+      return;
+    }
+    if (route.kind === `quiz`) {
+      // 4択問題を指定した出題: 条件(prefs)は変えずに始め、URLを #ox/run に置き換える(戻るでリンク元へ)
+      if (startQuizScope(route.ids, false)) {
+        history.replaceState(null, ``, `#ox/run`);
+        renderRun(wrap, ctx);
+        return;
+      }
+      history.replaceState(null, ``, `#ox`);
+      renderLanding(wrap, ctx, { notice: `指定された問題の○×がまだないため、出題を始められませんでした。` });
       return;
     }
     if (route.kind === `start`) {
@@ -941,6 +995,11 @@ window.Views.ox = (function () {
       });
     }
     wrap.querySelector(`[data-role="continue"]`).addEventListener(`click`, () => {
+      // 4択問題を指定した出題は、同じ問題の文でもう一度(条件 prefs は変えない)
+      if (sess.scope.type === `quiz`) {
+        if (startQuizScope(sess.scope.ids || [], sess.fromLanding)) Router.navigate(`#ox/run`);
+        return;
+      }
       prefs.scope = Object.assign({}, sess.scope);
       prefs.filter = sess.filter;
       prefs.count = sess.count;
@@ -955,11 +1014,13 @@ window.Views.ox = (function () {
 
   return {
     render,
+    // 模擬試験・解き直しの結果から: その4択問題の○×へのリンク(#ox/quiz/<問題ID,…>。出せる文がなければ null)
+    quizNav,
     // テスト用
     _internal: {
       STATS_KEY, PREFS_KEY, COUNTS, prefs, parseParam, scopeCategories, withCategory, loadStatements, cleanEntry, loadStats, recordAnswer,
       inScope, matchesFilter, buildPool, weakOrder, spreadByQuiz, pickQuestions, createSession, startFromPrefs,
-      answerCurrent, summarize, contextOf, termLink, conditionLabel, loadSavedPrefs, lastStarted, validScope,
+      answerCurrent, summarize, contextOf, termLink, conditionLabel, loadSavedPrefs, lastStarted, validScope, quizScopeIds, startQuizScope,
       getSession: () => session,
       setSession: (s) => { session = s; },
     },

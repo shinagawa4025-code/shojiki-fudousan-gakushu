@@ -11,6 +11,7 @@ window.Views.settings = (function () {
     activityLog: `object`, autoQuizStats: `object`, basicsProgress: `object`, bookmarks: `object`, calcInputs: `object`,
     flashcards: `object`, oxStats: `object`, quizHistory: `object`, srsCards: `object`, roadmap: `object`,
     oxPrefs: `object`, quizPrefs: `object`, reviewNewToday: `object`, onboardingDone: `object`, learnerProfile: `object`,
+    quizRetry: `object`, quizRetryToday: `object`,
     examSession: `object|null`, examRetryResult: `object|null`,
     examHistory: `array`, examTargets: `array`,
     reviewNewLimit: `number`, ttsRate: `number`, lastBackupAt: `number`, backupNoteDismissedAt: `number`,
@@ -169,7 +170,7 @@ window.Views.settings = (function () {
 
   // バックアップのファイル名・目印に使う名前(以前のファイルも読み込める)
   function backupSlug() {
-    return (window.SITE && SITE.backupSlug) || `manabu-fudosan`;
+    return (window.SITE && SITE.backupSlug) || `fudomana`;
   }
 
   // 読み上げ速度の表示(0.95 → 0.95、1 → 1.0)

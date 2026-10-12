@@ -552,12 +552,38 @@ window.Views.exam = (function () {
     };
   }
 
-  // 採点して記録する。副作用(SRS・ストリーク・履歴)は同じ試験IDにつき1回だけ
+  // 解き直しの予定(Drill): 4択の確認問題を間違えたら翌日から出し直し、期限が来ていた問題に正解したら次の段階へ
+  // 未回答は登録しない(解けなかったとは限らないため)。用語から作った問題は対象外
+  function noteDrill(s) {
+    if (!window.Drill) return;
+    try {
+      s.questions.forEach((q, i) => {
+        if (!q || q.kind !== `fixed` || typeof q.refId !== `string`) return;
+        const chosen = Number.isInteger(s.answers[i]) ? s.answers[i] : null;
+        if (chosen === null) return;
+        Drill.note(q.refId, chosen === q.correctIndex, `exam`);
+      });
+    } catch (e) { console.error(`[解き直し] 模擬試験の結果を記録できませんでした`, e); }
+  }
+
+  // 結果に出す: 解き直しの予定に入れた(入れる)問題ID(間違えて回答した4択の確認問題。今のデータにあるものだけ)
+  function drillIdsOf(wrong) {
+    const out = [];
+    if (!window.Drill) return out;
+    wrong.forEach((w) => {
+      if (w && w.kind === `fixed` && Number.isInteger(w.chosen) && typeof w.refId === `string` && !out.includes(w.refId) && Drill.isEligible(w.refId)) out.push(w.refId);
+    });
+    return out;
+  }
+
+  // 採点して記録する。副作用(SRS・解き直しの予定・ストリーク・履歴)は同じ試験IDにつき1回だけ
   function finalizeSession(s, finishedAt) {
     const entry = gradeSession(s, finishedAt);
     if (s.mode === `retry`) {
       entry.retryOf = s.retryOf || null;
       Storage.set(RETRY_RESULT_KEY, entry);
+      // 解き直しは何度でも受けられる。同じ日に同じ問題を何度間違えても、解き直しの予定は1回だけ登録される(Drill)
+      noteDrill(s);
       if (window.Streak) Streak.recordToday();
       clearSession();
       return entry;
@@ -568,6 +594,7 @@ window.Views.exam = (function () {
       clearSession();
       return existing;
     }
+    noteDrill(s);
     const graded = new Set();
     entry.wrong.forEach((w) => {
       // 未回答は「もう一度」にしない(解けなかったとは限らず、長い復習間隔を消してしまうため)
@@ -1455,6 +1482,15 @@ window.Views.exam = (function () {
     // 次にやること: 正答率が7割に届かなかった分野(低い順)
     const lowRows = catRows.filter((r) => catById(r.id) && r.pct < GOOD_PCT).sort((a, b) => (a.pct - b.pct) || (b.total - a.total));
     const retryCount = retryWrong.length || retryFlagged.length;
+    // 間違えた4択の確認問題: 解き直しの予定に入れたこと(今日受けた試験だけ「明日から」と伝える)と、その問題の○×
+    const drillIds = drillIdsOf(wrong);
+    const doneDay = DateUtil.format(new Date(entry.finishedAt || entry.startedAt));
+    const oxNav = drillIds.length && window.Views.ox && typeof Views.ox.quizNav === `function` ? Views.ox.quizNav(drillIds) : null;
+    const drillHtml = drillIds.length && (doneDay === DateUtil.today() || oxNav) ? `
+      <div class="exam-drill">
+        ${doneDay === DateUtil.today() ? `<p class="exam-drill-note">${ic(`calendar`, 16)}<span>間違えた${drillIds.length}問を<a href="#quiz/due">解き直しの予定</a>に追加しました(明日から)</span></p>` : ``}
+        ${oxNav ? `<a class="btn btn-secondary btn-block" href="${esc(oxNav)}" data-role="drill-ox">${ic(`o-x`)}<span>この論点を○×で確認</span></a>` : ``}
+      </div>` : ``;
     const nextHtml = `
       <section class="card exam-next" aria-labelledby="exam-next-title">
         <h3 class="card-title" id="exam-next-title">${ic(`flag`, 20)} 次にやること</h3>
@@ -1463,6 +1499,7 @@ window.Views.exam = (function () {
             <button type="button" class="btn btn-block" data-role="retry">${ic(`repeat`)}<span>${retryWrong.length ? `間違えた問題を解き直す` : `見直し印の問題を解き直す`}(<span data-role="retry-count">${retryCount}</span>問)</span></button>
             ${retryWrong.length && retryFlagged.length ? `<label class="check-inline exam-retry-flag"><input type="checkbox" data-role="retry-flagged"> 見直し印を付けて正解した${retryFlagged.length}問も含める</label>` : ``}
           </div>` : ``}
+        ${drillHtml}
         ${lowRows.length ? `
           <p class="exam-next-lead">正答率が7割に届かなかった分野</p>
           <ul class="exam-next-list">
@@ -1560,6 +1597,13 @@ window.Views.exam = (function () {
     }
 
     renderWrongList(wrap, wrong, flaggedOk, isFlagged);
+    // 間違えた問題の「図解で確認」
+    wrap.addEventListener(`click`, (e) => {
+      const b = e.target && e.target.closest ? e.target.closest(`[data-figure]`) : null;
+      if (!b || !window.CardUi || typeof CardUi.openFigure !== `function`) return;
+      e.preventDefault();
+      CardUi.openFigure(b.dataset.figure);
+    });
 
     const retryBtn = wrap.querySelector(`[data-role="retry"]`);
     const retryFlag = wrap.querySelector(`[data-role="retry-flagged"]`);
@@ -1693,6 +1737,9 @@ window.Views.exam = (function () {
     const links = [];
     if (w.kind === `fixed` && w.refId) links.push(`<a class="chip chip-small chip-muted" href="#quiz/q/${encodeURIComponent(w.refId)}">${ic(`pencil-check`, 14)}確認問題を開く</a>`);
     if (term) links.push(`<a class="chip chip-small chip-muted" href="#glossary/${encodeURIComponent(term.id)}">${ic(`layers`, 14)}用語集: ${esc(term.name)}</a>`);
+    // 関連する用語に図解があれば、その図をシートで開く
+    const figId = term && window.CardUi && typeof CardUi.diagramsFor === `function` ? CardUi.diagramsFor(term.id)[0] : null;
+    if (figId) links.push(`<button type="button" class="chip chip-small chip-muted" data-figure="${esc(figId)}">${ic(`diagram`, 14)}図解で確認</button>`);
     const statusHtml = status === `skip` ? `<span class="review-status exam-status-skip">未回答</span>`
       : status === `ok` ? `<span class="review-status review-status-ok">${ic(`check-circle`, 12)}正解</span>`
         : `<span class="review-status review-status-ng">${ic(`x-circle`, 12)}不正解</span>`;

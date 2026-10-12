@@ -3,15 +3,33 @@ window.Views = window.Views || {};
 window.Views.figures = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 18 });
 
-  // 学習内容ではなくアプリの使い方を説明する図(一覧の最後に別の見出しで並べる)
+  // 学習内容ではなくアプリの使い方を説明する図(一覧の最後に別の見出しで並べる)。Diagrams.groups の id `app` と、その中の図
+  const APP_GROUP = `app`;
   const APP_HELP_IDS = [`srs-cycle`];
 
-  // 学習内容の図 → アプリの使い方の図 の順(詳細画面の前後移動も同じ順)
-  function diagramIds() {
+  // 一覧の見出しごとの図: [{ id, label, ids }](学習内容の分野 → その他 → アプリの使い方。詳細画面の前後移動も同じ順)
+  // Diagrams.groups がなければ、学習内容の図をまとめて1つ・アプリの使い方の図を1つ
+  function sections() {
     const D = window.Diagrams;
     if (!D || !D.defs) return [];
-    const ids = Object.keys(D.defs).filter((id) => D.defs[id] && typeof D.defs[id].render === `function`);
-    return ids.filter((id) => !APP_HELP_IDS.includes(id)).concat(ids.filter((id) => APP_HELP_IDS.includes(id)));
+    const ok = (id) => !!D.defs[id] && typeof D.defs[id].render === `function`;
+    const all = Object.keys(D.defs).filter(ok);
+    const groups = Array.isArray(D.groups) ? D.groups.filter((g) => g && Array.isArray(g.ids)) : [];
+    const used = new Set();
+    const pick = (ids) => ids.filter((id) => ok(id) && !used.has(id) && used.add(id));
+    const content = [];
+    let help = null;
+    groups.forEach((g) => {
+      const ids = pick(g.ids);
+      if (!ids.length) return;
+      if (g.id === APP_GROUP) help = { id: g.id, label: String(g.label || `アプリの使い方`), ids };
+      else content.push({ id: g.id, label: String(g.label || ``), ids });
+    });
+    const helpRest = pick(all.filter((id) => APP_HELP_IDS.includes(id)));
+    if (helpRest.length) help = help ? Object.assign(help, { ids: help.ids.concat(helpRest) }) : { id: APP_GROUP, label: `アプリの使い方`, ids: helpRest };
+    const rest = pick(all);
+    if (rest.length) content.push({ id: `other`, label: groups.length ? `その他` : ``, ids: rest });
+    return help ? content.concat([help]) : content;
   }
 
   // byTerm の逆引き: 図解ID → [用語]
@@ -33,20 +51,53 @@ window.Views.figures = (function () {
     try { return window.Diagrams.defs[id].render(); } catch (e) { return ``; }
   }
 
-  // 用語が基礎知識として載っているトピック
-  function topicOfTerm(termId) {
-    return window.APP_DATA.topics.find((t) => (t.basicIds || []).includes(termId)) || null;
+  // 用語が基礎知識として載っているトピック(基礎知識の一覧 basicIds か、小見出し sections[].ids に入っているもの)
+  // 複数のトピックに載っているときは、検索(search.js)の案内先と同じ考え方で選ぶ:
+  // ①主目標の試験でその項目が属する分野のトピック ②宅建士・税理士の分野で個別指定(termIds)されたトピック ③試験向けトピック ④データの先頭
+  const TOPIC_RANK = [`topicO`, `topicN`, `topicL`, `topicK`, `topicJ`, `topicH`];
+  function topicHas(topic, termId) {
+    if (Array.isArray(topic.basicIds) && topic.basicIds.includes(termId)) return true;
+    return Array.isArray(topic.sections) && topic.sections.some((s) => s && Array.isArray(s.ids) && s.ids.includes(termId));
+  }
+  function primaryTypeId() {
+    try {
+      const p = window.Stats && Stats.primaryTarget ? Stats.primaryTarget() : null;
+      const type = p && Stats.examType ? Stats.examType(p.examTypeId) : null;
+      return type && Array.isArray(type.categories) ? type.id : null;
+    } catch (e) { return null; }
+  }
+  function topicOfTerm(term, primaryId) {
+    const cands = window.APP_DATA.topics.filter((t) => topicHas(t, term.id));
+    if (cands.length <= 1) return cands[0] || null;
+    const pickFrom = (topicIds) => (topicIds || []).map((id) => cands.find((c) => c.id === id)).find(Boolean) || null;
+    try {
+      if (primaryId && window.Stats && Stats.categoryOf) {
+        const cat = Stats.categoryOf(term, primaryId);
+        const hit = cat ? pickFrom(cat.topicIds) : null;
+        if (hit) return hit;
+      }
+      const types = window.APP_DATA.exams && Array.isArray(window.APP_DATA.exams.types) ? window.APP_DATA.exams.types : [];
+      const order = [primaryId, `takken`, `zeirishi`].filter((id, i, a) => id && a.indexOf(id) === i);
+      for (const typeId of order) {
+        const type = types.find((t) => t.id === typeId);
+        const cat = type && Array.isArray(type.categories) ? type.categories.find((c) => (c.termIds || []).includes(term.id)) : null;
+        const hit = cat ? pickFrom(cat.topicIds) : null;
+        if (hit) return hit;
+      }
+    } catch (e) { /* 試験の分野が読めなくても、下の順で選ぶ */ }
+    return pickFrom(TOPIC_RANK) || cands[0];
   }
 
   function render(root, param) {
-    const ids = diagramIds();
+    const secs = sections();
+    const ids = secs.flatMap((s) => s.ids);
     if (param) {
       const id = param.split(`/`)[0];
       if (ids.includes(id)) renderDetail(root, id, ids);
       else renderMissing(root);
       return;
     }
-    renderGallery(root, ids);
+    renderGallery(root, secs);
   }
 
   // 一覧の図(SVG)は画面に近づいてから描く(枠の高さは CSS で決まっているので、後から描いても位置はずれない)
@@ -74,7 +125,8 @@ window.Views.figures = (function () {
     window.addEventListener(`hashchange`, stop);
   }
 
-  function renderGallery(root, ids) {
+  function renderGallery(root, secs) {
+    const ids = secs.flatMap((s) => s.ids);
     const wrap = document.createElement(`div`);
     wrap.className = `view figures-view`;
     wrap.innerHTML = `
@@ -112,19 +164,21 @@ window.Views.figures = (function () {
           </div>
         </a>`;
     };
-    const contentIds = ids.filter((id) => !APP_HELP_IDS.includes(id));
-    const helpIds = ids.filter((id) => APP_HELP_IDS.includes(id));
-    if (contentIds.length) {
-      const grid = document.createElement(`div`);
-      grid.className = `fig-grid`;
-      grid.innerHTML = contentIds.map(cardHtml).join(``);
-      wrap.appendChild(grid);
-      wrap.insertAdjacentHTML(`beforeend`, `<p class="fig-count">全${contentIds.length}点</p>`);
-    }
-    if (helpIds.length) {
+    // 学習内容の図は分野ごとの見出しで並べる(見出しのない1グループだけなら、見出しなしの一覧)
+    const contentSecs = secs.filter((s) => s.id !== APP_GROUP);
+    const help = secs.find((s) => s.id === APP_GROUP);
+    const contentCount = contentSecs.reduce((n, s) => n + s.ids.length, 0);
+    contentSecs.forEach((s) => {
+      const sec = document.createElement(`section`);
+      sec.className = `fig-group`;
+      sec.innerHTML = `${s.label ? `<div class="section-head"><h3>${UI.escapeHtml(s.label)}</h3><span class="topic-group-meta">${s.ids.length}点</span></div>` : ``}<div class="fig-grid">${s.ids.map(cardHtml).join(``)}</div>`;
+      wrap.appendChild(sec);
+    });
+    if (contentCount) wrap.insertAdjacentHTML(`beforeend`, `<p class="fig-count">全${contentCount}点</p>`);
+    if (help) {
       const sec = document.createElement(`section`);
       sec.className = `fig-help`;
-      sec.innerHTML = `<div class="section-head"><h3>アプリの使い方</h3></div><div class="fig-grid">${helpIds.map(cardHtml).join(``)}</div>`;
+      sec.innerHTML = `<div class="section-head"><h3>${UI.escapeHtml(help.label)}</h3></div><div class="fig-grid">${help.ids.map(cardHtml).join(``)}</div>`;
       wrap.appendChild(sec);
     }
     fillPreviews(wrap);
@@ -146,6 +200,7 @@ window.Views.figures = (function () {
     const idx = ids.indexOf(id);
     const prev = idx > 0 ? ids[idx - 1] : null;
     const next = idx < ids.length - 1 ? ids[idx + 1] : null;
+    const primaryId = terms.length ? primaryTypeId() : null;
 
     const wrap = document.createElement(`div`);
     wrap.className = `view figures-view fig-detail`;
@@ -164,7 +219,7 @@ window.Views.figures = (function () {
           <div class="section-head"><h3>関連する用語</h3></div>
           <div class="fig-term-list">
             ${terms.map((t) => {
-              const topic = topicOfTerm(t.id);
+              const topic = topicOfTerm(t, primaryId);
               return `
                 <div class="card fig-term">
                   <div class="fig-term-head"><span class="badge badge-${t.level}">${t.level}</span><span class="fig-term-name">${t.name}</span></div>

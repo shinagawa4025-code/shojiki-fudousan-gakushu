@@ -1,7 +1,8 @@
 // Service Worker: オフラインで使えるように、アプリ本体を端末に保存(プリキャッシュ)して、そこから返す
 //
 // 公開時は GitHub Actions(tools/build.js)が、このファイルを元に次の3つを自動で書き換えた sw.js を作る:
-//   CACHE_NAME(内容のハッシュ)・BUILD_ID(index.html と組で確かめる目印)・PRECACHE_URLS(まとめたファイルの一覧)
+//   CACHE_NAME(内容のハッシュ)・BUILD_ID(index.html と組で確かめる目印)・PRECACHE_URLS(まとめたファイルの一覧。
+//   ホームを描いたあとに読み込む「詳細」の束 assets/detail.*.js も入れる。js/appData.js)
 // 下の一覧は、ビルドに失敗して元のファイルのまま公開するとき(とローカルでの確認)に使う。
 // ファイルを追加・削除したら、この一覧も直す(node tools/check.js webapp が index.html との食い違いを知らせる)。
 //
@@ -51,7 +52,9 @@ const PRECACHE_URLS = [
   `./data/content/q2_horei.js`,
   `./data/content/q2_zei_menjo.js`,
   `./data/content/q2_life.js`,
+  `./data/content/q3_shohizei.js`,
   `./data/content/q2_fix.js`,
+  `./js/appData.js`,
   `./js/storage.js`,
   `./js/dates.js`,
   `./js/icons.js`,
@@ -65,6 +68,7 @@ const PRECACHE_URLS = [
   `./js/theme.js`,
   `./js/tts.js`,
   `./js/srs.js`,
+  `./js/drill.js`,
   `./js/streak.js`,
   `./js/stats.js`,
   `./js/recommend.js`,
@@ -165,6 +169,9 @@ self.addEventListener(`fetch`, (event) => {
     } catch (err) {
       // オフラインで、アプリの中の別のページを開いたとき
       if (req.mode === `navigate`) {
+        // 入れ子の URL(learn/… の静的ページなど)で index.html を返すと、相対パスのファイル(assets/…・icons/…)を読めないので、
+        // アプリの入口へ移す(入口は保存済みの index.html で開く)
+        if (url.pathname.slice(scope.length).includes(`/`)) return Response.redirect(self.registration.scope, 302);
         const shell = await cache.match(`./index.html`);
         if (shell) return shell;
       }

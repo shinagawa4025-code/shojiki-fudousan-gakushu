@@ -133,6 +133,7 @@ window.Views.about = (function () {
         <p>相場や一般的な手順など、法令上の決まりがない内容には「実務上の目安」と表示しています。</p>
         <p>税率・特例・統計は毎年変わります。法改正や統計の更新は、確認しだい反映し、更新履歴でお知らせします。</p>
         <div class="card-actions"><a class="btn btn-secondary" href="#sources">${ic(`library`, 18)}情報源の一覧へ</a></div>
+        <p>各テーマ・用語・図解の解説は、アプリを開かずに読めるWebページ(<a href="learn/">学べるテーマの一覧</a>)としても公開しています。人に紹介するときや、検索から調べるときに使えます。</p>
         ${lawChangesHtml()}
       `)}
 

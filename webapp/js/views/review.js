@@ -2,7 +2,8 @@
 // 出題順: ①期限が来た復習カード → ②新しい用語(1日あたりの上限は設定の reviewNewLimit。作品由来の俗語 worksOnly は除く)
 // 画面: 見出し「今日の復習 ⓘ  n / 全体」と細い進捗バー → カード → 画面の下のトレイ
 //       (表のあいだは「答えを見る」、めくると4段階の評価。どちらも同じ位置に出して親指を動かさずに続けられるように)
-// 全部終えたら完了の画面(チェックの輪・3つの数字・次の復習・次にやること1つ)
+// 全部終えたら完了の画面(チェックの輪・3つの数字・次の復習・今日のメニューの次の手順・○×で仕上げる)
+// 今日の復習がないとき(開いた時点で0枚)も、今日のメニューに次の手順があればそれを案内する
 // 初めての人には一度だけ「復習のしくみ」の図と説明を出す(Storage `seenReviewTip` = true で以後は出さない)
 window.Views = window.Views || {};
 window.Views.review = (function () {
@@ -130,6 +131,27 @@ window.Views.review = (function () {
     return cat ? `#ox/cat/${cat.id}/10` : `#ox`;
   }
 
+  // 今日のメニュー(ホームの一番上)で、まだ終わっていない次の手順。復習と○×の手順は除く(○×は完了の画面の「○×で仕上げる」で案内する)
+  function nextMenuStep(oxNav) {
+    try {
+      if (!window.Recommend || typeof Recommend.todayMenu !== `function`) return null;
+      const steps = Recommend.todayMenu({ oxFallback: { nav: oxNav, scope: `` } });
+      const next = (Array.isArray(steps) ? steps : []).find((s) => s && !s.done && s.id !== `review`) || null;
+      return next && next.id !== `ox` && typeof next.nav === `string` ? next : null;
+    } catch (e) { return null; }
+  }
+
+  // 今日のメニューで、まだ終わっていない次の手順(復習の手順は除く。○×の手順も含める)。ホームと同じ条件で作る。なければ null
+  // (今日の復習がない日に、ホームの「今日の復習カード(完了)」から来たときの案内)
+  function nextMenuStepAny() {
+    try {
+      if (!window.Recommend || typeof Recommend.todayMenu !== `function`) return null;
+      const H = window.Views && Views.home;
+      const steps = Recommend.todayMenu(H && typeof H.menuOptions === `function` ? H.menuOptions() : undefined);
+      return (Array.isArray(steps) ? steps : []).find((s) => s && !s.done && s.id !== `review` && typeof s.nav === `string`) || null;
+    } catch (e) { return null; }
+  }
+
   // 見出しの ⓘ で開く「復習のしくみ」
   function aboutHtml() {
     const lim = newLimit();
@@ -227,6 +249,9 @@ window.Views.review = (function () {
       infoBtn.hidden = false;
       const next = nextDueInfo();
       const nextText = next ? `次の復習は${next.days === 1 ? `明日` : `${next.days}日後`}(${next.count}件)です。` : ``;
+      // 今日のメニューの次の手順があれば、それを主ボタンにする(ホームの「今日の復習カード(完了)」から来たときに行き止まりにしない)
+      const menu = nextMenuStepAny();
+      const menuCta = menu ? { label: `次のメニュー: ${esc(menu.title)}`, nav: menu.nav } : null;
       let el;
       if (!Object.keys(Srs.getAllCards()).length && !candidates.length) {
         el = UI.emptyState({ icon: `layers`, title: `出題できる用語がありません`, cta: { label: `用語集を見る`, nav: `#glossary` } });
@@ -236,14 +261,14 @@ window.Views.review = (function () {
           icon: `trophy`,
           title: `今日の復習はありません`,
           body: `${nextText}すべての用語を学習済みです。`,
-          cta: { label: `○×一問一答で演習`, nav: `#ox` },
+          cta: menuCta || { label: `○×一問一答で演習`, nav: `#ox` },
         });
       } else {
         el = UI.emptyState({
           icon: `check-circle`,
           title: `今日の復習はありません`,
           body: `${nextText}${newLimit() ? `新しい用語の上限(1日${newLimit()}語)にも達しています。` : `新しい用語は出さない設定です。`}`,
-          cta: { label: `用語集を見る`, nav: `#glossary` },
+          cta: menuCta || { label: `用語集を見る`, nav: `#glossary` },
         });
       }
       if (moreNew) el.appendChild(moreNewButton(`btn btn-secondary`));
@@ -269,8 +294,11 @@ window.Views.review = (function () {
     }
 
     // 完了の画面: チェックの輪・評価した枚数/思い出せた割合/連続日数・次の復習・次にやること
+    // 次にやることは「今日のメニュー」のまだ終わっていない次の手順(○×の手順なら「○×で仕上げる」をそのまま使う)
     function renderDone(moreNew) {
       infoBtn.hidden = true;
+      const finishNav = oxFinishNav();
+      const menuNext = nextMenuStep(finishNav);
       const done = session.done;
       const missed = Math.min(done, Object.keys(session.againIds).filter((id) => session.againIds[id] > 0).length);
       const pct = done ? Math.max(0, Math.round(((done - missed) / done) * 100)) : 0;
@@ -292,7 +320,11 @@ window.Views.review = (function () {
         </div>
         ${next ? `<p class="rv-done-next">${ic(`calendar`)}<span>次の復習は <b>${next.days === 1 ? `明日` : `${next.days}日後`} ${next.count}枚</b></span></p>` : ``}
         <div class="rv-done-actions">
-          <a class="btn btn-lg btn-block" href="${esc(oxFinishNav())}" data-role="ox-finish">${ic(`o-x`, 20)}○×で仕上げる(10問)</a>
+          ${menuNext ? `
+            <a class="btn btn-lg btn-block rv-done-menu" href="${esc(menuNext.nav)}" data-role="menu-next">
+              <span class="rv-done-menu-text"><span>次のメニュー: ${esc(menuNext.title)}</span>${menuNext.sub ? `<small>${esc(menuNext.sub)}</small>` : ``}</span>${ic(`arrow-right`, 20)}
+            </a>` : ``}
+          <a class="btn btn-lg btn-block${menuNext ? ` btn-secondary` : ``}" href="${esc(finishNav)}" data-role="ox-finish">${ic(`o-x`, 20)}○×で仕上げる(10問)</a>
         </div>
       `;
       if (moreNew) el.querySelector(`.rv-done-actions`).appendChild(moreNewButton(`btn btn-secondary btn-block`));

@@ -6,24 +6,30 @@ const BLOCK_RE = /<!--\s*build:(css|js)\s+([A-Za-z0-9_-]+)[\s\S]*?-->([\s\S]*?)<
 const isLocal = (u) => !!u && !/^[a-z][a-z0-9+.-]*:|^\/\/|^#/i.test(u);
 
 // <!-- build:css app … --> 〜 <!-- /build --> の範囲。中には <link rel="stylesheet"> / <script src></script> と HTML コメントだけを置ける
+// <script> に付けてよい属性は data-bundle="detail" だけ(公開時に「詳細」の束へ回すファイルの印。ローカルでは何もしない)。
+// 戻り値の later は、その印の付いたファイルの集合
 function parseBlocks(html) {
   const blocks = [];
   for (const m of html.matchAll(BLOCK_RE)) {
     const [whole, kind, name, body] = m;
     const tagRe = kind === 'css' ? /<link\b[^>]*>/g : /<script\b[^>]*><\/script>/g;
     const files = [];
+    const later = new Set();
     for (const t of body.matchAll(tagRe)) {
       const attr = kind === 'css' ? 'href' : 'src';
       if (kind === 'css' && !/\brel="stylesheet"/.test(t[0])) throw new Error(`build:css ${name} に stylesheet 以外の <link> があります: ${t[0]}`);
-      if (kind === 'js' && /\b(type|async|defer|nomodule)\b/.test(t[0].replace(/\bsrc="[^"]*"/, ''))) throw new Error(`build:js ${name} の <script> に属性があります(まとめられない): ${t[0]}`);
+      const extra = kind === 'js' ? t[0].replace(/^<script\b/, '').replace(/><\/script>$/, '').replace(/\bsrc="[^"]*"/, '').replace(/\bdata-bundle="detail"/, '').trim() : '';
+      if (kind === 'js' && extra) throw new Error(`build:js ${name} の <script> に src と data-bundle="detail" 以外の属性があります(まとめられない): ${t[0]}`);
       const url = (t[0].match(new RegExp(`\\b${attr}="([^"]+)"`)) || [])[1];
       if (!isLocal(url)) throw new Error(`build:${kind} ${name} に外部のファイルがあります: ${t[0]}`);
-      files.push(url.replace(/^\.\//, ''));
+      const rel = url.replace(/^\.\//, '');
+      files.push(rel);
+      if (kind === 'js' && /\bdata-bundle="detail"/.test(t[0])) later.add(rel);
     }
     const rest = body.replace(tagRe, '').replace(/<!--[\s\S]*?-->/g, '').trim();
     if (rest) throw new Error(`build:${kind} ${name} の中に、まとめられないものがあります: ${rest.slice(0, 80)}`);
     if (!files.length) throw new Error(`build:${kind} ${name} が空です`);
-    blocks.push({ kind, name, files, start: m.index, end: m.index + whole.length });
+    blocks.push({ kind, name, files, later, start: m.index, end: m.index + whole.length });
   }
   if (blocks.some((b) => b.kind === 'css') === false) throw new Error('<!-- build:css … --> がありません');
   if (blocks.some((b) => b.kind === 'js') === false) throw new Error('<!-- build:js … --> がありません');

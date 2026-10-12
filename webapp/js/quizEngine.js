@@ -373,6 +373,7 @@ window.QuizEngine = (function () {
   }
 
   function buildQuestionOfType(term, type) {
+    if (type === `law-ref`) noteEarly(`QuizEngine.law-ref`);
     const variants = nameVariants(term);
     const stem = type === `name-from-def` ? maskNames(term.simpleExplanation, variants)
       : type === `law-ref` ? `「${term.name}」の根拠法令は?`
@@ -440,10 +441,16 @@ window.QuizEngine = (function () {
       && Number.isInteger(item.correctIndex) && item.correctIndex >= 0 && item.correctIndex < 4;
   }
 
+  // 公開版で、詳細(選択肢・解説)が届く前に呼ばれたことを記録する(画面は詳細を待ってから描くので、通常は起きない)
+  function noteEarly(where) {
+    if (window.AppData && AppData.note && AppData.hasDetail && !AppData.hasDetail()) AppData.note(where);
+  }
+
   // 4択形式の固定問題(data/quiz.js の format:'mc')を問題オブジェクトに変換
   function fromFixedMc(item, opts) {
     opts = opts || {};
     if (!isMcItem(item)) return null;
+    noteEarly(`QuizEngine.fromFixedMc`);
     const truths = statementTruths(item);
     const notes = cleanNotes(item.choiceNotes, !!truths);
     const choices = item.choices.map((text, i) => ({ text, correct: i === item.correctIndex, note: notes ? notes[i] : ``, truth: truths ? truths[i] : null }));
@@ -493,19 +500,29 @@ window.QuizEngine = (function () {
 
   // ○×一問一答用: 正誤判定型の4択問題を1文ずつの○×問題に分解する
   // 戻り値: [{ id: 'quiz-K-01#2', quizId, index, text, truth, note, context, termId, level, topicIds }]
+  // note(選択肢ごとの解説)と context(問いかけの前提)は使うときに作る(ホームの集計では id・正誤・分野しか使わないため)。
+  // どちらも同じ問題の4つの文で1回だけ作り、作った値を覚えておく。項目の順と値は、すぐに作った場合と同じ(JSON にしても同じ)
   function statementsFrom(item) {
     const truths = statementTruths(item);
     if (!truths) return [];
-    const notes = cleanNotes(item.choiceNotes, true);
-    const context = stemContext(item.question);
+    let notes;
+    let context;
+    const noteAt = (i) => {
+      if (notes === undefined) notes = cleanNotes(item.choiceNotes, true);
+      return notes ? notes[i] : ``;
+    };
+    const contextOf = () => {
+      if (context === undefined) context = stemContext(item.question);
+      return context;
+    };
     return item.choices.map((text, i) => ({
       id: `${item.id}#${i}`,
       quizId: item.id,
       index: i,
       text,
       truth: truths[i],
-      note: notes ? notes[i] : ``,
-      context,
+      get note() { return noteAt(i); },
+      get context() { return contextOf(); },
       termId: item.relatedTermId || null,
       level: item.level,
       topicIds: item.topicIds || [],
@@ -514,17 +531,19 @@ window.QuizEngine = (function () {
 
   // 全問の○×の文(起動後に何度も呼ばれるので、作った一覧を覚えておく)。
   // 問題データが変わったら作り直す: 配列の差し替え・件数の変化(ContentPack.add)と、
-  // 追加コンテンツの登録回数(ContentPack.patchQuiz は既存の問題を件数を変えずに書き換える)を目印にする
+  // 追加コンテンツの登録回数(ContentPack.patchQuiz は既存の問題を件数を変えずに書き換える)、
+  // 公開版で詳細(選択肢・選択肢ごとの解説)を取り込んだこと(AppData.version)を目印にする
   let stmtCache = null;
   let stmtKey = null;
   function statementsKey(quiz) {
     const packs = window.ContentPack && typeof ContentPack.list === `function` ? ContentPack.list().length : 0;
-    return { quiz, n: quiz.length, packs };
+    const detail = window.AppData && typeof AppData.version === `function` ? AppData.version() : 0;
+    return { quiz, n: quiz.length, packs, detail };
   }
   function allStatements() {
     const quiz = (window.APP_DATA && window.APP_DATA.quiz) || [];
     const key = statementsKey(quiz);
-    if (!stmtCache || !stmtKey || stmtKey.quiz !== key.quiz || stmtKey.n !== key.n || stmtKey.packs !== key.packs) {
+    if (!stmtCache || !stmtKey || stmtKey.quiz !== key.quiz || stmtKey.n !== key.n || stmtKey.packs !== key.packs || stmtKey.detail !== key.detail) {
       stmtCache = quiz.flatMap(statementsFrom);
       stmtKey = key;
     }
@@ -535,6 +554,15 @@ window.QuizEngine = (function () {
   function clearStatementCache() {
     stmtCache = null;
     stmtKey = null;
+  }
+
+  // 公開版で詳細を取り込んだら、根拠法令から作った作り置き(ダミーの候補・出題できるか)も作り直す
+  if (window.AppData && AppData.onDetail) {
+    AppData.onDetail(() => {
+      clearStatementCache();
+      poolCache = { terms: null, map: new Map() };
+      lawEligibleCache.clear();
+    });
   }
 
   return {

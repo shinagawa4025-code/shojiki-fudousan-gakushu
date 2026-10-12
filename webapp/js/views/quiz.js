@@ -71,6 +71,7 @@ window.Views.quiz = (function () {
   // ===== 入口 =====
 
   function render(root, param) {
+    if (param === `due` || (param && param.startsWith(`due/`))) { renderDue(root, param); return; }
     let startMode = `fixed`;
     let topicParam = null;
     let initialWeak = false;
@@ -90,6 +91,9 @@ window.Views.quiz = (function () {
     }
     const initialTopic = topicParam && AppIndex.topicsById[topicParam] ? topicParam : ALL;
     const fixedCount = window.APP_DATA.quiz.length;
+    // 期限が来た解き直しがあれば、見出しの右に入口を出す
+    let dueNow = 0;
+    try { dueNow = window.Drill ? Drill.dueCount() : 0; } catch (e) { dueNow = 0; }
 
     const wrap = document.createElement(`div`);
     wrap.className = `view quiz-view`;
@@ -97,6 +101,7 @@ window.Views.quiz = (function () {
       <div class="view-head">
         <h2>4択問題</h2>
         ${infoBtnHtml(`4択問題について`)}
+        ${dueNow ? `<a class="chip chip-small quiz-due-chip" href="#quiz/due" aria-label="解き直し ${dueNow}問">${ic(`repeat`, 14)}<span>解き直し</span><span class="num">${dueNow}</span></a>` : ``}
       </div>
       <div class="segmented quiz-mode" role="group" aria-label="出題モード" data-role="mode-chips">
         <button type="button" class="segmented-item" data-mode="fixed" aria-pressed="${startMode === `fixed`}">${ic(`list`, 16)}確認問題(${fixedCount}問)</button>
@@ -114,6 +119,7 @@ window.Views.quiz = (function () {
       <p>確認問題は本試験と同じ4択で、選択肢ごとに○×の理由と根拠条文を確認できます。</p>
       <p>自動生成クイズは用語集から毎回ちがう4択を出題します。</p>
       <p>間違えた問題の用語は「<a href="#review">今日の復習</a>」に自動で追加されます。</p>
+      <p>間違えた確認問題は翌日から「<a href="#quiz/due">解き直し</a>」に出ます(1→3→7→21日後。4回続けて正解すると卒業)。</p>
       <p class="view-info-keys">キーボード: <kbd>1</kbd>〜<kbd>4</kbd> で画面内の問題に回答 / <kbd>Enter</kbd> で次の問題へ</p>`);
     // 用語のリンクは画面を離れずにシートで開く(長押し・新しいタブ用に href は残す)
     wrap.addEventListener(`click`, onTermLinkClick);
@@ -157,7 +163,7 @@ window.Views.quiz = (function () {
         // ボタンやリンクの上ではブラウザ標準の動作(クリック)に任せる
         if (e.target && e.target.closest && e.target.closest(`button, a, summary, input, select, textarea, [role="button"]`)) return;
         const card = ctx.lastAnswered;
-        const next = card && card.isConnected ? card.querySelector(`[data-role="next-q"]`) : null;
+        const next = card && card.isConnected ? card.querySelector(`[data-role="next-q"], [data-role="due-next"]`) : null;
         if (!next) return;
         e.preventDefault();
         next.click();
@@ -763,6 +769,7 @@ window.Views.quiz = (function () {
     }
   }
 
+  // 戻り値: 解き直しの予定(Drill)の変化(4択の確認問題だけ。Drill.noteRight / noteWrong の戻り値)
   function recordFixedResult(q, result, qHistory) {
     // 別のタブでの回答を消さないよう、最新の記録を読み直してから書き込む
     Object.assign(qHistory, getHistory());
@@ -770,6 +777,31 @@ window.Views.quiz = (function () {
     Storage.set(`quizHistory`, qHistory);
     if (window.Streak) Streak.recordToday();
     if (result === `ng` && q.relatedTermId && AppIndex.termsById[q.relatedTermId]) Srs.grade(q.relatedTermId, 1, { silent: true });
+    // 解き直しの予定: 間違えたら翌日から出し直し、期限が来た問題に正解したら次の段階へ(記述式は対象外)
+    if (window.Drill && QuizEngine.isMcItem(q)) {
+      try { return Drill.note(q.id, result === `ok`, `quiz`); } catch (e) { console.error(`[解き直し] 記録できませんでした`, e); }
+    }
+    return null;
+  }
+
+  // 用語に図解があれば、その最初の図解ID(なければ null)
+  function figureIdFor(termId) {
+    if (!termId || !window.CardUi || typeof CardUi.diagramsFor !== `function`) return null;
+    const ids = CardUi.diagramsFor(termId);
+    return ids.length ? ids[0] : null;
+  }
+
+  // 「図解で確認」のチップ(押すと図解をシートで開く)
+  function figureChipHtml(termId) {
+    const id = figureIdFor(termId);
+    return id ? `<button type="button" class="chip chip-small chip-muted" data-figure="${esc(id)}">${ic(`diagram`, 14)}図解で確認</button>` : ``;
+  }
+
+  function onFigureClick(e) {
+    const b = e.target && e.target.closest ? e.target.closest(`[data-figure]`) : null;
+    if (!b || !window.CardUi || typeof CardUi.openFigure !== `function`) return;
+    e.preventDefault();
+    CardUi.openFigure(b.dataset.figure);
   }
 
   // 「次の問題」: 同じ一覧の後ろに問題があるカードだけ、回答バーに付ける(トピック詳細・ブックマークの一覧でも同じ)
@@ -795,8 +827,9 @@ window.Views.quiz = (function () {
   }
 
   // 確認問題のカード。topics.js(トピック詳細)・bookmarks.js からも使う
-  // opts: { history, onResult(result, card, picked, restored), onGotoNg, onBookmark(on, card), restoreChoice }
+  // opts: { history, onResult(result, card, picked, restored, drill), onGotoNg, onBookmark(on, card), restoreChoice }
   // restoreChoice: 戻る・再読み込みのとき、回答済みの表示(解説つき)を記録し直さずに再現する(4択は選んだ番号、記述は 'ok'/'ng')
+  // onResult の drill: その回答で解き直しの予定がどう変わったか(Drill.note の戻り値。戻るで再現したときは undefined)
   function buildFixedCard(q, opts) {
     opts = opts || {};
     const qHistory = opts.history || getHistory();
@@ -822,6 +855,7 @@ window.Views.quiz = (function () {
     wireBookmark(card, `quiz:${q.id}`, opts.onBookmark);
     // 画面(クイズ)側にも同じ処理があるが、トピック詳細などから使う場合のためにカード自身でも受ける
     card.addEventListener(`click`, onTermLinkClick);
+    card.addEventListener(`click`, onFigureClick);
     card.addEventListener(`click`, (e) => {
       const nb = e.target.closest ? e.target.closest(`[data-role="next-q"]`) : null;
       if (!nb) return;
@@ -832,7 +866,7 @@ window.Views.quiz = (function () {
     const bodyEl = card.querySelector(`[data-role="body"]`);
 
     function afterLinksHtml(ok) {
-      const links = `${termLinkHtml(q.relatedTermId)}${!ok && opts.onGotoNg ? `<button type="button" class="link-btn" data-role="goto-ng">苦手な問題だけ表示</button>` : ``}`;
+      const links = `${termLinkHtml(q.relatedTermId)}${figureChipHtml(q.relatedTermId)}${!ok && opts.onGotoNg ? `<button type="button" class="link-btn" data-role="goto-ng">苦手な問題だけ表示</button>` : ``}`;
       return links ? `<div class="quiz-after-links">${links}</div>` : ``;
     }
 
@@ -882,8 +916,8 @@ window.Views.quiz = (function () {
           ${metaHtml()}
         `;
         wireGotoNg(explainEl);
-        if (!restored) recordFixedResult(q, result, qHistory);
-        if (opts.onResult) opts.onResult(result, card, picked, !!restored);
+        const drill = restored ? undefined : recordFixedResult(q, result, qHistory);
+        if (opts.onResult) opts.onResult(result, card, picked, !!restored, drill);
         placeNext(restored);
       }
 
@@ -935,6 +969,281 @@ window.Views.quiz = (function () {
       if (opts.restoreChoice === `ok` || opts.restoreChoice === `ng`) showResult(opts.restoreChoice, true);
     }
     return card;
+  }
+
+  // ===== 解き直し(#quiz/due・#quiz/due/<問題数>) =====
+  // 期限が来た解き直しの問題(Drill)を、確認問題と同じカードで出す(見出し「解き直し n問」)。
+  // 答えると予定が進む(正解: 次の段階へ・4回目の正解で卒業 / 不正解: 翌日から最初の段階)。
+  // 表示は DUE_PAGE 問ずつ(#quiz/due/<n> なら最初の n 問)。残りは結果の「残りの問題も解く」で足す
+  // 戻る・再読み込みで同じ問題・同じ回答を出せるよう(記録は1回だけ)、履歴エントリの state に保存する
+  //   dueState: { day: 開いた日, ids: [開いたときに期限が来ていた問題ID], shown: 表示している数, answered: { 問題ID: 選んだ番号 },
+  //               outcome: { 問題ID: 'up:<日数>:<卒業までの残り回数>' | 'grad' | 'reset' }, rem: { 問題ID: 開いたときの卒業までの残り回数 } }
+  const DUE_PAGE = 10;
+  const DUE_MAX = 50;
+  const OUTCOME_RE = /^(grad|reset|up:\d{1,2}:\d)$/;
+
+  function parseDueState(raw) {
+    // 開いた日と違う日(ホーム画面のアプリを翌日に開いた・再読み込みした)は、その日の期限で出し直す
+    if (!window.Drill || !Storage.isPlainObject(raw) || !Array.isArray(raw.ids) || raw.day !== DateUtil.today()) return null;
+    const ids = raw.ids.filter((id, i, a) => typeof id === `string` && a.indexOf(id) === i && Drill.isEligible(id)).slice(0, DUE_MAX);
+    if (!ids.length) return null;
+    const pick = (src, ok) => {
+      const out = {};
+      if (Storage.isPlainObject(src)) ids.forEach((id) => { if (ok(src[id])) out[id] = src[id]; });
+      return out;
+    };
+    const shown = Number(raw.shown);
+    return {
+      ids,
+      shown: Number.isInteger(shown) && shown > 0 ? Math.min(shown, ids.length) : Math.min(DUE_PAGE, ids.length),
+      answered: pick(raw.answered, (v) => Number.isInteger(v) && v >= 0 && v < 4),
+      outcome: pick(raw.outcome, (v) => typeof v === `string` && OUTCOME_RE.test(v)),
+      rem: pick(raw.rem, (v) => Number.isInteger(v) && v >= 1 && v <= 4),
+    };
+  }
+
+  // 回答で予定がどう変わったかの1行(解説の先頭に出す)
+  function drillOutcomeHtml(code) {
+    if (code === `grad`) return `<p class="drill-result is-grad">${ic(`trophy`, 16)}<span>卒業です。この問題は解き直しの予定から外れました</span></p>`;
+    if (code === `reset`) return `<p class="drill-result is-reset">${ic(`repeat`, 16)}<span>明日もう一度出します(1→3→7→21日後の最初からやり直し)</span></p>`;
+    const m = /^up:(\d+):(\d)$/.exec(code || ``);
+    if (m) return `<p class="drill-result">${ic(`calendar`, 16)}<span>次は${m[1]}日後にもう一度出します(卒業まであと${m[2]}回)</span></p>`;
+    return ``;
+  }
+
+  function drillOutcomeCode(result, drill) {
+    if (result !== `ok`) return `reset`;
+    if (!drill) return ``;
+    if (drill.graduated) return `grad`;
+    const left = window.Drill ? Drill.INTERVALS.length - drill.step : 0;
+    return Number.isInteger(drill.days) && left > 0 ? `up:${drill.days}:${left}` : ``;
+  }
+
+  // 今日のメニューの手順(ホームと同じ条件で作る。ホームの関数がなければ既定の条件)。作れなければ []
+  function menuSteps() {
+    try {
+      const H = window.Views && window.Views.home;
+      const opts = H && typeof H.menuOptions === `function` ? H.menuOptions() : undefined;
+      const steps = window.Recommend && typeof Recommend.todayMenu === `function` ? Recommend.todayMenu(opts) : [];
+      return Array.isArray(steps) ? steps.filter((s) => s && typeof s.nav === `string`) : [];
+    } catch (e) { return []; }
+  }
+
+  // 今日のメニューで、まだ終わっていない最初の手順(exceptId の手順は除く)。なければ null
+  function nextMenuStep(exceptId, steps) {
+    return (steps || menuSteps()).find((s) => !s.done && s.id !== exceptId) || null;
+  }
+
+  function renderDue(root, param) {
+    const qHistory = getHistory();
+    const byId = {};
+    window.APP_DATA.quiz.forEach((q) => { byId[q.id] = q; });
+    const saved = parseDueState(historyState().dueState);
+    const day = DateUtil.today();
+    let ids;
+    let shown;
+    let answered;
+    let outcome;
+    let rem;
+    if (saved) {
+      ({ ids, shown, answered, outcome, rem } = saved);
+    } else {
+      ids = window.Drill ? Drill.dueIds().slice(0, DUE_MAX) : [];
+      const n = Number(String(param || ``).split(`/`)[1]);
+      shown = Math.min(ids.length, Number.isInteger(n) && n > 0 ? n : DUE_PAGE);
+      answered = {};
+      outcome = {};
+      rem = {};
+      ids.forEach((id) => { const e = Drill.get(id); if (e) rem[id] = Drill.remaining(e); });
+    }
+
+    const wrap = document.createElement(`div`);
+    wrap.className = `view quiz-view quiz-due-view`;
+    wrap.dataset.docTitle = `解き直し`;
+    wrap.innerHTML = `
+      <div class="view-head">
+        <h2>解き直し${ids.length ? ` <span class="num">${ids.length}</span>問` : ``}</h2>
+        ${infoBtnHtml(`解き直しについて`)}
+      </div>
+      <div data-role="due-body"></div>
+    `;
+    root.appendChild(wrap);
+    wireInfo(wrap, `解き直しについて`, `
+      <p>4択の確認問題・模擬試験・○×一問一答で間違えた問題を、1日後 → 3日後 → 7日後 → 21日後に出し直します。</p>
+      <p>期限が来た問題に正解すると次の段階へ進み、4回続けて正解すると「卒業」して出なくなります。間違えたときは翌日から最初の段階に戻ります。</p>
+      <p class="view-info-keys">キーボード: <kbd>1</kbd>〜<kbd>4</kbd> で画面内の問題に回答 / <kbd>Enter</kbd> で次の問題へ</p>`);
+    wrap.addEventListener(`click`, onTermLinkClick);
+    const body = wrap.querySelector(`[data-role="due-body"]`);
+
+    if (!ids.length) {
+      const next = window.Drill ? Drill.nextDue() : null;
+      const total = window.Drill ? Drill.count() : 0;
+      const menu = nextMenuStep(`retry`);
+      const nextText = next ? `次は${next.days === 1 ? `明日` : `${next.days}日後`}(${esc(DateUtil.toJapanese(next.date))})に${next.count}問です。` : ``;
+      body.appendChild(UI.emptyState({
+        icon: `check-circle`,
+        title: `今日の解き直しはありません`,
+        body: total
+          ? `${nextText}予定に入っている問題は全部で${total}問です。`
+          : `4択の確認問題・模擬試験・○×で間違えた問題は、翌日からここで解き直せます(1→3→7→21日後に出し直し、4回続けて正解すると卒業)。`,
+        cta: menu ? { label: `次のメニュー: ${esc(menu.title)}`, nav: menu.nav } : { label: `4択問題へ`, nav: `#quiz` },
+      }));
+      return;
+    }
+
+    body.innerHTML = `
+      <p class="progress-text quiz-progress" data-role="due-progress"></p>
+      <div class="quiz-list" data-role="due-list"></div>
+      <div class="card quiz-summary drill-summary" data-role="due-summary" tabindex="-1" hidden></div>
+    `;
+    const list = body.querySelector(`[data-role="due-list"]`);
+    const progressEl = body.querySelector(`[data-role="due-progress"]`);
+    const summaryEl = body.querySelector(`[data-role="due-summary"]`);
+    const ctx = { lastAnswered: null };
+    bindKeys(wrap, list, ctx);
+
+    function saveState() {
+      patchHistoryState({ dueState: { day, ids: ids.slice(), shown, answered, outcome, rem } });
+    }
+
+    const isOk = (id) => !!byId[id] && answered[id] === byId[id].correctIndex;
+
+    function paintProgress() {
+      const shownIds = ids.slice(0, shown);
+      const done = shownIds.filter((id) => answered[id] != null).length;
+      const ok = shownIds.filter(isOk).length;
+      progressEl.textContent = `${done} / ${shownIds.length}問回答・正解 ${ok}問${ids.length > shown ? `(ほかに${ids.length - shown}問)` : ``}`;
+    }
+
+    // 最後のカード(後ろに問題がない)には「未回答の問題へ」「結果を見る」を付ける
+    function paintTail() {
+      const cards = Array.from(list.querySelectorAll(`.quiz-card`));
+      const last = cards[cards.length - 1];
+      cards.forEach((c) => { if (c !== last) { const b = c.querySelector(`[data-role="due-next"]`); if (b) b.remove(); } });
+      if (!last || !last.classList.contains(`is-answered`)) return;
+      const bar = last.querySelector(`.quiz-answer-bar[data-role="verdict"]`);
+      if (!bar) return;
+      const label = cards.some((c) => !c.classList.contains(`is-answered`)) ? `未回答の問題へ` : `結果を見る`;
+      let b = bar.querySelector(`[data-role="due-next"]`);
+      if (!b) {
+        bar.insertAdjacentHTML(`beforeend`, `<button type="button" class="btn quiz-next" data-role="due-next" data-label=""></button>`);
+        b = bar.querySelector(`[data-role="due-next"]`);
+      }
+      if (b.dataset.label !== label) {
+        b.dataset.label = label;
+        b.innerHTML = nextBtnInner(label);
+      }
+    }
+
+    list.addEventListener(`click`, (e) => {
+      const b = e.target.closest ? e.target.closest(`[data-role="due-next"]`) : null;
+      if (!b) return;
+      const target = list.querySelector(`.quiz-card:not(.is-answered)`);
+      if (target) { focusCard(target); return; }
+      if (!summaryEl.hidden) {
+        summaryEl.scrollIntoView({ behavior: UI.prefersReducedMotion() ? `auto` : `smooth`, block: `start` });
+        summaryEl.focus({ preventScroll: true });
+      }
+    });
+
+    function handleResult(result, card, picked, restored, drill) {
+      const id = card.dataset.quizId;
+      if (!restored) {
+        answered[id] = picked;
+        outcome[id] = drillOutcomeCode(result, drill);
+        if (!outcome[id]) delete outcome[id];
+        ctx.lastAnswered = card;
+      }
+      const line = drillOutcomeHtml(outcome[id]);
+      const explain = card.querySelector(`[data-role="explain"]`);
+      if (line && explain) explain.insertAdjacentHTML(`afterbegin`, line);
+      if (!restored) {
+        saveState();
+        paintProgress();
+        paintTail();
+        renderSummary();
+      }
+    }
+
+    function buildCard(id) {
+      const card = buildFixedCard(byId[id], { history: qHistory, onResult: handleResult, restoreChoice: answered[id] });
+      const tools = card.querySelector(`.quiz-card-tools`);
+      if (tools && rem[id]) tools.insertAdjacentHTML(`beforebegin`, `<span class="drill-tag">${ic(`repeat`, 12)}卒業まであと${rem[id]}回</span>`);
+      return card;
+    }
+
+    function appendCards(from, to) {
+      const fragment = document.createDocumentFragment();
+      ids.slice(from, to).forEach((id) => { if (byId[id]) fragment.appendChild(buildCard(id)); });
+      list.appendChild(fragment);
+      list.querySelectorAll(`.quiz-card.is-answered`).forEach(ensureNextButton);
+      // 戻るで再現したカードの「次の問題」は次のフレームで付くので、最後のカードのボタンもそのあとで決める
+      requestAnimationFrame(paintTail);
+    }
+
+    function renderSummary() {
+      const shownIds = ids.slice(0, shown);
+      const total = shownIds.length;
+      if (!total || shownIds.some((id) => answered[id] == null)) {
+        summaryEl.hidden = true;
+        summaryEl.innerHTML = ``;
+        return;
+      }
+      const ok = shownIds.filter(isOk).length;
+      const pct = Math.round((ok / total) * 100);
+      const count = (pred) => shownIds.filter((id) => pred(outcome[id] || ``)).length;
+      const grad = count((c) => c === `grad`);
+      const up = count((c) => c.startsWith(`up:`));
+      const reset = count((c) => c === `reset`);
+      const rest = ids.length - shown;
+      const wrongIds = shownIds.filter((id) => !isOk(id));
+      const oxNav = wrongIds.length && window.Views.ox && typeof Views.ox.quizNav === `function` ? Views.ox.quizNav(wrongIds) : null;
+      // 今日のメニューの次の手順: 残りの問題があっても、メニューの解き直し(今日の分)が終わっていれば案内する
+      const steps = menuSteps();
+      const retryStep = steps.find((s) => s.id === `retry`);
+      const menu = !rest || !retryStep || retryStep.done ? nextMenuStep(`retry`, steps) : null;
+      summaryEl.hidden = false;
+      summaryEl.innerHTML = `
+        <div class="recommend-head">
+          <h3 class="card-title">${ic(pct >= PASS_PCT ? `trophy` : `flag`, 20)} 解き直しの結果</h3>
+          <span class="stat-value">${ok}<small>/${total}問</small></span>
+        </div>
+        <div class="quiz-summary-bar">
+          <div class="progress-bar progress-bar-lg" aria-hidden="true"><div class="progress-bar-fill ${pct >= PASS_PCT ? `fill-success` : ``}" style="width:${pct}%"></div></div>
+          <span class="quiz-summary-pct num">正答率 ${pct}%</span>
+        </div>
+        <ul class="drill-summary-list">
+          ${grad ? `<li>${ic(`trophy`, 16)}<span>卒業 <b class="num">${grad}</b>問</span></li>` : ``}
+          ${up ? `<li>${ic(`calendar`, 16)}<span>次の段階へ <b class="num">${up}</b>問</span></li>` : ``}
+          ${reset ? `<li>${ic(`repeat`, 16)}<span>明日もう一度 <b class="num">${reset}</b>問</span></li>` : ``}
+        </ul>
+        ${streakLineHtml()}
+        <div class="card-actions">
+          ${menu ? `<a class="btn" href="${esc(menu.nav)}" data-role="menu-next">${ic(`arrow-right`)}次のメニュー: ${esc(menu.title)}</a>` : ``}
+          ${rest ? `<button type="button" class="btn${menu ? ` btn-secondary` : ``}" data-role="due-more">${ic(`repeat`)}残りの${rest}問も解く</button>` : ``}
+          ${oxNav ? `<a class="btn btn-secondary" href="${esc(oxNav)}">${ic(`o-x`)}間違えた問題を○×で確認</a>` : ``}
+          <a class="btn btn-ghost" href="#home">${ic(`home`)}ホームへ</a>
+        </div>
+      `;
+      const more = summaryEl.querySelector(`[data-role="due-more"]`);
+      if (more) {
+        more.addEventListener(`click`, () => {
+          const from = shown;
+          shown = Math.min(ids.length, shown + DUE_PAGE);
+          appendCards(from, shown);
+          saveState();
+          paintProgress();
+          renderSummary();
+          const first = list.querySelectorAll(`.quiz-card`)[from];
+          if (first) focusCard(first);
+        });
+      }
+    }
+
+    appendCards(0, shown);
+    paintProgress();
+    renderSummary();
+    saveState();
   }
 
   // ===== 自動生成クイズ =====

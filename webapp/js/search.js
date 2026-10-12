@@ -89,8 +89,15 @@ window.GlobalSearch = (function () {
     return pickFrom(EXAM_TOPIC_RANK) || cands[0].id;
   }
 
+  // 公開版で詳細(解説・選択肢・根拠法令・作品・情報源・図解)がまだ届いていないか。届く前は、届いている項目(名前・説明・問題文)だけで
+  // 索引を作り、届いたら作り直す(仮の値「…」を索引や結果の説明に入れないように)
+  function detailMissing() {
+    return !!(window.AppData && typeof AppData.hasDetail === `function` && !AppData.hasDetail());
+  }
+
   function buildIndex(primaryId) {
     const idx = [];
+    const partial = detailMissing();
     const screens = new Set();
     if (window.Nav && Array.isArray(Nav.ITEMS)) {
       Nav.ITEMS.forEach((it) => {
@@ -112,7 +119,7 @@ window.GlobalSearch = (function () {
     AppIndex.allTerms.forEach((t) => {
       const topicId = t.source === `general` ? basicTopicOf(t, primaryId) : null;
       const nav = topicId ? `#topics/${topicId}/${t.id}` : `#glossary/${t.id}`;
-      idx.push(entry(t.source === `general` ? `基礎知識` : `用語`, t.name, t.simpleExplanation, nav, t.aliases, t.lawRef));
+      idx.push(entry(t.source === `general` ? `基礎知識` : `用語`, t.name, t.simpleExplanation, nav, t.aliases, partial ? `` : t.lawRef));
     });
     const D = window.Diagrams;
     if (D && D.defs) {
@@ -121,15 +128,20 @@ window.GlobalSearch = (function () {
         idx.push(entry(`図解`, d.title, d.caption || d.alt || ``, `#figures/${id}`, [], d.alt));
       });
     }
-    window.APP_DATA.episodes.forEach((e) => {
-      idx.push(entry(`作品で学ぶ`, `${e.displayLabel} ${e.theme}`, e.summary, `#works/${e.id}`, [], (e.terms || []).map((x) => x.term).join(` `)));
-    });
+    if (!partial) {
+      window.APP_DATA.episodes.forEach((e) => {
+        idx.push(entry(`作品で学ぶ`, `${e.displayLabel} ${e.theme}`, e.summary, `#works/${e.id}`, [], (e.terms || []).map((x) => x.term).join(` `)));
+      });
+    }
     window.APP_DATA.quiz.forEach((q) => {
-      idx.push(entry(`クイズ`, q.question, q.answer || q.explanation || ``, `#quiz/q/${q.id}`, [], (q.choices || []).join(` `)));
+      if (partial) idx.push(entry(`クイズ`, q.question, ``, `#quiz/q/${q.id}`, []));
+      else idx.push(entry(`クイズ`, q.question, q.answer || q.explanation || ``, `#quiz/q/${q.id}`, [], (q.choices || []).join(` `)));
     });
-    window.APP_DATA.sources.forEach((s) => {
-      idx.push(entry(`情報源`, s.orgName, s.description, `#sources`, [], s.category));
-    });
+    if (!partial) {
+      window.APP_DATA.sources.forEach((s) => {
+        idx.push(entry(`情報源`, s.orgName, s.description, `#sources`, [], s.category));
+      });
+    }
     return idx;
   }
 
@@ -150,9 +162,13 @@ window.GlobalSearch = (function () {
   }
 
   function search(query, limit) {
-    // 主目標の試験が変わったら、基礎知識の案内先が変わるため索引を作り直す
-    const key = primaryTypeId();
-    if (!index || key !== indexKey) { index = buildIndex(key); indexKey = key; }
+    // 主目標の試験が変わったら、基礎知識の案内先が変わるため索引を作り直す。公開版で詳細を取り込んだときも作り直す
+    const ver = window.AppData && typeof AppData.version === `function` ? AppData.version() : 0;
+    const typeId = primaryTypeId();
+    const key = `${typeId}|${ver}`;
+    if (!index || key !== indexKey) { index = buildIndex(typeId); indexKey = key; }
+    // 詳細がまだなら読み込みを急ぐ(届いたら上の目印で作り直す)
+    if (detailMissing()) AppData.whenDetail().catch(() => { /* 失敗の知らせは AppData が出す */ });
     const q = norm(String(query || ``).trim());
     if (!q) return [];
     return index
@@ -166,6 +182,15 @@ window.GlobalSearch = (function () {
   // 図解などデータが後から増えたときに索引を作り直す
   function reset() {
     index = null;
+  }
+
+  // 公開版で詳細を取り込んだら、届く前に作った索引を捨て、手の空いたときに作り直しておく(次の検索を待たせないように)
+  if (window.AppData && AppData.onDetail) {
+    AppData.onDetail(() => {
+      if (!index) return;
+      index = null;
+      setTimeout(() => { try { if (!index) search(`あ`, 1); } catch (e) { /* 検索時に作り直す */ } }, 1500);
+    });
   }
 
   return { search, reset, norm };

@@ -1,4 +1,4 @@
-// 学習トピック: まなぶ不動産の学習の軸になるトピック(一人暮らしの実践ガイド・暮らしと取引のA〜G・P・Q、
+// 学習トピック: ふどまなの学習の軸になるトピック(一人暮らしの実践ガイド・暮らしと取引のA〜G・P・Q、
 // 宅建士試験の各分野(H・J・K・L・N)、不動産と消費税(O))
 // sections: 基礎知識チェックリストの小見出し(表示順)。basicIds の全項目をちょうど1回ずつ含める
 // (どの小見出しにも入っていない項目は末尾の「その他」に表示され、js/dataIndex.js が警告を出す)
@@ -141,9 +141,10 @@ window.APP_DATA.topics = [
     episodes: [],
     basicIds: [],
     sections: [
-      { name: `課税・非課税の判定`, ids: [`basicH13`, `basicO01`, `basicO02`, `basicO03`, `basicO04`, `basicO05`, `basicO06`] },
-      { name: `対価の区分と個別の取引`, ids: [`basicO07`, `basicO08`, `basicO09`, `basicO10`] },
-      { name: `課税売上割合と仕入税額控除`, ids: [`basicO11`, `basicO12`, `basicO13`, `basicO14`, `basicO15`, `basicO16`] },
-      { name: `納税義務・簡易課税・インボイス`, ids: [`basicO17`, `basicO18`, `basicO19`, `basicO20`] },
+      { name: `課税・非課税の判定`, ids: [`basicH13`, `basicO01`, `basicO02`, `basicO03`, `basicO04`, `basicO05`, `basicO06`, `basicO24`, `basicO25`] },
+      { name: `対価の区分と個別の取引`, ids: [`basicO07`, `basicO08`, `basicO09`, `basicO10`, `basicO22`, `basicO23`] },
+      { name: `課税売上割合と仕入税額控除`, ids: [`basicO11`, `basicO12`, `basicO13`, `basicO14`, `basicO15`, `basicO16`, `basicO28`] },
+      { name: `納税義務・簡易課税・インボイス`, ids: [`basicO26`, `basicO27`, `basicO17`, `basicO18`, `basicO19`, `basicO20`, `basicO29`] },
+      { name: `時期・税額控除・申告と価格表示`, ids: [`basicO21`, `basicO30`, `basicO31`, `basicO32`] },
     ] },
 ];

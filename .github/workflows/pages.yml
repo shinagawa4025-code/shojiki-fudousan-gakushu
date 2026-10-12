@@ -4,6 +4,9 @@ name: Deploy to GitHub Pages
 # - 確認(tools/check.js)が失敗したら何も公開しない(今の公開版がそのまま残る)
 # - ビルドか動作確認が失敗したら、元のファイル(webapp)をそのまま公開する(キャッシュ名だけコミットごとに変える)。
 #   元のファイルでも動作確認が失敗するとき(元のファイル自体の不具合)は、何も公開しない
+# - どちらの経路でも、サイトのフォルダを作ったあと・動作確認の前に、検索エンジン向けの静的ページ(learn/ と sitemap.xml)を
+#   tools/static_pages.js で作る。データは元のファイル(webapp)から読む。生成に失敗すると予備の経路でも同じく失敗するので、
+#   何も公開しない(静的ページのないサイトを黙って公開しない)。動作確認(--require-static)は静的ページがあることも確かめる
 # 依存パッケージは使わない(npm install なし。Node の標準機能と、ランナーに入っている Chrome だけ)
 
 on:
@@ -31,12 +34,13 @@ jobs:
           node-version: 22.12.0
       - name: Check content and raw sources
         run: node tools/check.js webapp
-      - name: Build bundles and smoke test
+      - name: Build bundles, static pages and smoke test
         id: bundle
         continue-on-error: true
         run: |
           node tools/build.js webapp _site
-          node tools/smoke.js _site --raw webapp --require-browser
+          node tools/static_pages.js _site --webapp webapp
+          node tools/smoke.js _site --raw webapp --require-browser --require-static
       - name: Fallback - deploy raw sources with a unique cache name
         if: steps.bundle.outcome != 'success'
         run: |
@@ -45,9 +49,11 @@ jobs:
           SHA="${GITHUB_SHA::10}"
           sed -i -E '/^const CACHE_NAME = /s/shojiki-gakushu-[0-9A-Za-z._-]+/shojiki-gakushu-raw-'"$SHA"'/' _site/sw.js
           grep -q "shojiki-gakushu-raw-$SHA" _site/sw.js
+          # 静的ページが作れなければ(ここで失敗すると)何も公開しない(今の公開版が残る)
+          node tools/static_pages.js _site --webapp webapp
           # 元のファイルでも動かなければ(元のファイル自体の不具合)、何も公開しない(今の公開版が残る)
-          node tools/smoke.js _site --raw webapp
-          echo "::warning::Bundle build or smoke test failed; deployed the raw sources (CACHE_NAME shojiki-gakushu-raw-$SHA)"
+          node tools/smoke.js _site --raw webapp --require-static
+          echo "::warning::Bundle build, static pages or smoke test failed; deployed the raw sources (CACHE_NAME shojiki-gakushu-raw-$SHA)"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

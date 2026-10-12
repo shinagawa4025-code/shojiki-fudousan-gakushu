@@ -1,4 +1,7 @@
 // hashベースのSPAルーティング: #view/param
+// 公開版では、ホーム以外の画面のコードと詳細データを、ホームを描いたあとに読み込む(js/appData.js)。
+// まだ届いていないときにホーム以外の画面を開いたら(最初からその画面のリンクを開いたときも)、起動画面と同じ「読み込み中」を出して待ち、
+// 届いたらその画面を描く。待っている間は、履歴の state(y・yh: 戻る/進むで使うスクロール位置)を書き換えない
 window.Router = (function () {
   let viewRoot = null;
   const views = {};
@@ -7,6 +10,9 @@ window.Router = (function () {
   const DEFAULT_VIEW = `home`;
   let firstRender = true;
   let currentView = null;
+  let renderedView = null; // 最後に実際に描いた画面(読み込み中の表示は含めない。入るアニメーションの判定に使う)
+  let pending = false; // 詳細を待って「読み込み中」を出している間
+  const SLOW_MS = 15000; // 読み込み中がこれより長く続いたら、時間がかかっていることを知らせる
   let renderSeq = 0;
   const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
@@ -23,6 +29,8 @@ window.Router = (function () {
   if (`scrollRestoration` in history) history.scrollRestoration = `manual`;
   // yh: 位置を保存したときのハッシュ(別の画面の位置・状態が書き込まれていないかを描画時に確かめる)
   function saveScroll() {
+    // 読み込み中の表示の間は書かない(まだ描いていない画面の位置を 0 で上書きしないように)
+    if (pending) return;
     try {
       const st = history.state && typeof history.state === `object` ? history.state : {};
       if (st.y === window.scrollY && st.yh === location.hash) return;
@@ -32,6 +40,7 @@ window.Router = (function () {
   let scrollTimer = null;
   let scrollHash = null;
   window.addEventListener(`scroll`, () => {
+    if (pending) return;
     // スクロールしてから300ms以内に「戻る」と、戻り先の履歴(popstate の後・描画の前)に前の画面の位置を書いてしまう。
     // スクロールした画面と今のハッシュが違えば保存しない
     scrollHash = location.hash;
@@ -88,8 +97,15 @@ window.Router = (function () {
       try { history.replaceState(null, ``, `#${DEFAULT_VIEW}`); } catch (e) { /* 無視 */ }
       param = null;
     }
-    const prevView = currentView;
+    // 公開版で詳細がまだ届いていなければ、読み込み中を出して待つ(届いたらこの関数をもう一度呼ぶ)
+    if (needsDetail(name)) {
+      showPending(name, seq);
+      return;
+    }
+    pending = false;
+    const prevView = renderedView;
     currentView = name;
+    renderedView = name;
 
     // 別の画面で保存した位置・状態(yh の画面が違う)がこの履歴に入っていたら使わない(画面側の qState・gState なども読ませない)
     // 同じ画面内の URL の付け替え(#quiz → #quiz/auto など)は画面名が同じなのでそのまま使う
@@ -162,6 +178,88 @@ window.Router = (function () {
     firstRender = false;
 
     if (unknown && window.UI) UI.toast(`ページが見つからなかったため、ホームを表示しました`, `default`, { duration: 4000 });
+    // 公開版: 最初の画面を描いたら、手の空いたときに詳細の読み込みを始める
+    if (window.AppData && AppData.start) AppData.start();
+  }
+
+  // ホーム以外の画面は、公開版では詳細(データと画面のコード)がそろってから描く
+  function needsDetail(name) {
+    return name !== DEFAULT_VIEW && !!window.AppData && typeof AppData.hasDetail === `function` && !AppData.hasDetail();
+  }
+
+  // 読み込み中の表示(起動画面と同じ見た目)。少し待ってから「読み込み中…」を出す(.boot-status のアニメーション)
+  function pendingEl() {
+    const el = document.createElement(`div`);
+    el.className = `view view-pending`;
+    el.dataset.docTitle = `読み込み中`;
+    const name = appName();
+    const tagline = (window.SITE && SITE.tagline) || ``;
+    el.innerHTML = `
+      <div class="boot">
+        <img class="boot-logo" src="icons/logo.svg" alt="" width="64" height="64">
+        ${name ? `<p class="boot-name">${name.replace(/[<>&"]/g, ``)}</p>` : ``}
+        ${tagline ? `<p class="boot-tagline">${tagline.replace(/[<>&"]/g, ``)}</p>` : ``}
+        <p class="boot-status" role="status">読み込み中…</p>
+      </div>`;
+    return el;
+  }
+
+  function showPending(name, seq) {
+    pending = true;
+    currentView = name;
+    // 読み込み中の表示のあとに描く画面(届いた画面・戻ったホーム)には、入るアニメーションを付けない
+    renderedView = null;
+    clearTimeout(scrollTimer);
+    document.body.classList.remove(`exam-active`);
+    if (window.TTS && TTS.stop) TTS.stop();
+    viewRoot.innerHTML = ``;
+    const subnav = window.Nav ? Nav.subnavFor(name) : null;
+    if (subnav) viewRoot.appendChild(subnav);
+    viewRoot.appendChild(pendingEl());
+    window.scrollTo(0, 0);
+    if (window.Nav) Nav.update(name);
+    const app = appName();
+    document.title = app ? `読み込み中|${app}` : `読み込み中`;
+    // 通信が止まって届かないまま(失敗にもならない)のときは、しばらくしたら案内と再読み込みのボタンを出す
+    const slowTimer = setTimeout(() => {
+      if (seq !== renderSeq || !pending) return;
+      const box = viewRoot.querySelector(`.view-pending .boot`);
+      const status = box && box.querySelector(`.boot-status`);
+      if (!status) return;
+      status.innerHTML = `<span class="nowrap">読み込みに時間がかかっています。</span><span class="nowrap">通信状態を確認してください。</span>`;
+      const btn = document.createElement(`button`);
+      btn.type = `button`;
+      btn.className = `btn btn-sm btn-secondary boot-reload`;
+      btn.textContent = `再読み込み`;
+      btn.addEventListener(`click`, () => location.reload());
+      box.appendChild(btn);
+    }, SLOW_MS);
+    AppData.whenDetail().then(() => {
+      clearTimeout(slowTimer);
+      if (seq === renderSeq) render();
+    }, (err) => {
+      clearTimeout(slowTimer);
+      if (seq !== renderSeq) return;
+      // 読み込めなかった: エラー画面(再読み込み・ホームへ)。ナビは使える
+      pending = false;
+      renderedView = name;
+      viewRoot.innerHTML = ``;
+      const sub = window.Nav ? Nav.subnavFor(name) : null;
+      if (sub) viewRoot.appendChild(sub);
+      if (window.ErrorScreen) viewRoot.appendChild(ErrorScreen.build(err, { view: name, network: true }));
+      else viewRoot.insertAdjacentHTML(`beforeend`, `<div class="view error-view" data-doc-title="エラー"><h2>画面を表示できませんでした</h2><p>通信状態を確認して、再読み込みしてください。</p></div>`);
+      document.title = app ? `エラー|${app}` : `エラー`;
+    });
+  }
+
+  // 詳細の画面のコードを読み込むと、画面側の hashchange の処理(模擬試験の後片付けなど)が Router より後に登録される。
+  // 元のファイルのまま(先に登録される)と同じ順になるよう、Router の処理を最後に付け直す
+  if (window.AppData && AppData.onDetail) {
+    AppData.onDetail(() => {
+      if (!viewRoot) return;
+      window.removeEventListener(`hashchange`, render);
+      window.addEventListener(`hashchange`, render);
+    });
   }
 
   // 同じタブの中で奥へ進む移動か(#topics → #topics/topicK、メニュー → 設定 など)
@@ -179,6 +277,17 @@ window.Router = (function () {
     viewRoot = rootEl;
     window.addEventListener(`hashchange`, render);
     if (!location.hash) history.replaceState(null, ``, `#${DEFAULT_VIEW}`);
+    // 初回ガイド(画面全体を覆うダイアログ)を開いているときは、その下の最初の画面を次のタスクで描く
+    // (ガイドの表示と最初の画面の描画・レイアウトを1つの長いタスクにしない。起動直後の操作の待ちを短くする)。
+    // それまでは起動画面と同じ表示を置く(app.js は起動の最後に .view があるかを確かめる)
+    if (document.querySelector(`.onb-overlay`)) {
+      const seq = renderSeq;
+      currentView = viewOfHash(location.hash) || DEFAULT_VIEW;
+      viewRoot.innerHTML = ``;
+      viewRoot.appendChild(pendingEl());
+      setTimeout(() => { if (seq === renderSeq) render(); }, 0);
+      return;
+    }
     render();
   }
 
