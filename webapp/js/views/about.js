@@ -21,7 +21,7 @@ window.Views.about = (function () {
   // プライバシーポリシーの制定日・改定日(公開日 SITE.releasedAt とは別に固定する。公開のたびに日付が変わらないように)。
   // ポリシーの文面を変えたら revised に、その版を公開する日を書き、更新履歴(data/changelog.js)にも1行書く
   // (v12: 学習時間・目標・バッジ・解答の記録と「AIに聞く」の扱いを追記。公開日は SITE.releasedAt と同じ日にする)
-  const PRIVACY_DATES = { established: `2026-10-12`, revised: `2026-10-19` };
+  const PRIVACY_DATES = { established: `2026-10-12`, revised: `2026-10-15` };
 
   // 'YYYY-MM-DD' → 'YYYY年M月D日'(形式が違えばそのまま)
   function jpDate(s) {

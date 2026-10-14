@@ -13,7 +13,7 @@ window.APP_DATA = window.APP_DATA || {};
     {
       // 日付は公開日(js/siteConfig.js の releasedAt・about.js の PRIVACY_DATES.revised と同じ日)
       version: `12.0`,
-      date: `2026-10-19`,
+      date: `2026-10-15`,
       title: `合格予測・学習計画・問題の拡充`,
       items: [
         // 数は統合後のデータで数えた値(4択801問・うち個数24問・組合せ16問、○×3,180文。2026-10-14 時点)
