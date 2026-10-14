@@ -21,7 +21,7 @@ window.APP_DATA.specials = [
     description: `相続不動産の悩みをプロが本音で解説(全3回の3回目)`, duration: `22分`,
     url: `https://www.youtube.com/watch?v=-jcWBkdXXo4` },
 
-  { id: `s6`, title: `イッキ見スペシャル「住宅ローンの罰!事故物件の告知義務」`,
+  { id: `s6`, title: `イッキ見スペシャル「住宅ローンの罠!事故物件の告知義務」`,
     description: `住宅ローンや事故物件告知義務をテーマにした総集編`, duration: `2時間17分`,
     url: `https://www.youtube.com/watch?v=0N7cv815k_s` },
 

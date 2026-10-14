@@ -170,6 +170,13 @@ window.Views.quiz = (function () {
       }
     }
     document.addEventListener(`keydown`, onKey);
+    // 画面を離れたら外す(次のキー入力まで残すと、開くたびに前の画面の要素とリスナーが残り続ける)
+    const off = () => document.removeEventListener(`keydown`, onKey);
+    if (window.UI && typeof UI.onLeave === `function`) UI.onLeave(wrap, off);
+    else {
+      const onHash = () => { if (!wrap.isConnected) { off(); window.removeEventListener(`hashchange`, onHash); } };
+      window.addEventListener(`hashchange`, onHash);
+    }
   }
 
   function firstUnansweredInView(root) {

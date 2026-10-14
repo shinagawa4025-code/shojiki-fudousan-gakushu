@@ -7,7 +7,13 @@ name: Deploy to GitHub Pages
 # - どちらの経路でも、サイトのフォルダを作ったあと・動作確認の前に、検索エンジン向けの静的ページ(learn/ と sitemap.xml)を
 #   tools/static_pages.js で作る。データは元のファイル(webapp)から読む。生成に失敗すると予備の経路でも同じく失敗するので、
 #   何も公開しない(静的ページのないサイトを黙って公開しない)。動作確認(--require-static)は静的ページがあることも確かめる
+# - 予備の経路でもブラウザでの動作確認は必須(--require-browser)。ランナーに Chrome が見つからないときは、確かめていない
+#   元のファイルを公開せずに失敗する(今の公開版が残り、実行は失敗として通知される)
+# - 各段階に時間の上限を付ける(ビルドの経路が想定外に長引いても、予備の経路が job の上限の前に動けるように)
 # 依存パッケージは使わない(npm install なし。Node の標準機能と、ランナーに入っている Chrome だけ)
+# ランナーは ubuntu-24.04 に固定(ubuntu-latest は 2026-10-19 から Ubuntu 26.04 へ順次切り替わる。移るときは
+# ubuntu-26.04 で一度動かして、smoke.js が Chrome を見つけること・ビルドの BUILD_ID が変わらないことを確かめてから)
+# actions はすべて Node 24 で動く版(Node 20 の版は廃止予定の警告が出る)
 
 on:
   push:
@@ -19,30 +25,36 @@ permissions:
   pages: write
   id-token: write
 
+# 公開は1つずつ。実行中の公開は止めない(途中で止めると公開が中途半端になりうる)。待っている古い実行は新しい実行に置き換わる
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
         with:
           node-version: 22.12.0
       - name: Check content and raw sources
+        timeout-minutes: 3
         run: node tools/check.js webapp
       - name: Build bundles, static pages and smoke test
         id: bundle
         continue-on-error: true
+        timeout-minutes: 8
         run: |
           node tools/build.js webapp _site
           node tools/static_pages.js _site --webapp webapp
           node tools/smoke.js _site --raw webapp --require-browser --require-static
       - name: Fallback - deploy raw sources with a unique cache name
         if: steps.bundle.outcome != 'success'
+        timeout-minutes: 8
         run: |
           rm -rf _site
           cp -r webapp _site
@@ -51,11 +63,11 @@ jobs:
           grep -q "shojiki-gakushu-raw-$SHA" _site/sw.js
           # 静的ページが作れなければ(ここで失敗すると)何も公開しない(今の公開版が残る)
           node tools/static_pages.js _site --webapp webapp
-          # 元のファイルでも動かなければ(元のファイル自体の不具合)、何も公開しない(今の公開版が残る)
-          node tools/smoke.js _site --raw webapp --require-static
+          # 元のファイルでも動かなければ(元のファイル自体の不具合・ブラウザがない)、何も公開しない(今の公開版が残る)
+          node tools/smoke.js _site --raw webapp --require-browser --require-static
           echo "::warning::Bundle build, static pages or smoke test failed; deployed the raw sources (CACHE_NAME shojiki-gakushu-raw-$SHA)"
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
   deploy:
@@ -63,7 +75,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -84,8 +84,10 @@ function startServer(root, port) {
 
 // ---- ブラウザと DevTools プロトコル ----
 function findBrowser() {
-  const c = [opt('--browser'), process.env.CHROME_PATH,
-    '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium-browser', '/usr/bin/chromium',
+  // Linux は GitHub のランナー(ubuntu-24.04・26.04 とも Chrome・Chromium・Edge 入り)の置き場所を順に探す
+  const c = [opt('--browser'), process.env.CHROME_PATH, process.env.CHROME_BIN,
+    '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/opt/google/chrome/chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium',
+    '/usr/bin/microsoft-edge', '/usr/bin/microsoft-edge-stable',
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
   return c.find((p) => p && fs.existsSync(p)) || null;

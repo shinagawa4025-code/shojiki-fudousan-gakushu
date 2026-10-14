@@ -197,7 +197,7 @@ window.Views.settings = (function () {
     wrap.className = `view settings-view`;
     wrap.innerHTML = `
       <h2>設定</h2>
-      <p class="view-desc">学習の記録(記憶済みの用語・クイズの履歴・復習の予定など)は、この端末のブラウザの中にだけ保存されています。Safariで長期間開かないと記録が消えることがあります。ホーム画面に追加するか、定期的にバックアップを取ってください。</p>
+      <p class="view-desc">学習の記録(記憶済みの用語・解いた問題・復習の予定など)は、この端末のブラウザの中にだけ保存されています。Safariで長期間開かないと記録が消えることがあります。ホーム画面に追加するか、定期的にバックアップを取ってください。</p>
 
       ${profileCardHtml(readProfile())}
 
@@ -361,6 +361,8 @@ window.Views.settings = (function () {
       if (!wrap.isConnected) { if (offTheme) offTheme(); return; }
       paintSegmented(themeGroup, ThemeManager.getPreference());
     });
+    // 画面を離れたら監視を外す(テーマを切り替えるまで古い画面が残らないように)
+    if (UI.onLeave) UI.onLeave(wrap, () => { if (offTheme) offTheme(); });
 
     // ---- 読み上げ速度 ----
     if (ttsSupported) {

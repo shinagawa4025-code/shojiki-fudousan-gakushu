@@ -1,5 +1,6 @@
 // 間隔反復学習(SM-2簡易版)
 window.Srs = (function () {
+  const MAX_INTERVAL = 3650; // 次の復習までの最大日数(10年)
   const DEFAULT_CARD = () => ({ ease: 2.5, interval: 0, reps: 0, dueDate: todayStr(), lastGrade: null });
 
   // 日付計算はローカル日付基準のDateUtilに委譲(関数名は既存呼び出しとの互換のため維持)
@@ -54,36 +55,40 @@ window.Srs = (function () {
   // 評価gを付けた後のカードを返す(元のカードは変更しない純粋関数)
   function nextCard(prev, g) {
     const card = Object.assign(DEFAULT_CARD(), Storage.isPlainObject(prev) ? prev : {});
-    // 壊れたインポートで文字列になっていても計算できるよう数値に揃える
-    card.ease = Number(card.ease) || 2.5;
-    card.interval = Number(card.interval) || 0;
-    card.reps = Number(card.reps) || 0;
+    // 壊れたインポートで文字列・負の数・巨大な値になっていても計算できるよう、数値に揃えて範囲に収める
+    // (ease は評価で 1.3 未満にならない。間隔・回数は0以上。間隔の上限は MAX_INTERVAL)
+    card.ease = Math.max(1.3, Number(card.ease) || 2.5);
+    card.interval = Math.min(MAX_INTERVAL, Math.max(0, Number(card.interval) || 0));
+    card.reps = Math.max(0, Math.floor(Number(card.reps) || 0));
     if (g === 1) { // もう一度
       card.reps = 0;
       card.interval = 0;
       card.ease = Math.max(1.3, card.ease - 0.2);
-      card.dueDate = todayStr();
     } else if (g === 2) { // 難しい
       card.interval = Math.max(1, Math.round((card.interval || 1) * 1.2));
       card.ease = Math.max(1.3, card.ease - 0.15);
       card.reps += 1;
-      card.dueDate = addDays(todayStr(), card.interval);
     } else if (g === 3) { // 普通
-      if (card.reps === 0) card.interval = 1;
-      else if (card.reps === 1) card.interval = 6;
-      else card.interval = Math.round(card.interval * card.ease);
+      card.interval = goodInterval(card);
       card.reps += 1;
-      card.dueDate = addDays(todayStr(), card.interval);
     } else { // 簡単
       // 「普通」より短くならないようにする(2回目の復習は「普通」が6日固定のため、計算だけだと4日になることがあった)
-      const good = card.reps === 0 ? 1 : card.reps === 1 ? 6 : Math.round(card.interval * card.ease);
-      card.interval = Math.max(good + 1, Math.round((card.interval || 1) * card.ease * 1.3) + 1);
+      card.interval = Math.max(goodInterval(card) + 1, Math.round((card.interval || 1) * card.ease * 1.3) + 1);
       card.ease += 0.15;
       card.reps += 1;
-      card.dueDate = addDays(todayStr(), card.interval);
     }
+    // 間隔の上限(何年も先の日付・日付として表せない値にならないように)
+    card.interval = Math.min(card.interval, MAX_INTERVAL);
+    card.dueDate = g === 1 ? todayStr() : addDays(todayStr(), card.interval);
     card.lastGrade = g;
     return card;
+  }
+
+  // 「普通」の次の間隔。間隔が0のまま(壊れたインポートなど)でも、少なくとも翌日にする(今日のままだと毎回出題され続ける)
+  function goodInterval(card) {
+    if (card.reps === 0) return 1;
+    if (card.reps === 1) return 6;
+    return Math.max(1, Math.round(card.interval * card.ease));
   }
 
   // 各評価を付けた場合の次回までの日数 { 1: 0, 2: n, 3: n, 4: n }

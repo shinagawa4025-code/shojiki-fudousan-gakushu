@@ -337,3 +337,16 @@
   .calc-result-card { scroll-margin-top: var(--sp-4); }
   .calc-results { top: var(--sp-5); max-height: calc(100vh - var(--sp-5) * 2); }
 }
+
+/* スマホ横向き: アプリバーは固定されない(style.css)ので、結果の列と結果サマリーは画面の上端に付ける。
+   サマリーの帯は本文の左右の余白(ノッチの安全領域を含む)に合わせる(768px以上の -24px だと横にはみ出して横スクロールが出る) */
+@media (max-height: 500px) and (max-width: 1023px) and (orientation: landscape) {
+  .calc-sticky { top: 0; }
+  .calc-sticky-bar {
+    margin-left: calc(-1 * max(var(--sp-4), env(safe-area-inset-left, 0px)));
+    margin-right: calc(-1 * max(var(--sp-4), env(safe-area-inset-right, 0px)));
+    padding-left: max(var(--sp-4), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--sp-4), env(safe-area-inset-right, 0px));
+  }
+  .calc-results { top: var(--sp-3); max-height: calc(100vh - var(--bottom-nav-h) - var(--safe-bottom) - var(--sp-3) * 2); }
+}

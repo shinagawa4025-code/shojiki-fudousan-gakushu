@@ -194,7 +194,9 @@ window.Router = (function () {
     el.dataset.docTitle = `読み込み中`;
     const name = appName();
     const tagline = (window.SITE && SITE.tagline) || ``;
+    // どの画面にも見出し(h2)が1つあるように、読み上げ用の見出しを置く(見た目は起動画面と同じ)
     el.innerHTML = `
+      <h2 class="sr-only">読み込み中</h2>
       <div class="boot">
         <img class="boot-logo" src="icons/logo.svg" alt="" width="64" height="64">
         ${name ? `<p class="boot-name">${name.replace(/[<>&"]/g, ``)}</p>` : ``}

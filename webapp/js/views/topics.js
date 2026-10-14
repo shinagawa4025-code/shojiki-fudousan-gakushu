@@ -204,9 +204,11 @@ window.Views.topics = (function () {
 
     // 戻る/再読み込みで帰ってきたときは、開いていた項目・表示件数・絞り込みを元に戻す(履歴エントリごとに保存)
     // (Router は描画の直後に保存位置へスクロールするので、ここで同期的に元の高さまで作っておく)
+    // 直リンク(#topics/<id>/<基礎知識ID>)の履歴へ戻ってきたとき(この履歴に保存した状態がある)も、保存した状態を使う
+    // (スクロール位置で判定すると、画面の一番上で操作してから離れたときに、戻ると直リンクの最初の表示に戻ってしまう)
     const hs = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
     const returning = Number(hs.y) > 0;
-    const saved = hs.tState && typeof hs.tState === `object` && hs.tState.topic === topic.id && (!focusBasicId || returning) ? hs.tState : null;
+    const saved = hs.tState && typeof hs.tState === `object` && hs.tState.topic === topic.id ? hs.tState : null;
     const myHash = location.hash;
 
     const wrap = document.createElement(`div`);
@@ -383,7 +385,8 @@ window.Views.topics = (function () {
       else if (!value) delete basicsProgress[id].learnedAt;
       basicsProgress[id].learned = value;
       Storage.set(`basicsProgress`, basicsProgress);
-      Streak.recordToday();
+      // 学習記録は学習済みにしたときだけ(チェックを外したのは学習ではないので数えない)
+      if (value) Streak.recordToday();
       const li = itemEls.get(id);
       if (li) {
         li.classList.toggle(`is-learned`, value);

@@ -303,7 +303,18 @@ window.QuizEngine = (function () {
   }
 
   // ===== 用語名の伏せ字(答えが問題文・選択肢にそのまま書かれているのを防ぐ) =====
-  // 用語名・括弧書きを除いた名前・それを「・」で区切った各部分・別名(2文字以上)。長いものから順に置き換える
+  // 「AとBの違い」「AとB」の形の名前の A と B(説明文には「Aは…、Bは…」と別々に書かれるため、それぞれ伏せる)
+  // 語の途中の「と」(「おとり広告」など)や「土地と建物の一括譲渡の対価」のような句では切らないよう、
+  // 「と」の前後が漢字・カタカナ・英数字で、A・B がどちらも「の」を含まない2文字以上の語のときだけ分ける
+  const PAIR_TAIL = /の(?:違い|基礎|基本|関係|比較|区分|役割)$|とは$/;
+  const PAIR_RE = /^([^と]*[一-龯々ァ-ヶー0-9A-Za-z０-９])と([一-龯々ァ-ヶー0-9A-Za-z０-９][^と]*)$/;
+  function pairParts(s) {
+    const m = String(s || ``).trim().replace(PAIR_TAIL, ``).match(PAIR_RE);
+    if (!m || /の/.test(m[1]) || /の/.test(m[2]) || m[1].length < 2 || m[2].length < 2) return [];
+    return [m[1], m[2]];
+  }
+
+  // 用語名・括弧書きを除いた名前・それを「・」で区切った各部分・「AとB」の A と B・別名(2文字以上)。長いものから順に置き換える
   function nameVariants(term) {
     const set = new Set();
     const add = (s) => {
@@ -314,13 +325,21 @@ window.QuizEngine = (function () {
     add(name);
     const core = name.replace(/[(（][^()（）]*[)）]/g, ``).trim();
     add(core);
-    core.split(/[・/／]/).forEach(add);
+    const parts = core.split(/[・/／]/);
+    parts.forEach(add);
+    [core].concat(parts).forEach((s) => pairParts(s).forEach(add));
     (Array.isArray(term.aliases) ? term.aliases : []).forEach(add);
     return Array.from(set).sort((a, b) => b.length - a.length);
   }
 
   function mentionsAny(text, variants) {
     return variants.some((v) => text.includes(v));
+  }
+
+  // 2つの用語の名前が重なっているか(一方の名前・その一部・別名が、もう一方の名前などに含まれる)
+  // 例: 「原状回復」と「原状回復ガイドラインの負担の考え方…」、「固定資産税・都市計画税」と「固定資産税の納税義務者・…」
+  function namesOverlap(a, b) {
+    return a.some((x) => b.some((y) => x.includes(y) || y.includes(x)));
   }
 
   function maskNames(text, variants) {
@@ -394,6 +413,9 @@ window.QuizEngine = (function () {
       // (例: 「仲介手数料・管理手数料と消費税」の説明「不動産の〇〇や…」に対するダミー「仲介手数料」)
       if (type === `name-from-def` && nameVariants(cand).some((v) => variants.includes(v))) continue;
       if (type === `def-from-name` && mentionsAny(text, variants)) continue;
+      // 名前が重なる用語どうしは説明がもう一方にも当てはまりやすく、正解が2つあるように見えるので使わない
+      // (意味を選ぶでは、ダミーの説明の中の自分の名前が〇〇に伏せられるため、上の判定だけでは見つからない)
+      if (type !== `law-ref` && namesOverlap(variants, nameVariants(cand))) continue;
       usedTexts.add(text);
       distractors.push({ text, correct: false });
     }

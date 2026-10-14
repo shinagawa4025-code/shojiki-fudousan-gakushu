@@ -216,7 +216,7 @@ window.Onboarding = (function () {
           <p class="onb-lead">借りる・買う・売る・相続する。暮らしの中の不動産から宅建士試験の合格まで、基礎知識・問題・計算機で少しずつ身につける無料の学習アプリです。</p>
           <ul class="onb-points">
             <li><span class="onb-point-icon">${ic(`shield`)}</span><span>登録不要・広告なし。学習の記録は<strong>この端末の中だけ</strong>に保存され、外部には送信されません。</span></li>
-            <li><span class="onb-point-icon">${ic(`library`)}</span><span>解説は法令の条文や国土交通省・国税庁などの一次情報で確認しています(${asOfMonth()})。</span></li>
+            <li><span class="onb-point-icon">${ic(`library`)}</span><span>解説は、法令の条文や国土交通省・国税庁などの一次情報をもとに作っています(${asOfMonth()}。誤りが残っていることもあります)。</span></li>
             <li><span class="onb-point-icon">${ic(`info`)}</span><span>個人が運営する非公式の学習アプリです。法律・税務の個別相談には対応していません。</span></li>
           </ul>`;
       },

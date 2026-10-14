@@ -79,6 +79,8 @@
   --color-surface-raised: #ffffff;
   --color-border: #e3e8ef;
   --color-border-strong: #c5ceda;
+  /* 操作部品の形を示す線(スライダーの溝など)。面に対して 3:1 以上(白の上で 3.3:1) */
+  --color-border-control: #848e9c;
   --color-text: #1a2330;
   --color-text-muted: #5a6577;
   --color-heading: #121c2b;
@@ -169,6 +171,7 @@
   --color-surface-raised: #232d39;
   --color-border: #2a3542;
   --color-border-strong: #3a4757;
+  --color-border-control: #6a7b92;
   --color-text: #e6ebf1;
   --color-text-muted: #9aa7b7;
   --color-heading: #f1f4f8;
@@ -245,7 +248,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overflow-wrap: anywhere;
+  /* 最後の行に1〜2文字だけ残る改行を避ける(対応ブラウザのみ。見出し・ボタンは下の balance が優先) */
+  text-wrap: pretty;
 }
+/* 太字は3段階のうち 700 に固定(既定の bolder だと 700 の親の中で 900 になる) */
+b, strong { font-weight: var(--fw-bold); }
 
 h1, h2, h3, h4 {
   color: var(--color-heading);
@@ -288,6 +295,10 @@ h2[tabindex="-1"]:focus { outline: none; }
 .view-desc { color: var(--color-text-muted); font-size: var(--fs-md); line-height: var(--lh-snug); margin: 0 0 var(--sp-4); }
 /* 見出し・ボタンの文字は行ごとの長さをそろえ、最後の行に1〜2文字だけ残らないように */
 h2, .card-title, .empty-state-title, .todo-title, .hero-primary-title, .sheet-title, .btn-lg, .btn-block { text-wrap: balance; }
+/* 見出しは語の途中(「用語/集」「上/限」)で折り返さず、文節の切れ目で折り返す(Chrome系のみ。ほかのブラウザでは無視される) */
+h2, .card-title, .sheet-title { word-break: auto-phrase; }
+/* 行の中の短い説明(メニュー・設定の選択肢・ホームの行)も「バックア/ップ」のように語の途中で切らない */
+:is(.list-row-sub, .more-row-desc, .profile-option-desc, .todo-sub, .tile-desc) { word-break: auto-phrase; }
 /* 操作部品は長押しで文字選択・メニューが出ないように(本文は選択できるまま) */
 :is(.btn, .chip, .segmented, .subnav, .bottom-nav, .side-nav-item) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .text-muted { color: var(--color-text-muted); }
@@ -563,7 +574,8 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 .segmented-count { font-size: var(--fs-2xs); font-weight: 400; font-variant-numeric: tabular-nums; color: var(--color-text-muted); margin-left: 2px; }
 .glossary-status { margin-top: var(--sp-1); flex: 1 1 100%; max-width: 520px; }
 /* 5項目を画面幅に収めるため、件数はラベルの下に小さく */
-.glossary-status .segmented-item { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 0; padding: var(--sp-1) 2px; min-height: 44px; line-height: 1.2; }
+/* min-width は文字の幅まで(0 にすると、文字を大きくしたときにラベルが隣と重なる。収まらなければ横にスクロール) */
+.glossary-status .segmented-item { flex: 1 1 0; min-width: min-content; flex-direction: column; gap: 0; padding: var(--sp-1) 2px; min-height: 44px; line-height: 1.2; }
 .glossary-status .segmented-count { margin-left: 0; }
 /* 横スクロールする1行のチップ列(スマホで縦に長くならないように) */
 .chip-row-scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; margin-inline: calc(var(--sp-4) * -1); padding-inline: var(--sp-4); scroll-padding-inline: var(--sp-4); }
@@ -715,6 +727,8 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 }
 @media (hover: hover) { .chip:hover { border-color: var(--color-primary); color: var(--color-primary); } }
 .chip.active, .chip[aria-pressed="true"] { background: var(--color-primary-fill); border-color: var(--color-primary-fill); color: var(--color-on-primary); }
+/* 選択中のチップの件数は薄くしない(青の上で白を薄くすると 4.5:1 を下回る。作品で学ぶ・模擬試験の結果の絞り込み) */
+:is(.chip.active, .chip[aria-pressed="true"]) :is(.num, .exam-filter-count) { opacity: 1; }
 .chip-small { min-height: 34px; padding: 0 var(--sp-3); font-size: var(--fs-sm); }
 .chip-small::after { content: ""; position: absolute; inset: -5px 0; }
 .chip-muted, .chip-topic { background: var(--color-surface-muted); color: var(--color-text-muted); border-color: transparent; }
@@ -991,9 +1005,11 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 .toast-show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast-success { background: var(--color-success-fill); }
 .toast-error { background: var(--color-danger-fill); }
-.toast .btn { flex-shrink: 0; white-space: nowrap; min-height: 36px; padding: 0 var(--sp-3); background: rgba(255, 255, 255, .16); }
-/* ダークのトーストは地が明るめなので、白く重ねると文字とのコントラストが4.5:1を下回る。暗く重ねる */
-:root[data-theme="dark"] .toast .btn:not(.toast-close) { background: rgba(0, 0, 0, .2); }
+.toast .btn { flex-shrink: 0; white-space: nowrap; min-height: 36px; padding: 0 var(--sp-3); background: rgba(0, 0, 0, .2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .45); }
+/* 白く重ねると、成功(緑)・エラー(赤)のトーストでは白い文字とのコントラストが4.5:1を下回る(緑 3.7:1)。
+   どのテーマ・種類でも暗く重ね、ボタンの形は白い細線で示す */
+/* トーストの地(青・緑・赤)の上では、青いフォーカス枠が見えない(1.4:1)ので白にする */
+.toast :focus-visible { outline-color: #ffffff; }
 
 /* セクション見出し */
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin: var(--sp-7) 0 var(--sp-3); }
@@ -1175,6 +1191,11 @@ a.topic-card { text-decoration: none; color: inherit; }
 .source-category { margin: var(--sp-6) 0 var(--sp-3); }
 .source-row .law-name a { color: var(--color-primary); text-decoration: none; display: inline-flex; align-items: center; gap: var(--sp-1); }
 @media (hover: hover) { .source-row .law-name a:hover { text-decoration: underline; } }
+/* タッチ端末では押せる範囲を上下に広げる(見た目の行の高さは変えない。高さ 28px → 44px) */
+@media (pointer: coarse) {
+  .source-row .law-name a { position: relative; }
+  .source-row .law-name a::after { content: ""; position: absolute; inset: -8px -4px; }
+}
 
 /* クイズ(回答バー・カードの状態は css/practice.css) */
 .quiz-card-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
@@ -1244,7 +1265,8 @@ a.topic-card { text-decoration: none; color: inherit; }
 .grade-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-1); margin-top: auto; padding-top: var(--sp-3); }
 /* 評価ボタンの基本形(ラベルの下に次の間隔)。淡い面+色付きの文字は practice.css の .review-view .grade-btn */
 .grade-btn { font-size: var(--fs-md); padding: var(--sp-2) var(--sp-1); min-height: 54px; flex-direction: column; gap: 1px; border: 0; border-radius: var(--radius-md); font-weight: 700; }
-.grade-btn small { font-size: var(--fs-2xs); opacity: .85; font-weight: 600; }
+/* 次の間隔(小さい文字)は薄くしない(淡い色の面の上で薄くすると 4.5:1 を下回る) */
+.grade-btn small { font-size: var(--fs-2xs); font-weight: 600; }
 .tts-btn { color: var(--color-text-muted); }
 
 /* 設定 */
@@ -1254,10 +1276,14 @@ a.topic-card { text-decoration: none; color: inherit; }
 .settings-import-ok { background: var(--color-success-bg); color: var(--color-success); }
 .settings-import-ng { background: var(--color-danger-bg); color: var(--color-danger); }
 .settings-range-label { display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--fs-md); max-width: 320px; }
-.settings-range { width: 100%; accent-color: var(--color-primary-fill); }
-.settings-range::-webkit-slider-runnable-track { background: var(--color-surface-muted); border-radius: var(--radius-pill); height: 6px; }
-.settings-range::-moz-range-track { background: var(--color-surface-muted); border-radius: var(--radius-pill); height: 6px; }
-.settings-range::-webkit-slider-thumb { margin-top: -5px; }
+/* 読み上げ速度のスライダー: ブラウザ標準の見た目をやめて溝とつまみを描く(標準の溝が独自の溝の周りにはみ出さないように)。
+   指で触れる範囲は 32px、溝は 6px。溝の色は面に対して 3:1 以上(--color-border-control) */
+.settings-range { -webkit-appearance: none; appearance: none; width: 100%; height: 32px; margin: 0; background: transparent; cursor: pointer; }
+.settings-range::-webkit-slider-runnable-track { height: 6px; border-radius: var(--radius-pill); background: var(--color-border-control); }
+.settings-range::-moz-range-track { height: 6px; border-radius: var(--radius-pill); background: var(--color-border-control); }
+.settings-range::-moz-range-progress { height: 6px; border-radius: var(--radius-pill); background: var(--color-primary-fill); }
+.settings-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; margin-top: -9px; border-radius: 50%; border: 2px solid var(--color-surface); background: var(--color-primary-fill); box-shadow: 0 0 0 1px var(--color-primary-fill), var(--shadow-1); }
+.settings-range::-moz-range-thumb { box-sizing: border-box; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--color-surface); background: var(--color-primary-fill); box-shadow: 0 0 0 1px var(--color-primary-fill), var(--shadow-1); }
 .settings-file-label { cursor: pointer; }
 .nowrap { white-space: nowrap; }
 .target-list { display: flex; flex-direction: column; gap: var(--sp-2); margin: var(--sp-3) 0; }
@@ -1478,7 +1504,8 @@ a.topic-card { text-decoration: none; color: inherit; }
 /* ---------- タッチ端末では操作部品を40px以上に ---------- */
 @media (pointer: coarse) {
   .subnav-item, .segmented-item, .btn-sm, .link-btn { min-height: 40px; }
-  .flip-face-actions .btn-icon { width: 44px; height: 44px; min-height: 44px; }
+  /* アイコンだけのボタン(検索・テーマ・閉じる・ブックマーク・説明など)は指で押しやすい 44px に */
+  .btn-icon, .flip-face-actions .btn-icon { width: 44px; height: 44px; min-height: 44px; }
 }
 /* 0件の日もマスの形が分かるように */
 .streak-day[data-level="0"] { border: 1px solid var(--color-border); }
@@ -1505,12 +1532,18 @@ a.topic-card { text-decoration: none; color: inherit; }
     scroll-padding-top: calc(var(--app-bar-h) + var(--safe-top) + var(--sp-2));
     scroll-padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--sp-2));
   }
+  /* 今日の復習: 下部タブの上に固定した評価のトレイ(高さ 54px+上下8px)の裏にも隠れないように(practice.css) */
+  html:has(.review-view .review-grade-row) { scroll-padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--sp-2) + 54px + var(--sp-2) * 2 + var(--sp-2)); }
+}
+/* PC: カードの下で画面の下端に貼り付くトレイの分 */
+@media (min-width: 1024px) {
+  html:has(.review-view .review-grade-row) { scroll-padding-bottom: calc(var(--sp-3) + 54px + var(--sp-2) * 2 + var(--sp-2)); }
 }
 /* 先頭へスクロールしたときの余白(ヘッダー分は上の scroll-padding で確保済み) */
 [data-role="auto-list"], .calc-panel, .quiz-list { scroll-margin-top: var(--sp-3); }
 /* トースト: 上部表示と閉じるボタン */
 .toast.toast-top { bottom: auto; top: calc(var(--app-bar-h) + var(--safe-top) + var(--sp-3)); }
-.toast .toast-close { width: 36px; height: 36px; min-height: 36px; padding: 0; background: transparent; color: inherit; }
+.toast .toast-close { width: 36px; height: 36px; min-height: 36px; padding: 0; background: transparent; box-shadow: none; color: inherit; }
 /* 用語集・クイズで絞り込み条件から外れたカード(読み上げ向けの補足は不要: 次の操作で一覧から外れる) */
 /* 裏面の見出しバッジ(長い用語名)が右上のボタンを押し出さないように */
 .flip-face-tags { min-width: 0; }

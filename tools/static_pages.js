@@ -160,6 +160,7 @@ body {
   letter-spacing: .02em;
   -webkit-font-smoothing: antialiased;
   overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 h1, h2, h3 { color: var(--color-heading); line-height: var(--lh-tight); font-weight: var(--fw-bold); letter-spacing: .03em; font-feature-settings: "palt"; text-wrap: pretty; word-break: auto-phrase; }
 h1 { font-size: var(--fs-2xl); margin: 0 0 var(--sp-3); }
@@ -185,7 +186,7 @@ a:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; bo
 .lp-crumbs ol { list-style: none; margin: 0 0 var(--sp-5); padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--sp-1); font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); }
 .lp-crumbs li { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .lp-crumbs li + li::before { content: "›"; color: var(--color-text-muted); }
-.lp-crumbs a { color: var(--color-text-muted); text-decoration: underline; }
+.lp-crumbs a { color: var(--color-text-muted); text-decoration: underline; display: inline-block; padding-block: 4px; }
 .lp-crumbs [aria-current] { color: var(--color-text); }
 .lp-kicker { margin: 0 0 var(--sp-1); color: var(--color-text-muted); font-size: var(--fs-sm); font-weight: var(--fw-ui); }
 .lp-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); margin: 0 0 var(--sp-5); color: var(--color-text-muted); font-size: var(--fs-sm); }
@@ -216,7 +217,7 @@ section.lp-card { margin-top: var(--sp-5); }
 .lp-figure { margin: var(--sp-5) 0; padding: var(--sp-4) var(--sp-3) var(--sp-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
 .lp-figure-title { margin: 0 0 var(--sp-2); color: var(--color-heading); font-size: var(--fs-sm); font-weight: var(--fw-bold); }
 .lp-figure figcaption { margin-top: var(--sp-2); color: var(--color-text-muted); font-size: var(--fs-xs); line-height: var(--lh-snug); }
-.lp-figure-link { display: inline-block; margin-top: var(--sp-2); font-size: var(--fs-sm); font-weight: var(--fw-ui); }
+.lp-figure-link { display: inline-block; padding-block: 4px; margin-top: var(--sp-2); font-size: var(--fs-sm); font-weight: var(--fw-ui); }
 .lp-figure-large .dg { max-width: 640px; }
 
 /* アプリへのボタン */
@@ -545,7 +546,7 @@ ${o.body}
   }
 
   const isPartOf = { '@type': `WebSite`, name: NAME, url: BASE };
-  const termSet = { '@type': `DefinedTermSet`, '@id': `${urlOf(LEARN)}#terms`, name: `${NAME}の用語・基礎知識`, url: urlOf(LEARN) };
+  const termSet = { '@type': `DefinedTermSet`, '@id': `${urlOf(LEARN)}#terms`, name: `${NAME}の用語・基礎知識`, url: urlOf(LEARN), inLanguage: `ja` };
   const kindOf = (t) => (t.source === `general` ? `基礎知識` : `用語`);
   const CRUMB_ROOT = [NAME, ``];
   const CRUMB_LEARN = [`学べるテーマ`, LEARN];
@@ -641,7 +642,8 @@ ${o.body}
         {
           '@type': `LearningResource`, '@id': urlOf(p), name: tp.name, description: oneLine(tp.description), url: urlOf(p), inLanguage: `ja`, isAccessibleForFree: true,
           educationalLevel: tp.level, learningResourceType: `基礎知識の解説`, isPartOf,
-          hasPart: orderOf(tp).map((t) => ({ '@type': `DefinedTerm`, name: t.name, url: urlOf(`${LEARN}term/${t.id}.html`) })),
+          // LearningResource が扱う用語は teaches(DefinedTerm を取れる。hasPart は CreativeWork 用)
+          teaches: orderOf(tp).map((t) => ({ '@type': `DefinedTerm`, name: t.name, url: urlOf(`${LEARN}term/${t.id}.html`) })),
         },
         crumbsLd(crumbList),
       ],
@@ -693,7 +695,8 @@ ${o.body}
       ${prev ? `<a href="${esc(rel(p, `${LEARN}term/${prev.id}.html`))}"><small>前へ</small>${esc(prev.name)}</a>` : ``}
       ${next ? `<a class="lp-pager-next" href="${esc(rel(p, `${LEARN}term/${next.id}.html`))}"><small>次へ</small>${esc(next.name)}</a>` : ``}
     </nav>` : ``}`;
-    const dt = { '@type': `DefinedTerm`, '@id': `${urlOf(p)}#term`, name: t.name, description: oneLine(t.simpleExplanation), url: urlOf(p), inLanguage: `ja`, inDefinedTermSet: termSet };
+    // DefinedTerm は inLanguage を持てない(CreativeWork の項目)。言語は <html lang> と用語集(DefinedTermSet)で示す
+    const dt = { '@type': `DefinedTerm`, '@id': `${urlOf(p)}#term`, name: t.name, description: oneLine(t.simpleExplanation), url: urlOf(p), inDefinedTermSet: termSet };
     if (aliases.length) dt.alternateName = aliases;
     page(p, {
       title: t.name,

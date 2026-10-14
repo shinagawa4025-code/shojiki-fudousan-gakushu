@@ -243,7 +243,7 @@ window.Views.progress = (function () {
   // scope: ボタンに添える範囲の注記(宅建士以外の試験では「(全分野)」。テーマ表示では付けない)
   function weakHtml(items, scope) {
     if (!items.length) {
-      return `<p class="prog-note prog-note-flush">今のところ苦手なポイントはありません。クイズや○×で間違えた問題・用語がここに集まります。</p>`;
+      return `<p class="prog-note prog-note-flush">今のところ苦手なポイントはありません。4択・○×で間違えた問題・用語がここに集まります。</p>`;
     }
     const hasTerm = items.some((w) => w.kind === `term`);
     const hasStmt = items.some((w) => w.kind === `statement`);
@@ -292,14 +292,14 @@ window.Views.progress = (function () {
     const used = new Set(actions.map((a) => base(a.nav)));
     const buttons = [
       { nav: `#ox`, html: `<a class="btn" href="#ox">${ic(`o-x`)}○×一問一答</a>` },
-      { nav: `#quiz`, html: `<a class="btn btn-secondary" href="#quiz">${ic(`pencil-check`)}クイズ</a>` },
+      { nav: `#quiz`, html: `<a class="btn btn-secondary" href="#quiz">${ic(`pencil-check`)}4択問題</a>` },
       mock ? { nav: `#exam`, html: `<a class="btn btn-secondary" href="#exam/short">${ic(`timer`)}模擬試験</a>` } : null,
     ].filter((b) => b && !used.has(b.nav));
     return `
       <div class="empty-state empty-state-compact ana-empty">
         <div class="empty-state-icon">${UI.icon(`target`, { size: 28 })}</div>
         <p class="empty-state-title">まだ分析できる回答がありません</p>
-        <p class="empty-state-body">○×一問一答・クイズ${mock ? `・模擬試験` : ``}で問題を解くと、分野ごとの得意・苦手がここに表示されます。</p>
+        <p class="empty-state-body">○×一問一答・4択問題${mock ? `・模擬試験` : ``}で問題を解くと、分野ごとの得意・苦手がここに表示されます。</p>
         ${buttons.length ? `<div class="ana-empty-actions">${buttons.map((b) => b.html).join(``)}</div>` : ``}
       </div>`;
   }
@@ -491,7 +491,7 @@ window.Views.progress = (function () {
       </div>
       <p class="calc-note prog-note">${active
         ? `直近${WEEKS}週間で${active}日・合計${total}回学習しました(これまでに学習した日は${Streak.totalActiveDays()}日)。`
-        : `まだ学習の記録がありません。カードやクイズで学習すると、その日のマスに色が付きます。`}</p>
+        : `まだ学習の記録がありません。カードや問題で学習すると、その日のマスに色が付きます。`}</p>
       <div class="heat-wrap">
         <div class="heat-grid" role="img" aria-label="直近${WEEKS}週間の学習記録。学習した日は${active}日です。" data-role="heat-grid">
           <span class="heat-month"></span>${monthCells.join(``)}

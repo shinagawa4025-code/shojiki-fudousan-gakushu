@@ -99,6 +99,8 @@
       items = [];
       activeIdx = -1;
       input.removeAttribute(`aria-activedescendant`);
+      // 検索欄は combobox(index.html)。結果の一覧を開いているかを読み上げに伝える
+      input.setAttribute(`aria-expanded`, `false`);
     }
 
     function positionResults() {
@@ -151,6 +153,7 @@
         });
       }
       resultsEl.hidden = false;
+      input.setAttribute(`aria-expanded`, `true`);
       positionResults();
     }
 
@@ -246,10 +249,16 @@
     const cur = Router.current();
     if (cur !== `home` && cur !== `progress`) return;
     const hash = location.hash || `#home`;
+    // 見ていた位置に戻す。画面側が描画後のフレームで動かす(#progress/weak の弱点分析へのスクロールなど)ので、
+    // そのあと(同じフレームの後ろ)でももう一度戻す。背景のタブではフレームが止まり、戻ってきたときに動くため
+    const keepAt = (y) => {
+      window.scrollTo(0, y);
+      if (typeof requestAnimationFrame === `function`) requestAnimationFrame(() => { if (location.hash === hash) window.scrollTo(0, y); });
+    };
     const redraw = () => {
       const y = window.scrollY;
       Router.navigate(hash);
-      if (opts && opts.keepScroll) window.scrollTo(0, y);
+      if (opts && opts.keepScroll) keepAt(y);
     };
     clearInterval(redrawTimer);
     if (!hasOverlay()) { redraw(); return; }
@@ -260,7 +269,7 @@
       clearInterval(redrawTimer);
       const y = window.scrollY;
       Router.navigate(hash);
-      window.scrollTo(0, y);
+      keepAt(y);
     }, 500);
   }
 

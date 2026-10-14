@@ -302,7 +302,7 @@ body.onb-open .sheet-backdrop { z-index: 180; }
 .onb-choice-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: var(--lh-snug); }
 .onb-choice-title { font-size: var(--fs-base); font-weight: 700; color: var(--color-heading); text-wrap: balance; }
 .onb-choice-desc { font-size: var(--fs-sm); color: var(--color-text-muted); text-wrap: balance; }
-.onb-choice-mark { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border: 1.5px solid var(--color-border-strong); border-radius: 50%; color: transparent; }
+.onb-choice-mark { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border: 1.5px solid var(--color-border-control); border-radius: 50%; color: transparent; }
 .onb-choice[aria-checked="true"] .onb-choice-mark { border-color: var(--color-primary-fill); background: var(--color-primary-fill); color: var(--color-on-primary); }
 
 /* 試験日の登録 */
@@ -321,7 +321,7 @@ body.onb-open .sheet-backdrop { z-index: 180; }
 .onb-interest-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .onb-interest-text b { font-weight: 700; text-wrap: balance; }
 .onb-interest-text small { font-size: var(--fs-xs); font-weight: 600; color: var(--color-text-muted); text-wrap: balance; }
-.onb-interest-mark { display: grid; place-items: center; flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--color-border-strong); color: transparent; }
+.onb-interest-mark { display: grid; place-items: center; flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--color-border-control); color: transparent; }
 .onb-interest[aria-pressed="true"] { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-heading); box-shadow: inset 0 0 0 1px var(--color-primary); }
 .onb-interest[aria-pressed="true"] .onb-interest-mark { border-color: var(--color-primary-fill); background: var(--color-primary-fill); color: var(--color-on-primary); }
 @media (max-width: 359px) {
@@ -368,6 +368,10 @@ body.onb-open .sheet-backdrop { z-index: 180; }
 .target-row-edit > .target-row-date { display: block; }
 .target-row-hint { grid-column: 2; grid-row: 1 / span 2; display: grid; color: var(--color-text-muted); }
 .target-home-tag { background: var(--color-primary-soft); color: var(--color-primary); }
+/* 幅の狭いスマホ(320px など)では行の余白を詰め、試験日が「(火)・」だけ次の行に残らないようにする */
+@media (max-width: 359px) {
+  .target-row { gap: var(--sp-1); padding: var(--sp-1) var(--sp-2); }
+}
 .target-empty { margin: 0; }
 .settings-backup-status { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--color-text-muted); }
 .settings-seg { max-width: 520px; }

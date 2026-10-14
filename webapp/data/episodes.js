@@ -13,7 +13,7 @@ window.APP_DATA.episodes = [
     summary: `売却依頼を他社に回さず両手仲介を狙う「囲い込み」の手口と、仲介手数料を下げる交渉法`,
     terms: [
       { term: `囲い込み`, definition: `他社に情報を回さず自社で両手仲介を狙う行為` },
-      { term: `仲介手数料`, definition: `成約の対価、家賃1ヶ月分は上限で交渉余地あり` },
+      { term: `仲介手数料`, definition: `媒介により契約が成立したときに宅建業者に支払う報酬。上限は国土交通大臣の告示で決まり(売買は代金400万円超なら3%+6万円・税別)、上限より低い額で合意することもできる(宅地建物取引業法46条)` },
     ], termsNote: null,
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=jrvZVrN-g0k` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=yb02Td8mie8` } } },
 
@@ -25,7 +25,7 @@ window.APP_DATA.episodes = [
   { id: `7-8`, epFirst: 7, epSecond: 8, displayLabel: `第7-8直`, theme: `新・中間省略登記`,
     summary: `駅から遠い掘り出し物件の判断ポイントと、売主を経由せず利益を抜く「中間省略登記」の仕組み`,
     terms: [
-      { term: `中間省略登記`, definition: `転売時に中間業者名義を登記せず直接最終買主へ所有権を移す手法。中抜きの隠れ蓕にも` },
+      { term: `中間省略登記`, definition: `転売時に中間業者名義を登記せず直接最終買主へ所有権を移す手法。中抜きの隠れ蓑にも` },
     ], termsNote: null,
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=e9YeGOUk6hg` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=fm7-RbTVsE8` } } },
 
@@ -39,14 +39,14 @@ window.APP_DATA.episodes = [
   { id: `11-12`, epFirst: 11, epSecond: 12, displayLabel: `第11-12直`, theme: `瑕疵担保責任`,
     summary: `欠陥住宅の保証期間を延ばす交渉術と、発覚した欠陥の補強工事費用を誰が負担するかの争い`,
     terms: [
-      { term: `瑕疵担保責任(契約不適合責任)`, definition: `引渡し後の欠陥への売主責任、期間は特約で調整可(第87-88直にも登場)` },
+      { term: `瑕疵担保責任(契約不適合責任)`, definition: `引渡し後の欠陥への売主責任、期間は特約で調整可。ただし宅建業者が売主のときは、通知期間を引渡しから2年以上とする特約を除き買主に不利な特約は無効(宅建業法40条)、新築住宅の構造耐力上主要な部分等は10年(品確法)(第87-88直にも登場)` },
     ], termsNote: null,
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=1wx6h4C0UJQ` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=R1ydn6M7p7g` } } },
 
   { id: `13-14`, epFirst: 13, epSecond: 14, displayLabel: `第13-14直`, theme: `告知義務`,
     summary: `事故物件の告知義務の線引きと、それを隠して売り抜けようとする悪徳業者の実態`,
     terms: [
-      { term: `告知義務`, definition: `事故物件などの事実を伝える義務、範囲はケースバイケース(第101-102直にも登場)` },
+      { term: `告知義務`, definition: `事故物件などの事実を伝える義務。人の死の告知は国交省ガイドライン(令和3年)に目安がある(第101-102直にも登場)` },
     ], termsNote: null,
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=DN7FRUCpH7c` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=sn-6oOtIJmk` } } },
 
@@ -151,14 +151,14 @@ window.APP_DATA.episodes = [
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=ZXXPGPlhs7A` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=JfufWsjFekA` } } },
 
   { id: `43-44`, epFirst: 43, epSecond: 44, displayLabel: `第43-44直`, theme: `任意売却`,
-    summary: `競売より高く売れる任意売却と、住宅ローン支払い不能時の借金減额手段`,
+    summary: `競売より高く売れる任意売却と、住宅ローン支払い不能時の借金減額手段`,
     terms: [
       { term: `任意売却`, definition: `競売より高値で売れるよう金融機関の同意を得て売却する方法` },
     ], termsNote: null,
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=bZi2BHGtIFs` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=1h9uPLYPcNs` } } },
 
   { id: `45-46`, epFirst: 45, epSecond: 46, displayLabel: `第45-46直`, theme: `賃料増額請求`,
-    summary: `家賃が勇手に上がる理屈と、拒否できる法的根拠`,
+    summary: `家賃が勝手に上がる理屈と、拒否できる法的根拠`,
     terms: [
       { term: `賃料増額請求`, definition: `借地借家法に基づきオーナーが家賃値上げを求める制度、借主は拒否・協議できる` },
     ], termsNote: null,
@@ -172,7 +172,7 @@ window.APP_DATA.episodes = [
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=vm-gMO3rLMI` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=3aSlzPlWfj0` } } },
 
   { id: `49-50`, epFirst: 49, epSecond: 50, displayLabel: `第49-50直`, theme: `三為業者`,
-    summary: `初心者が三為業者にカモられる構図と、スルガ銀行問題を思わせる投資詐欺`,
+    summary: `初心者が三為業者にカモられる構図と、多額の融資を組ませて投資物件を買わせる手口`,
     terms: [
       { term: `三為業者(第三者のためにする契約)`, definition: `転売目的で安く仕入れ決済と同時に別の買主へ転売する業者` },
     ], termsNote: null,
@@ -181,7 +181,7 @@ window.APP_DATA.episodes = [
   { id: `51-52`, epFirst: 51, epSecond: 52, displayLabel: `第51-52直`, theme: `公簿売買`,
     summary: `登記簿がデタラメ!?と、重要事項説明書の記載責任をめぐる争い`,
     terms: [
-      { term: `公簿売買・実測売買`, definition: `登記簿面積のまま取引/実測して確定。レズリスクは公簿売買で買主が負う` },
+      { term: `公簿売買・実測売買`, definition: `登記簿面積のまま取引/実測して確定。公簿売買では実測面積との差による精算をしないのが通常で、面積が少なかったときの不利益は買主が負う` },
       { term: `重要事項説明書`, definition: `契約前の法定説明書類` },
     ], termsNote: null,
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=B50aDiVbzGk` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=q6isR3CIR3M` } } },
@@ -201,9 +201,9 @@ window.APP_DATA.episodes = [
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=nFEEGuQZepE` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=1NzWsZS_shc` } } },
 
   { id: `57-58`, epFirst: 57, epSecond: 58, displayLabel: `第57-58直`, theme: `賃貸仲介手数料上限値`,
-    summary: `仲介手数料は交渉で半額にできるという事実と、「1ヶ月分」誤解の解消`,
+    summary: `居住用の部屋の仲介手数料は、借主の承諾がなければ家賃の0.5か月分(税別)が上限という決まりと、「1か月分が当然」という誤解の解消`,
     terms: [
-      { term: `仲介手数料`, definition: `家賃1ヶ月分は上限で法律上の下限ではなく、交渉で下げられる余地がある(宅地建物取引業法46条)` },
+      { term: `仲介手数料`, definition: `家賃1か月分は上限で法律上の下限ではなく、交渉で下げられる余地がある(宅地建物取引業法46条)` },
     ], termsNote: null,
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=gu7YffJbIhI` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=BIhoUhdoVBc` } } },
 
@@ -215,7 +215,7 @@ window.APP_DATA.episodes = [
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=B2SYMG3uMx0` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=znVCIEvdCpw` } } },
 
   { id: `61-62`, epFirst: 61, epSecond: 62, displayLabel: `第61-62直`, theme: `立ち退き`,
-    summary: `立ち退かない居住者への過激な手法と、No.1営業マンへの悪魔化`,
+    summary: `立ち退かない居住者への過激な追い出し方と、「悪魔」と呼ばれる不動産営業No.1の誕生`,
     terms: [
       { term: `立ち退き`, definition: `借主に退去を求めること。正当事由や立退料の交渉が必要` },
     ], termsNote: null,
@@ -231,7 +231,7 @@ window.APP_DATA.episodes = [
   { id: `65-66`, epFirst: 65, epSecond: 66, displayLabel: `第65-66直`, theme: `管理費等滞納マンション`,
     summary: `中古購入後の前所有者滞納分請求と、法的責任の範囲`,
     terms: [
-      { term: `管理費等滞納`, definition: `前所有者の滞納分は新所有者に請求されうるが、前所有者への法的追及は難しい` },
+      { term: `管理費等滞納`, definition: `前所有者の滞納分は新所有者にも請求される(区分所有法8条)。支払った新所有者は前所有者に求償できるが、回収は難しいこともある` },
     ], termsNote: null,
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=cQ-mQU9lW7E` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=r7WaoHrwkUA` } } },
 
@@ -395,7 +395,7 @@ window.APP_DATA.episodes = [
   { id: `111-112`, epFirst: 111, epSecond: 112, displayLabel: `第111-112直`, theme: `更新料`,
     summary: `契約直後に引っ越すことになった借主が更新料の返金を求める交渉術と、大家に直接交渉して更新料は返金されるのかという駆け引き`,
     terms: [
-      { term: `更新料`, definition: `契約更新時に借主が貸主側に支払う金銭。特約がなければ法律上一律の支払い義務があるわけではない` },
+      { term: `更新料`, definition: `契約更新時に借主が貸主側に支払う金銭。法律に定めはなく、特約(合意)がなければ支払義務はない` },
     ], termsNote: null,
     videos: { zenpen: { label: `前編`, url: `https://www.youtube.com/watch?v=xaDX1BwH710` }, kouhen: { label: `後編`, url: `https://www.youtube.com/watch?v=7W3713HbcOQ` } } },
 ];

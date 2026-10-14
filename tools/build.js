@@ -68,6 +68,13 @@ function readSrc(src, rel) {
   return fs.readFileSync(path.join(src, rel), 'utf8').replace(/^﻿/, '');
 }
 
+// HTML の中のスクリプト(src なし・JSON-LD などのデータは除く)の中身。CSP のハッシュに使う
+function inlineScripts(html) {
+  return [...html.replace(/<!--[\s\S]*?-->/g, '').matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+    .filter((m) => !/\bsrc\s*=/i.test(m[1]) && !/\btype\s*=\s*["']?application\/(ld\+)?json/i.test(m[1]))
+    .map((m) => m[2]);
+}
+
 function wrap(rel, code) {
   const name = JSON.stringify(rel);
   return `try{\n${code}\n}catch(e){console.error('[bundle] '+${name},e);(window.__bundleErrors=window.__bundleErrors||[]).push(${name})}\n`;
@@ -304,7 +311,16 @@ function main() {
     // (js/appData.js が同じ URL の <script> を入れたときに使われる)。ホームのときは本体を先に届けるため読み込まない
     const preload = `<script>(function(){var h=(location.hash||'').replace(/^#/,'').split('/')[0];if(h&&h!=='home'){var l=document.createElement('link');l.rel='preload';l.as='script';l.href=${lit(detailUrl)};document.head.appendChild(l);}})();</script>`;
     new vm.Script(preload.replace(/^<script>|<\/script>$/g, ''));
-    html = html.replace(/<meta charset="utf-8">/i, (m) => `${m}\n  <meta name="app-build" content="${PLACEHOLDER}">\n  ${preload}`);
+    // Content-Security-Policy(公開版だけ。GitHub Pages はヘッダーを付けられないので <meta>)。スクリプトは同じサイトのファイルと、
+    // index.html の中のスクリプト(起動の見張り・テーマ・上の preload)のハッシュだけを許す(万一 HTML に文字列が混ざっても実行されない)。
+    // style 属性はテンプレートで使うので 'unsafe-inline'。画像・接続・Service Worker は同じサイトだけ。外部への通信はない
+    const csp = (h) => {
+      const hashes = inlineScripts(h).map((code) => `'sha256-${crypto.createHash('sha256').update(code, 'utf8').digest('base64')}'`);
+      return `default-src 'self'; script-src 'self' ${[...new Set(hashes)].join(' ')}; style-src 'self' 'unsafe-inline'; img-src 'self'; object-src 'none'; base-uri 'self'`;
+    };
+    const policy = csp(html.replace(/<meta charset="utf-8">/i, (m) => `${m}\n  ${preload}`));
+    html = html.replace(/<meta charset="utf-8">/i, (m) => `${m}\n  <meta http-equiv="Content-Security-Policy" content="${policy}">\n  <meta name="app-build" content="${PLACEHOLDER}">\n  ${preload}`);
+    if (csp(html) !== policy || html.indexOf('http-equiv="Content-Security-Policy"') > html.search(/<script\b/i)) throw new Error('index.html の Content-Security-Policy が中のスクリプトと合いません');
 
     const copied = copyStatic(SRC, TMP);
 

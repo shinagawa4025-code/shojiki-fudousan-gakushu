@@ -18,6 +18,10 @@ window.Views.about = (function () {
     { id: `rights`, label: `権利表記` },
   ];
 
+  // プライバシーポリシーの制定日・改定日(公開日 SITE.releasedAt とは別に固定する。公開のたびに日付が変わらないように)。
+  // ポリシーの文面を変えたら revised に、その版を公開する日を書き、更新履歴(data/changelog.js)にも1行書く
+  const PRIVACY_DATES = { established: `2026-10-12`, revised: `2026-10-14` };
+
   // 'YYYY-MM-DD' → 'YYYY年M月D日'(形式が違えばそのまま)
   function jpDate(s) {
     const m = String(s || ``).match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -66,15 +70,22 @@ window.Views.about = (function () {
     </div>`;
   }
 
+  // 報告フォーム(js/siteConfig.js の SITE.report)が使えるか。未設定のあいだは「準備中」と書き、ないボタンを案内しない
+  function reportReady() {
+    return !!(window.Report && typeof Report.enabled === `function` && Report.enabled());
+  }
+
   function reportHtml() {
-    const u = window.Report && Report.url ? Report.url({ kind: `page`, title: `アプリ全体へのご意見`, location: `#about/report` }) : null;
-    const action = u
-      ? `<div class="card-actions"><a class="btn" href="${esc(u)}" target="_blank" rel="noopener">${ic(`flag`, 18)}ご意見・誤りを送る${ic(`external`, 14)}</a></div>`
-      : `<p class="about-pending">${ic(`info`, 16)}<span>報告フォームは準備中です。</span></p>`;
+    const u = reportReady() && Report.url ? Report.url({ kind: `page`, title: `アプリ全体へのご意見`, location: `#about/report` }) : null;
+    if (!u) {
+      return `
+      <p class="about-pending">${ic(`info`, 16)}<span>報告フォームは準備中です。</span></p>
+      <p>誤りの報告・ご意見は、Googleフォームで受け付ける予定です。用意ができたら、各問題・各項目に「誤りを報告」のリンクを表示し、更新履歴でお知らせします。個別のご相談(「私の場合はどうなるか」など)にはお答えできません。</p>`;
+    }
     return `
       <p>解説や問題の誤り、分かりにくいところに気づいたら、各問題・各項目の「誤りを報告」から送ってください。報告フォーム(Googleフォーム)には、どの項目かが自動で入力されます。</p>
-      <p>いただいた報告はすべて確認し、修正したものは更新履歴に記載します。返信はしていません。個別のご相談にはお答えできません。</p>
-      ${action}`;
+      <p>いただいた報告はすべて確認し、修正したものは更新履歴に記載します。返信はしていません。個別のご相談にはお答えできません。氏名・連絡先などの個人情報は書かないでください。</p>
+      <div class="card-actions"><a class="btn" href="${esc(u)}" target="_blank" rel="noopener">${ic(`flag`, 18)}ご意見・誤りを送る${ic(`external`, 14)}</a></div>`;
   }
 
   function render(root, param) {
@@ -82,6 +93,7 @@ window.Views.about = (function () {
     const name = SITE.name || ``;
     const asOf = jpDate(SITE.contentAsOf);
     const shareIcon = has(`share`) ? `share` : `external`;
+    const ready = reportReady();
 
     const wrap = document.createElement(`div`);
     wrap.className = `view about-view`;
@@ -109,7 +121,7 @@ window.Views.about = (function () {
           <li>住宅ローン・税金・諸費用の計算機</li>
           <li>分野別の進捗と弱点分析</li>
         </ul>
-        <p>無料・登録不要・広告なし。一度開いたあとは、インターネットにつながっていなくても使えます。</p>
+        <p>無料・登録不要・広告なし。一度開いて読み込みが終わったあとは、インターネットにつながっていなくても使えます(出典や動画のリンク先、Webページ版の解説を見るときは通信が必要です)。</p>
         <p class="about-version-line text-muted">バージョン ${esc(SITE.version || ``)}(${esc(jpDate(SITE.releasedAt))})・内容の確認日 ${esc(asOf)}</p>
         <div class="card-actions">
           <button type="button" class="btn btn-secondary" data-role="share">${ic(shareIcon, 18)}このアプリを紹介する</button>
@@ -121,10 +133,10 @@ window.Views.about = (function () {
       </section>
 
       ${section(`operator`, `運営者`, `info`, `
-        <p class="about-operator"><strong>運営: 個人(税理士法人に勤務し、資格試験を勉強中)</strong></p>
-        <p>税理士法人に勤務しながら資格試験の勉強をしている個人が、自分の学習のために作り始めたアプリを公開しています。弁護士・税理士など専門家の監修は受けていません。</p>
-        <p>このアプリは勤務先とは関係のない、個人の活動です。</p>
-        <p>解説と問題は、運営者がこのアプリのために作成したものです。文章の作成と確認にはAIツールも使っていますが、公開する前に、法令の条文や行政機関の資料と照らし合わせて確認しています。市販の教材・講座の内容や、試験の過去問題をそのまま使ってはいません。</p>
+        <p class="about-operator"><strong>運営: 個人(資格試験を勉強中)</strong></p>
+        <p>税理士法人に勤務しながら資格試験の勉強をしている個人が、自分の学習のために作り始めたアプリを公開しています。運営者は弁護士・税理士ではなく、このアプリは専門家の監修を受けていません。</p>
+        <p>このアプリは勤務先とは関係のない、個人の活動です。勤務先の業務や見解を示すものではありません。</p>
+        <p>解説・問題・図解は、このアプリのために新しく作成したものです。文章の作成と確認には、AIツールを多く使っています。公開する前に、法令の条文や行政機関の資料と照らし合わせて確認していますが、誤りが残っていることがあります。市販の教材・講座の内容や、試験の過去問題を転載したものではありません。</p>
       `)}
 
       ${section(`sources`, `内容の基準日と出典`, `library`, `
@@ -140,11 +152,12 @@ window.Views.about = (function () {
       ${section(`terms`, `免責事項・ご利用上の注意`, `shield`, `
         <ul class="about-list">
           <li>このアプリの内容は、不動産と関連する法律・税金について一般的な知識を学ぶためのものです。個別の取引・契約・申告についての法律相談・税務相談ではありません。具体的な判断は、弁護士・税理士・司法書士・宅地建物取引士などの専門家や、行政機関の窓口に確認してください。</li>
-          <li>運営者は、個別のご相談(「私の場合はどうなるか」など)にはお答えできません(税理士でない者が個別の税務相談に応じることは、税理士法で禁じられています)。</li>
+          <li>運営者は、個別のご相談(「私の場合はどうなるか」など)にはお答えできません(税理士でない者が、無償であっても、他人の求めに応じて具体的な税額の計算などの税務相談に応じることは、税理士法52条で禁じられています)。</li>
+          <li>このアプリは宅地建物取引業者ではなく、物件の紹介や、売買・賃貸の仲介(媒介)・代理は行っていません。特定の不動産会社・金融機関・サービスを勧めるものでもありません。</li>
           <li>法令・税制・統計は改正・更新されます。このアプリの内容は、原則として${esc(asOf)}時点で確認した法令・公表資料に基づいており、それ以後の改正が反映されていないことがあります。</li>
           <li>計算機の結果は、入力値と一定の前提に基づく概算です。実際の金額は、評価額・自治体の条例・特例の適用要件・端数処理などにより異なります。</li>
           <li>4択・○×・模擬試験の問題は、このアプリが独自に作成したものです。宅地建物取引士資格試験・税理士試験の過去問題や、試験を実施する都道府県・指定試験機関(一般財団法人不動産適正取引推進機構)・国税審議会の公式な問題ではありません。合格の目安などの数値も、このアプリ独自のものです。</li>
-          <li>内容の正確性には十分注意していますが、誤りが含まれる可能性があります。このアプリの利用によって生じた損害について、運営者は責任を負いかねます。誤りに気づいたときは「誤りを報告」からお知らせください。</li>
+          <li>内容の正確性には十分注意していますが、誤りが含まれる可能性があります。このアプリの利用によって生じた損害について、運営者は責任を負いかねます(運営者の故意または重大な過失による場合を除きます)。${ready ? `誤りに気づいたときは「誤りを報告」からお知らせください。` : ``}</li>
           <li>記録はお使いの端末のブラウザに保存されます。ブラウザのデータ削除・端末の故障・Safariの保存期間の制限などで記録が消えることがあります。定期的にバックアップを取ってください。</li>
           <li>このアプリは個人が運営する非公式の学習アプリで、試験の実施機関・行政機関・不動産会社などとは関係ありません。</li>
         </ul>
@@ -153,15 +166,15 @@ window.Views.about = (function () {
       ${section(`privacy`, `プライバシーポリシー`, `shield`, `
         <ol class="about-list">
           <li>このアプリは、氏名・メールアドレスなどの個人情報を取得しません。会員登録の仕組みもありません。</li>
-          <li>学習の記録(解いた問題・覚えた用語・復習の予定・試験日・設定など)は、お使いの端末のブラウザの保存領域(localStorage)にだけ保存され、運営者を含む外部には送信されません。消したいときはブラウザの「サイトデータの削除」で消去できます。バックアップ(JSONファイル)も利用者の端末に保存され、運営者には送られません。</li>
+          <li>学習の記録(解いた問題・覚えた用語・復習の予定・試験日・設定など)は、お使いの端末のブラウザの保存領域(localStorage)にだけ保存され、運営者を含む外部には送信されません。消したいときはブラウザの「サイトデータの削除」で消去できます。バックアップ(JSONファイル)は、利用者が選んだ保存先(端末のファイルなど)に保存され、運営者には送られません。</li>
           <li>アクセス解析ツール・広告・Cookieによる追跡は使っていません。外部のフォントやスクリプトも読み込んでいません。</li>
-          <li>このアプリは GitHub Pages(GitHub, Inc.)で公開しています。ページを開くと、通常のWebサイトと同じように、GitHub のサーバーにIPアドレスなどのアクセス記録が残ります(${ext(`https://docs.github.com/ja/site-policy/privacy-policies/github-general-privacy-statement`, `GitHub のプライバシーに関する声明`)}をご覧ください)。</li>
+          <li>このアプリは GitHub Pages(GitHub, Inc.)で公開しています。ページを開くと、通常のWebサイトと同じように、GitHub のサーバーにIPアドレスなどのアクセス記録が残ります(GitHub はセキュリティのために訪問者のIPアドレスを記録・保存すると説明しています。${ext(`https://docs.github.com/ja/pages/getting-started-with-github-pages/about-github-pages`, `GitHub Pages について`)}・${ext(`https://docs.github.com/ja/site-policy/privacy-policies/github-general-privacy-statement`, `GitHub のプライバシーに関する声明`)}をご覧ください)。運営者がこの記録を受け取ることはありません。</li>
           <li>出典リンク(e-Gov法令検索・国土交通省・国税庁など)や動画リンク(YouTube)を押すと、それぞれのサイトに移動します。移動先での情報の取扱いは、各サイトのポリシーに従います。</li>
-          <li>誤りの報告・ご意見は Google フォームで受け付けています。フォームには、報告対象を特定するために、項目のID・名称・画面の場所・アプリのバージョンが自動で入力されます(学習の記録は含みません)。送信された内容は確認と修正のためにだけ使い、第三者に提供しません。Google フォームの利用には ${ext(`https://policies.google.com/privacy?hl=ja`, `Google のプライバシーポリシー`)}が適用されます。</li>
+          <li>${ready ? `誤りの報告・ご意見は Google フォームで受け付けています。` : `誤りの報告・ご意見は Google フォームで受け付ける予定です(準備中)。`}フォームには、報告対象を特定するために、項目のID・名称・画面の場所・アプリのバージョンが自動で入力されます(学習の記録は含みません)。メールアドレスは集めません。氏名・連絡先などの個人情報は書かないでください。送信された内容は確認と修正のためにだけ使い、第三者に提供しません。Google フォームの利用には ${ext(`https://policies.google.com/privacy?hl=ja`, `Google のプライバシーポリシー`)}が適用されます。</li>
           <li>用語の読み上げには、端末・ブラウザに備わる音声合成機能を使います。ブラウザや選んだ音声によっては、読み上げる文章(用語の説明文)が音声合成サービスに送られることがあります。学習の記録が送られることはありません。</li>
           <li>このポリシーを変更するときは、このページと更新履歴でお知らせします。</li>
         </ol>
-        <p class="about-date-line text-muted">制定日: ${esc(jpDate(SITE.releasedAt))}</p>
+        <p class="about-date-line text-muted">制定日: ${esc(jpDate(PRIVACY_DATES.established))}${PRIVACY_DATES.revised ? `・最終改定日: ${esc(jpDate(PRIVACY_DATES.revised))}` : ``}</p>
       `)}
 
       ${section(`report`, `誤り・ご意見`, `flag`, reportHtml())}
@@ -186,7 +199,8 @@ window.Views.about = (function () {
       ${section(`changelog`, `更新履歴`, `list`, changelogHtml())}
 
       ${section(`rights`, `権利表記`, `info`, `
-        <p>アイコン・図解・文章はこのアプリのオリジナルです。「<a href="#works">作品で学ぶ</a>」で取り上げている作品名・各回のタイトルの権利は、各権利者に帰属します。</p>
+        <p>アプリの名前・ロゴ・アイコン・図解・文章はこのアプリのオリジナルです。法令の条文や行政機関の資料は、出典を示して引用しています。</p>
+        <p>「<a href="#works">作品で学ぶ</a>」で取り上げているマンガ『正直不動産』(原案 夏原武・漫画 大谷アキラ・脚本 水野光博/小学館)の作品名・各回のタイトル・動画の権利は、各権利者に帰属します。このアプリは作品の権利者・出版社・制作会社とは関係がなく、作品の画像やロゴは使っていません。</p>
       `)}
     `;
     root.appendChild(wrap);
@@ -266,6 +280,8 @@ window.Views.about = (function () {
     // 画面を開いたあとでインストールできるようになった・インストールされたときも表示を合わせる
     const onChange = () => { if (!wrap.isConnected) { window.removeEventListener(`installprompt:change`, onChange); return; } paint(); };
     window.addEventListener(`installprompt:change`, onChange);
+    // 画面を離れたら監視をやめる(ほかの画面に移ったあとも古い画面がメモリに残らないように)
+    if (UI.onLeave) UI.onLeave(wrap, () => window.removeEventListener(`installprompt:change`, onChange));
     paint();
   }
 

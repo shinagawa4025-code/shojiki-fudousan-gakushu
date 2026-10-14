@@ -225,6 +225,14 @@ body.has-storage-banner .quiz-answer-bar { bottom: calc(var(--bottom-nav-h) + va
 @media (min-width: 1024px) {
   body.has-storage-banner .quiz-answer-bar { bottom: calc(var(--storage-banner-h, 96px) + var(--sp-4) + var(--sp-2)); }
 }
+/* 回答バーのある一覧(ブックマークの問題の「元に戻す」など)では、下に出る通知を回答バーの上に出す
+   (通知が判定と「次の問題」を隠さないように。回答バーの高さは約72px) */
+body:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 72px + var(--sp-3)); }
+body.has-storage-banner:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--storage-banner-h, 96px) + var(--sp-3) + 72px + var(--sp-3)); }
+@media (min-width: 1024px) {
+  body:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) { bottom: calc(72px + var(--sp-4)); }
+  body.has-storage-banner:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) { bottom: calc(var(--storage-banner-h, 96px) + var(--sp-4) + var(--sp-2) + 72px + var(--sp-3)); }
+}
 
 /* 全体の解説・用語・誤りの報告 */
 .quiz-explain { margin-top: var(--sp-3); padding: var(--sp-3); border-radius: var(--radius-md); background: var(--color-surface-muted); }
@@ -416,7 +424,8 @@ body.has-storage-banner .quiz-answer-bar { bottom: calc(var(--bottom-nav-h) + va
   line-height: 1.25;
   gap: 2px;
 }
-.review-view .grade-btn small { font-size: var(--fs-2xs); font-weight: 600; opacity: .85; }
+/* 次に出す日(今日・明日・4日後)は薄くしない(淡い地の上で文字のコントラストが足りなくなるため) */
+.review-view .grade-btn small { font-size: var(--fs-2xs); font-weight: 600; }
 /* 淡い地に色の文字(4色の濃い塗りは信号のように見えて強すぎるため) */
 .review-view .grade-btn.grade-again, .review-view .grade-btn.grade-again:hover { background: var(--color-danger-bg); color: var(--color-danger); }
 .review-view .grade-btn.grade-hard, .review-view .grade-btn.grade-hard:hover { background: var(--color-warning-bg); color: var(--color-warning); }
@@ -442,6 +451,15 @@ body.has-storage-banner .quiz-answer-bar { bottom: calc(var(--bottom-nav-h) + va
 }
 @media (min-width: 1024px) {
   body:has(.review-view .review-grade-row) .toast:not(.toast-top) { bottom: calc(var(--sp-3) + 54px + var(--sp-2) * 2 + var(--sp-3)); }
+}
+/* 横向きのスマホ(画面の高さが低い)では、トレイを1行の低いボタンにしてカードの見える範囲を広げる
+   (評価ボタンは「普通 明日」のように横に並べる) */
+@media (max-width: 1023px) and (max-height: 500px) and (orientation: landscape) {
+  .review-view .review-grade-row { padding: var(--sp-1); bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--sp-1)); }
+  .review-view .review-grade-row :is(.review-reveal, .grade-btn) { min-height: 40px; padding-top: 0; padding-bottom: 0; }
+  .review-view .grade-btn { flex-direction: row; gap: var(--sp-1); }
+  .review-view { padding-bottom: calc(40px + var(--sp-1) * 2 + var(--sp-3)); }
+  body:has(.review-view .review-grade-row) .toast:not(.toast-top) { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--sp-1) + 40px + var(--sp-1) * 2 + var(--sp-2)); }
 }
 /* 「保存できません」のお知らせ(下部タブの上に固定)が出ているあいだは、トレイと通知をその上に出す */
 body.has-storage-banner .review-view .review-grade-row { bottom: calc(var(--storage-banner-h, 96px) + var(--sp-4) + var(--sp-2)); }

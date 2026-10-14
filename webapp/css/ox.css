@@ -246,3 +246,6 @@
 @media (min-width: 1024px) {
   .ox-view [data-role="result"] { scroll-margin-top: var(--sp-4); scroll-margin-bottom: var(--sp-4); }
 }
+/* 「保存できません」のお知らせ(shell.css。画面の下に固定)が出ているあいだは、回答後の解説を見える位置へ動かすときに
+   お知らせの高さの分も空ける(「次へ」がお知らせの裏に隠れないように) */
+body.has-storage-banner .ox-view [data-role="result"] { scroll-margin-bottom: calc(var(--storage-banner-h, 96px) + var(--sp-4)); }

@@ -291,6 +291,20 @@ window.Views.home = (function () {
     return a.kind === `auto-weak` || a.kind === `ox-weak` || (a.kind === `quiz` && a.icon === `target`);
   }
 
+  // 分野の○×(#ox/cat/<分野>/<問題数>)の分野。問題数だけが違うリンクを同じものとして扱うために使う
+  function oxCatOf(nav) {
+    const m = /^#ox\/cat\/([^/]+)/.exec(String(nav || ``));
+    return m ? m[1] : null;
+  }
+
+  // 同じ分野の○×(問題数だけ違うもの。ヒーローの「○×で10問」と次にやることの「〇〇を○×で確認(20問)」など)をもう出しているか
+  function sameOxCatUsed(used, a) {
+    const c = a && a.kind === `ox` ? oxCatOf(a.nav) : null;
+    if (!c) return false;
+    for (const n of used) if (oxCatOf(n) === c) return true;
+    return false;
+  }
+
   // ヒーローの「○×で10問」: 税理士は不動産と消費税、宅建士(または未登録)は優先して伸ばしたい分野
   function oxLink(ctx) {
     const typeId = ctx.typeId;
@@ -459,7 +473,7 @@ window.Views.home = (function () {
       primary = { nav: `#review`, title: `今日の復習をはじめる`, sub: `${work}枚・約${minutesFor(work)}分` };
     } else {
       if (!withMenu) doneLine = `<p class="hero-done">${ic(`check-circle`, 16)}<span>今日の復習は完了${ctx.newLeft && ctx.limit === 0 ? `(新しい用語は出さない設定)` : ``}</span></p>`;
-      const first = acts.find((a) => a.nav !== ox.nav && !used.has(a.nav)) || null;
+      const first = acts.find((a) => a.nav !== ox.nav && !used.has(a.nav) && !(a.kind === `ox` && oxCatOf(a.nav) && oxCatOf(a.nav) === oxCatOf(ox.nav)) && !sameOxCatUsed(used, a)) || null;
       if (first) primary = { nav: first.nav, title: verbTitle(ctx, first), sub: first.detail || `` };
       else primary = { nav: ox.nav, title: `○×一問一答で確認`, sub: `1問数秒。間違えた文だけ解き直せます` };
     }
@@ -481,7 +495,7 @@ window.Views.home = (function () {
       used.add(`kind:exam`);
     } else {
       // 直前期は解き直しを優先。それ以外は弱点分析の優先順(すでに出したリンクは除く)
-      const pool = acts.filter((a) => !used.has(a.nav));
+      const pool = acts.filter((a) => !used.has(a.nav) && !sameOxCatUsed(used, a));
       const pick = (urgent && pool.find(isWeakKind)) || pool.find((a) => a.kind !== `ox`) || pool[0] || null;
       if (pick) {
         const s = shortAction(ctx, pick);
@@ -629,7 +643,7 @@ window.Views.home = (function () {
   }
 
   function nextSectionExam(ctx, used, withLink) {
-    const rows = studyActions(ctx).filter((a) => !used.has(a.nav) && !(a.kind === `ox-try` && used.has(`kind:ox`)) && !(a.kind === `exam` && used.has(`kind:exam`))).slice(0, 3).map((a) => {
+    const rows = studyActions(ctx).filter((a) => !used.has(a.nav) && !sameOxCatUsed(used, a) && !(a.kind === `ox-try` && used.has(`kind:ox`)) && !(a.kind === `exam` && used.has(`kind:exam`))).slice(0, 3).map((a) => {
       used.add(a.nav);
       if (a.kind === `exam`) used.add(`kind:exam`);
       return { nav: a.nav, icon: a.icon, warn: isWeakKind(a), title: verbTitle(ctx, a), sub: a.detail || `` };
@@ -759,10 +773,16 @@ window.Views.home = (function () {
   }
 
   // ---- 模擬試験(模擬試験がある試験・受けたことがあるときだけ) ----
+  // 中断中の模擬試験があるか(壊れた保存値では「再開」を出さない。模擬試験の画面でも再開できないため)
+  function hasExamSession() {
+    const s = Storage.get(`examSession`, null);
+    return !!(s && typeof s === `object` && typeof s.id === `string` && Array.isArray(s.questions) && s.questions.length > 0);
+  }
+
   function examCard(ctx, used) {
-    const history = Stats.examHistory().filter((e) => e && typeof e.score === `number` && Number.isFinite(e.score) && typeof e.total === `number` && e.total > 0);
-    const session = Storage.get(`examSession`, null);
-    const hasSession = !!(session && typeof session === `object`);
+    // 得点は 0〜問題数の整数だけ(模擬試験の画面の履歴と同じ条件)
+    const history = Stats.examHistory().filter((e) => e && Number.isInteger(e.total) && e.total > 0 && Number.isInteger(e.score) && e.score >= 0 && e.score <= e.total);
+    const hasSession = hasExamSession();
     // ヒーローのタイル・次にやることに模擬試験を出していれば、カードは重ねない(中断中の試験があるときは出す)
     if (used && !hasSession && (used.has(`#exam`) || used.has(`kind:exam`))) return null;
     const typeObj = Stats.examType(ctx.typeId);
@@ -1024,7 +1044,7 @@ window.Views.home = (function () {
         <span class="home-menu-count num" aria-hidden="true">${st.done}/${st.total}</span>
       </div>
       <ol class="home-menu-list">${steps.map((s) => menuStepHtml(s, s === st.next)).join(``)}</ol>
-      ${st.allDone ? `<p class="home-menu-done">${ic(`trophy`, 16)}<span>今日のメニューはすべて完了です。おつかれさまでした</span></p>` : ``}`;
+      ${st.allDone ? `<p class="home-menu-done">${ic(`trophy`, 16)}<span>今日のメニューはすべて完了です。お疲れさまでした</span></p>` : ``}`;
     return card;
   }
 
@@ -1071,6 +1091,8 @@ window.Views.home = (function () {
       place(main, purposeSection(), picked ? 5 : 3);
       place(side, weekCard(ctx), 6);
       place(side, topicProgressSection(ctx, plan), 7);
+      // 暮らし・仕事向け(学ぶ目的が未設定の人も)でも、中断中の模擬試験があれば再開の入口を出す
+      if (hasExamSession()) place(side, examCard(ctx, used), 8);
     }
     if (!side.children.length) wrap.querySelector(`.home-layout`).classList.add(`is-single`);
     live = { wrap, main, ctx, day: DateUtil.today() };

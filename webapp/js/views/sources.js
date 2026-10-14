@@ -52,15 +52,15 @@ window.Views.sources = (function () {
       if (!list.length) return;
       const section = document.createElement(`section`);
       section.className = `source-group`;
-      section.innerHTML = `<h3 class="source-category">${category}</h3><div class="source-row-grid" data-role="rows"></div>`;
+      section.innerHTML = `<h3 class="source-category">${UI.escapeHtml(category)}</h3><div class="source-row-grid" data-role="rows"></div>`;
       const rowsEl = section.querySelector(`[data-role="rows"]`);
       list.forEach((src) => {
         const n = useCount[src.id] || 0;
         const row = document.createElement(`div`);
         row.className = `card card-compact law-row source-row`;
         row.innerHTML = `
-          <div class="law-name"><a href="${src.url}" target="_blank" rel="noopener">${src.orgName}${UI.icon(`external`, { size: 14 })}</a></div>
-          <div class="law-desc">${src.description}</div>
+          <div class="law-name"><a href="${UI.escapeHtml(src.url)}" target="_blank" rel="noopener">${UI.escapeHtml(src.orgName)}${UI.icon(`external`, { size: 14 })}</a></div>
+          <div class="law-desc">${UI.escapeHtml(src.description)}</div>
           ${n ? `<div class="source-use">参照している項目 <span class="num">${n}</span>件</div>` : ``}
         `;
         rowsEl.appendChild(row);

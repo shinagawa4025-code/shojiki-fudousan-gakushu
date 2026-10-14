@@ -238,7 +238,9 @@ window.Stats = (function () {
 
   // ---- 試験目標 ----
   function listTargets() {
-    return arr(`examTargets`).filter((t) => t && typeof t.name === `string` && DateUtil.isValid(t.date));
+    // id のない目標(壊れたバックアップなど)も、設定画面で編集・削除できるように仮の id を付ける
+    return arr(`examTargets`).filter((t) => t && typeof t.name === `string` && DateUtil.isValid(t.date))
+      .map((t, i) => (typeof t.id === `string` && t.id ? t : Object.assign({}, t, { id: `et_r${i}` })));
   }
 
   function saveTargets(list) {

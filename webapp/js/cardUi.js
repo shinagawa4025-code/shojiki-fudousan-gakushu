@@ -28,7 +28,8 @@ window.CardUi = (function () {
       // 最後の1文字とアイコンを改行させない(アイコンだけが次の行に送られないように)
       const chars = Array.from(String(src.orgName));
       const tail = chars.pop() || ``;
-      return `<li><a href="${src.url}" target="_blank" rel="noopener">${chars.join(``)}<span class="cite-tail">${tail}${ic(`external`, 12)}</span></a></li>`;
+      const esc = (s) => UI.escapeHtml(s);
+      return `<li><a href="${esc(src.url)}" target="_blank" rel="noopener">${esc(chars.join(``))}<span class="cite-tail">${esc(tail)}${ic(`external`, 12)}</span></a></li>`;
     }).filter(Boolean);
     return items.length ? `<div class="term-citation"><span class="term-citation-label">出典:</span><ul class="term-citation-list">${items.join(``)}</ul></div>` : ``;
   }
@@ -278,9 +279,10 @@ window.CardUi = (function () {
       Object.assign(known, latest);
       if (!latest[term.id]) delete known[term.id];
       Storage.set(`flashcards`, latest);
-      if (window.Streak) Streak.recordToday();
-      // 星はその場で塗り替える(一覧を作り直すとスクロール位置が飛ぶため、呼び出し側には通知だけする)
       const on = !!known[term.id];
+      // 学習記録は記憶済みにしたときだけ(星を外したのは学習ではないので数えない)
+      if (on && window.Streak) Streak.recordToday();
+      // 星はその場で塗り替える(一覧を作り直すとスクロール位置が飛ぶため、呼び出し側には通知だけする)
       card.querySelectorAll(`[data-role="known-toggle"]`).forEach((b) => {
         b.classList.toggle(`is-known`, on);
         b.setAttribute(`aria-pressed`, String(on));

@@ -155,7 +155,6 @@ body.exam-active .subnav { display: none; }
   background: var(--color-primary-soft);
   border-color: var(--color-primary);
   box-shadow: inset 0 0 0 1px var(--color-primary);
-  font-weight: 700;
 }
 .exam-choice.is-selected .choice-key { background: var(--color-primary-fill); border-color: var(--color-primary-fill); color: var(--color-on-primary); }
 

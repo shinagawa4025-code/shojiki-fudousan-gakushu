@@ -291,10 +291,12 @@ window.Views.calculators = (function () {
       }
       bldg.taxable = floorTo(Math.max(0, bldgYen - bldg.deduction), 1000);
       bldg.exemptLimit = s.how === `build` ? exempt.build : exempt.other;
-      // 価格そのものが免税点未満なら確実に非課税。控除後だけが免税点未満になる場合は判定方法を税事務所に確認
-      bldg.exempt = floorTo(bldgYen, 1000) < bldg.exemptLimit;
-      if (!bldg.exempt && bldg.taxable > 0 && bldg.taxable < bldg.exemptLimit) {
-        notes.push(`控除後の課税標準(${bldg.taxable.toLocaleString(`ja-JP`)}円)が免税点(${bldg.exemptLimit.toLocaleString(`ja-JP`)}円)未満です。免税点の判定は都道府県税事務所に確認してください(要確認)。`);
+      // 免税点は「課税標準となるべき額」、つまり住宅の控除(地方税法73条の14)を適用した後の額で判定する(同法73条の15の2)。
+      // 価格そのものが免税点未満なら免税点の扱い。控除で課税標準が0円になるときは、0円の理由を「控除で0円」と示すため免税点の扱いにはしない
+      const exemptByValue = floorTo(bldgYen, 1000) < bldg.exemptLimit;
+      bldg.exempt = exemptByValue || (bldg.taxable > 0 && bldg.taxable < bldg.exemptLimit);
+      if (bldg.exempt && !exemptByValue) {
+        notes.push(`控除後の課税標準(${bldg.taxable.toLocaleString(`ja-JP`)}円)が免税点(${bldg.exemptLimit.toLocaleString(`ja-JP`)}円)未満のため、建物には課税されません(免税点は控除後の額で判定します)。`);
       }
       bldg.tax = bldg.exempt ? 0 : floorTo(bldg.taxable * bldg.rate, 100);
     }
@@ -861,8 +863,8 @@ window.Views.calculators = (function () {
           ${notesHtml([
             `新築住宅の控除: 床面積${v.after ? `40㎡以上240㎡以下` : `50㎡以上240㎡以下(戸建以外の貸家住宅は40㎡以上)`}。令和13年3月31日までに取得する東京都特別区の特定都市再生緊急整備地域の住宅(貸家用のマンション・アパートの住戸を除く)は下限50㎡のまま(令和8年度改正)。`,
             `中古住宅の控除: 自己居住用で床面積${v.after ? `40` : `50`}㎡以上240㎡以下。昭和56年12月31日以前の新築は新耐震基準への適合証明が必要。`,
-            `住宅用土地の減額: 土地取得から原則2年以内(令和13年3月31日までの取得は3年以内)に住宅を新築した場合など。中古住宅は土地と住宅の取得が前後1年以内。`,
-            `免税点(${v.after ? `令和8年4月1日以後` : `令和8年3月31日以前`}の取得): 土地${yen(v.exempt.land)}円・家屋の建築${yen(v.exempt.build)}円・家屋の売買等${yen(v.exempt.other)}円未満は非課税。`,
+            `住宅用土地の減額: 土地取得から原則2年以内(令和13年3月31日までの取得は3年以内、政令で定める場合は4年以内)に住宅を新築した場合など。中古住宅は土地と住宅の取得が前後1年以内。`,
+            `免税点(${v.after ? `令和8年4月1日以後` : `令和8年3月31日以前`}の取得): 土地${yen(v.exempt.land)}円・家屋の建築${yen(v.exempt.build)}円・家屋の売買等${yen(v.exempt.other)}円未満は非課税。宅地の1/2や住宅の控除を適用した後の課税標準で判定します。`,
           ])}
           ${basisHtml(keys, today)}
         `);
@@ -913,7 +915,7 @@ window.Views.calculators = (function () {
         { key: `lowCost`, label: `低廉な空家等の特例を使う(800万円以下・事前に説明し合意)`, type: `check`, value: false, showIf: (s) => s.mode !== `lease` },
         { key: `rentYen`, label: `月額賃料(消費税を除く)`, unit: `円`, value: `100000`, showIf: (s) => s.mode === `lease` },
         { key: `residential`, label: `居住用の建物である`, type: `check`, value: true, showIf: (s) => s.mode === `lease` },
-        { key: `consent`, label: `依頼者の承諾を得ている(居住用で一方から1か月分を受ける場合)`, type: `check`, value: false, showIf: (s) => s.mode === `lease` && s.residential },
+        { key: `consent`, label: `媒介の依頼を受ける際に依頼者の承諾を得ている(居住用で一方から0.5か月分を超えて受ける場合)`, type: `check`, value: false, showIf: (s) => s.mode === `lease` && s.residential },
         { key: `longVacant`, label: `長期の空家等の特例(貸主から上乗せ)を使う`, type: `check`, value: false, showIf: (s) => s.mode === `lease` },
       ],
       terms: [`term02`, `basicO09`],
@@ -934,7 +936,7 @@ window.Views.calculators = (function () {
             ])}
             ${notesHtml([
               v.residential && !v.consent ? `居住用建物は、依頼を受ける際に承諾を得ていない限り、依頼者の一方から受けられるのは賃料0.5か月分(+消費税)までです。` : ``,
-              v.longVacant ? `長期の空家等の特例: 長期間使われていない(または今後も使用の見込みがない)物件では、貸主から上乗せして合計2か月分(+消費税)まで受けられます。借主の負担は通常の上限のままです。目安は少なくとも1年を超えて使われていない物件です(国土交通省「解釈・運用の考え方」)。` : ``,
+              v.longVacant ? `長期の空家等の特例: 長期間使われていない(または今後も使用の見込みがない)物件では、貸主から上乗せして合計2か月分(+消費税)まで受けられます。借主の負担は通常の上限のままです。目安は少なくとも1年を超えて使われていない物件で、入居者を募集中の賃貸住宅の空き室は該当しません(国土交通省「解釈・運用の考え方」)。` : ``,
               `店舗・事務所など居住用以外で権利金(返還されないもの)の授受がある場合は、権利金を売買代金とみなして売買の計算式で上限を出すこともできます。`,
             ])}
             ${basisHtml(keys, today)}

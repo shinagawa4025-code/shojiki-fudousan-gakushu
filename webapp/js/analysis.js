@@ -80,6 +80,12 @@ window.Analysis = (function () {
     return typeof id === `string` ? own(AppIndex.termsById, id) || null : null;
   }
 
+  // 学習対象の用語か(作品由来の俗語 worksOnly は「作品で学ぶ」コーナー用。用語集・復習・自動生成クイズ・進捗の母数と同じく数えない)
+  function isStudyTerm(id) {
+    const t = termById(id);
+    return !!t && t.worksOnly !== true;
+  }
+
   function topicById(id) {
     return typeof id === `string` ? own(AppIndex.topicsById, id) || null : null;
   }
@@ -168,11 +174,12 @@ window.Analysis = (function () {
     return auto;
   }
 
-  // 自動生成クイズで苦手な用語: 不正解が1回以上あり、正解の回数以下になっていない(クイズ画面の「苦手な用語」と同じ基準)
+  // 自動生成クイズで苦手な用語: 不正解が1回以上あり、正解の回数以下になっていない(クイズ画面の「苦手な用語」と同じ基準。
+  // クイズ画面と同じく、出題しない作品由来の俗語 worksOnly は以前の成績があっても数えない)
   function weakTermIdsFrom(auto) {
     return Object.keys(auto).filter((id) => {
       const s = auto[id];
-      return !!termById(id) && s.wrong > 0 && s.wrong >= s.correct;
+      return isStudyTerm(id) && s.wrong > 0 && s.wrong >= s.correct;
     });
   }
 
@@ -430,8 +437,10 @@ window.Analysis = (function () {
     const topics = (window.APP_DATA.topics || []).filter((t) => t && typeof t.id === `string`);
     const buckets = dict();
     topics.forEach((t) => { buckets[t.id] = newBucket(); });
+    // 母数は進捗画面のトピック別(Stats.byTopic)と同じく、作品由来の俗語 worksOnly を除く
     topics.forEach((t) => {
       (own(AppIndex.topicTermIndex, t.id) || []).forEach((id) => {
+        if (!isStudyTerm(id)) return;
         buckets[t.id].total += 1;
         if (studied[id]) buckets[t.id].studied += 1;
         if (isLearned(d, id)) buckets[t.id].learned += 1;
@@ -439,7 +448,7 @@ window.Analysis = (function () {
     });
     const topicsOf = (ids) => (Array.isArray(ids) ? ids.filter((id) => typeof id === `string` && buckets[id]) : []);
     accumulate(d, quizById, buckets,
-      (tid) => topicsOf((termById(tid) || {}).topicIds),
+      (tid) => (isStudyTerm(tid) ? topicsOf(termById(tid).topicIds) : []),
       (q) => topicsOf(q.topicIds));
     return topics.map((t) => Object.assign({ id: t.id, name: t.name, icon: t.icon || `book-open`, topic: t }, finalize(buckets[t.id])));
   }
@@ -511,7 +520,8 @@ window.Analysis = (function () {
     Object.keys(d.srs).forEach((id) => { termIds[id] = true; });
     Object.keys(termIds).forEach((id) => {
       const t = termById(id);
-      if (!t) return;
+      // 作品由来の俗語 worksOnly は、クイズ画面の「苦手な用語」・苦手優先のクイズと同じく挙げない
+      if (!t || t.worksOnly === true) return;
       const a = d.auto[id];
       const autoNet = a && a.wrong > 0 && a.wrong >= a.correct ? a.wrong - a.correct + 1 : 0;
       const ex = examTermWrong[id] || 0;

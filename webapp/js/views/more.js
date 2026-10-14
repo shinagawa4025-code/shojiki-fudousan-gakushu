@@ -11,7 +11,7 @@ window.Views.more = (function () {
     { report: true, icon: `flag`, title: `誤り・ご意見を送る`, desc: `報告フォームが開きます` },
   ];
   const CORNER_ROWS = [
-    { nav: `#works`, icon: `play-square`, title: `作品で学ぶ`, badge: `任意`, desc: `マンガ・ドラマの動画をテーマ別に紹介` },
+    { nav: `#works`, icon: `play-square`, title: `作品で学ぶ`, badge: `任意`, desc: `公式チャンネルの動画をテーマ別に紹介` },
   ];
 
   // 報告フォーム(Googleフォーム)の URL。未設定なら null(行を出さない)
@@ -70,6 +70,8 @@ window.Views.more = (function () {
     }));
     paint();
     const off = ThemeManager.onChange(() => { if (!wrap.isConnected) { if (off) off(); return; } paint(); });
+    // 画面を離れたら監視を外す(テーマを切り替えるまで古い画面が残らないように)
+    if (UI.onLeave) UI.onLeave(wrap, () => { if (off) off(); });
   }
 
   return { render };

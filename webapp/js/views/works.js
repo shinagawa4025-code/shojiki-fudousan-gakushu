@@ -43,15 +43,15 @@ window.Views.works = (function () {
     wrap.dataset.docTitle = `作品で学ぶ`;
     wrap.innerHTML = `
       <h2>作品で学ぶ <span class="badge badge-soft works-badge">任意</span></h2>
-      <p class="view-desc">不動産を題材にしたマンガ・ドラマ『${esc(WORK_TITLE)}』の公式YouTubeチャンネルで公開されている動画を、このアプリのテーマ別に紹介するコーナーです。体系的に学ぶなら<a href="#topics">「学ぶ」タブのトピック</a>から始めるのがおすすめです。</p>
+      <p class="view-desc">不動産業界を描いたマンガ『${esc(WORK_TITLE)}』の公式YouTubeチャンネル「${esc(CHANNEL_NAME)}」で公開されている動画(マンガを動画にしたものなど)を、このアプリのテーマ別に紹介するコーナーです。体系的に学ぶなら<a href="#topics">「学ぶ」タブのトピック</a>から始めるのがおすすめです。</p>
       <aside class="card card-compact works-notice" aria-label="このコーナーについて">
         <p class="works-notice-title">${ic(`info`, 18)}<span>このコーナーについて</span></p>
         <ul class="works-notice-list">
-          <li>このアプリは個人が運営する非公式の学習アプリで、作品の著作権者・出版社・制作会社・公式チャンネルとは関係ありません。作品名と各回のタイトルは、内容を紹介する目的で記載しています。</li>
-          <li>各回の要点は、このアプリが独自にまとめたものです。動画は公式チャンネル(YouTube)で視聴してください。</li>
+          <li>このアプリは個人が運営する非公式の学習アプリで、作品の著作権者・出版社・制作会社・公式チャンネルとは関係ありません(提携・許諾・推薦を受けたものではありません)。作品名と各回のタイトルは、どの動画かを示すために記載しています。作品の画像やロゴは使っていません。</li>
+          <li>各回の紹介文と用語の説明は、公式チャンネルの動画タイトルなどをもとに、このアプリが短くまとめたものです(セリフや内容を書き起こしたものではありません)。動画は公式チャンネル(YouTube)で視聴してください。</li>
           <li>作品はフィクションです。作中の取引や手口の描き方は、実際の法律・実務と異なることがあります。正しい扱いは各トピックの解説で確認してください。</li>
         </ul>
-        <p class="works-credit">原作: 大谷アキラ(漫画)・夏原武(原案)・水野光博(脚本)/小学館「ビッグコミック」連載。<br>掲載している動画: ${CHECKED_AT}時点で公開されていた通常回${episodes.length * 2}本(${episodes.length}テーマ)と特別編${specials.length}本。<a href="${CHANNEL_URL}" target="_blank" rel="noopener">${esc(CHANNEL_NAME)}${ic(`external`, 14)}</a></p>
+        <p class="works-credit">作品: 『${esc(WORK_TITLE)}』原案 夏原武・漫画 大谷アキラ・脚本 水野光博(小学館「ビッグコミック」)。<br>掲載している動画: ${CHECKED_AT}時点で公開されていた通常回${episodes.length * 2}本(${episodes.length}テーマ)と特別編${specials.length}本。<a href="${CHANNEL_URL}" target="_blank" rel="noopener">公式チャンネル「${esc(CHANNEL_NAME)}」${ic(`external`, 14)}</a></p>
       </aside>
       <input type="search" class="search-input" placeholder="テーマ・要点・用語を検索…" aria-label="動画を検索" enterkeyhint="search">
       <div class="chip-row chip-row-scroll works-filter" role="group" aria-label="テーマで絞り込む" data-role="filter"></div>

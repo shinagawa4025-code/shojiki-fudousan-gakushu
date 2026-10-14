@@ -20,7 +20,12 @@ window.UI = (function () {
   function trapFocus(container, onEscape) {
     const previouslyFocused = document.activeElement;
     function onKeydown(e) {
-      if (e.key === `Escape` && onEscape) { e.preventDefault(); onEscape(); return; }
+      if (e.key === `Escape` && onEscape) {
+        // 上に別のダイアログ(シートの上の確認など)が開いているときは、いちばん上のものだけを閉じる
+        const open = document.querySelectorAll(`.sheet-backdrop:not(.is-closing), .modal-overlay, .onb-overlay`);
+        if (open.length && open[open.length - 1] !== container && container.isConnected) return;
+        e.preventDefault(); onEscape(); return;
+      }
       if (e.key !== `Tab`) return;
       const items = Array.from(container.querySelectorAll(FOCUSABLE)).filter((el) => el.offsetParent !== null);
       if (!items.length) return;
@@ -157,6 +162,9 @@ window.UI = (function () {
     return { dismiss };
   }
 
+  // 開いているシートの数(重ねて開いたときに、下のシートが開いたまま背景のスクロール止めを外さないように)
+  let openSheets = 0;
+
   // 下から出るパネル(PCでは中央のダイアログ)。content は HTML文字列 か Element
   // opts.footer: 下端に固定する操作ボタンの欄(HTML文字列 か Element。フォームの送信ボタンなど)
   // 戻り値 { el, body, foot, close }
@@ -188,6 +196,7 @@ window.UI = (function () {
     }
     document.body.appendChild(backdrop);
     document.body.style.overflow = `hidden`;
+    openSheets += 1;
     let closed = false;
     const release = trapFocus(backdrop, () => close());
 
@@ -196,7 +205,9 @@ window.UI = (function () {
       if (closed) return;
       closed = true;
       release(restoreFocus === false ? false : undefined);
-      document.body.style.overflow = ``;
+      // シートを重ねて開いていたときは、最後の1枚を閉じるまで背景のスクロールを止めたままにする
+      openSheets = Math.max(0, openSheets - 1);
+      if (!openSheets) document.body.style.overflow = ``;
       window.removeEventListener(`hashchange`, onHashChange);
       if (instant || prefersReducedMotion()) backdrop.remove();
       else {
@@ -290,5 +301,16 @@ window.UI = (function () {
     el.scrollIntoView({ behavior: prefersReducedMotion() ? `auto` : `smooth`, block: block || `center` });
   }
 
-  return { confirm, toast, sheet, emptyState, trapFocus, escapeHtml, prefersReducedMotion, scrollIntoView, icon: ic };
+  // 画面を離れたとき(el が画面から外れたあとの最初の画面移動)に後片付けを呼ぶ。
+  // document・window・ThemeManager に付けた監視を、次にそのイベントが起きるまで残さないために使う(長く使うと監視と古い画面が溜まるため)
+  function onLeave(el, fn) {
+    const check = () => {
+      if (el.isConnected) return;
+      window.removeEventListener(`hashchange`, check);
+      try { fn(); } catch (e) { /* 後片付けの失敗は無視 */ }
+    };
+    window.addEventListener(`hashchange`, check);
+  }
+
+  return { confirm, toast, sheet, emptyState, trapFocus, escapeHtml, prefersReducedMotion, scrollIntoView, onLeave, icon: ic };
 })();

@@ -630,7 +630,7 @@ window.Views.ox = (function () {
       title: `○×一問一答について`,
       content: `<div class="view-info">
         <p>4択問題の選択肢を1文ずつ、正しい(○)か誤り(×)かで判定します。</p>
-        <p>間違えた文の用語は「<a href="#review">今日の復習</a>」に自動で追加されます。「間違えたことがある」を選ぶと、前回まちがえた文から順に解き直せます。</p>
+        <p>間違えた文の用語は「<a href="#review">今日の復習</a>」に自動で追加されます。「間違えたことがある」を選ぶと、前回間違えた文から順に解き直せます。</p>
         <p class="view-info-keys">キーボード: <kbd>O</kbd>・<kbd>1</kbd>・<kbd>←</kbd> で○ / <kbd>X</kbd>・<kbd>2</kbd>・<kbd>→</kbd> で× / <kbd>Enter</kbd> で次へ</p>
       </div>`,
     }));
@@ -703,7 +703,7 @@ window.Views.ox = (function () {
       if (!inScopeList.length) noteEl.textContent = `この分野の○×問題はまだありません。ほかの分野を選んでください。`;
       else if (!poolSize && prefs.filter === `unanswered`) noteEl.textContent = `${where}文はすべて回答済みです。「すべて」か「間違えたことがある」を選んでください。`;
       else if (!poolSize) noteEl.textContent = `${where || `まだ`}間違えた文はありません。`;
-      else noteEl.textContent = `条件に合う${poolSize}文から${n}問を${prefs.filter === `wrong` ? `、前回まちがえた文から順に` : `ランダムに`}出題します。`;
+      else noteEl.textContent = `条件に合う${poolSize}文から${n}問を${prefs.filter === `wrong` ? `、前回間違えた文から順に` : `ランダムに`}出題します。`;
     }
 
     function begin() {
@@ -840,7 +840,8 @@ window.Views.ox = (function () {
       paintAnswered(res.review, true);
       focusEl(resultEl.querySelector(`[data-role="next"]`));
       // 解説が画面外(スマホの下部タブの裏)に出たら見える位置までスクロール(余白は CSS の scroll-margin)
-      requestAnimationFrame(() => UI.scrollIntoView(resultEl, `nearest`));
+      // 記録を保存できなかったときのお知らせ(Storage が次のタスクで出す)の分も空けられるよう、そのあとで動かす
+      setTimeout(() => requestAnimationFrame(() => { if (resultEl.isConnected) UI.scrollIntoView(resultEl, `nearest`); }), 0);
       // 「正解したら自動で次へ」: 間違えたときは解説を読めるよう必ず止まる
       if (res.ok && prefs.autoNext) startAutoNext();
     }

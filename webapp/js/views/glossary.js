@@ -67,10 +67,11 @@ window.Views.glossary = (function () {
     const PAGE_SIZE = 30;
     let visibleCount = PAGE_SIZE;
     // 戻るで帰ってきたときは、絞り込み・表示件数・めくったカードを元に戻す(履歴エントリごとに保存)
-    // 直リンク(#glossary/<id>)の履歴へ戻ってきたとき(スクロール位置の記録がある)も、対象へ飛ばずに保存した状態を使う
+    // 直リンク(#glossary/<id>)の履歴へ戻ってきたとき(この履歴に保存した状態がある)も、対象へ飛ばずに保存した状態を使う
+    // (スクロール位置で判定すると、画面の一番上で操作してから離れたときに、戻ると直リンクの最初の表示に戻ってしまう。
+    //  リンクで新しく開いたとき・同じ直リンクを開き直したとき(Router.navigate)は、履歴に状態がないので直リンクとして開く)
     const hs = window.history.state && typeof window.history.state === `object` ? window.history.state : {};
-    const returning = Number(hs.y) > 0;
-    const savedG = hs.gState && typeof hs.gState === `object` && (!scrollTermId || returning) ? hs.gState : null;
+    const savedG = hs.gState && typeof hs.gState === `object` ? hs.gState : null;
     // めくったカード(裏返したカードは背が伸びるため、戻ったときに表に戻すと位置がずれる)
     const flippedIds = new Set();
     let restoringFlips = false;

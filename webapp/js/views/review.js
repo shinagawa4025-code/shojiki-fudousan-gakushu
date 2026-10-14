@@ -152,6 +152,25 @@ window.Views.review = (function () {
     } catch (e) { return null; }
   }
 
+  // その日の学習記録の回数(activityLog。旧形式の true は1回)
+  function activityCount(day) {
+    const log = Storage.get(`activityLog`, {});
+    const v = log[day];
+    if (window.Streak && typeof Streak.countOf === `function`) return Streak.countOf(v);
+    return v === true ? 1 : (typeof v === `number` && Number.isFinite(v) && v > 0 ? v : 0);
+  }
+
+  // 評価を元に戻したとき、その評価で付けた学習記録を1回分取り消す(0回になった日は記録から消す)
+  function uncountActivity(day) {
+    try {
+      const n = activityCount(day);
+      if (!n) return;
+      const log = Storage.get(`activityLog`, {});
+      if (n > 1) log[day] = n - 1; else delete log[day];
+      Storage.set(`activityLog`, log);
+    } catch (e) { /* 記録を戻せなくても復習は続けられる */ }
+  }
+
   // 見出しの ⓘ で開く「復習のしくみ」
   function aboutHtml() {
     const lim = newLimit();
@@ -384,8 +403,12 @@ window.Views.review = (function () {
       const prevCard = Srs.getCard(term.id);
       const prevKnown = !!known[term.id];
       const item = queue[0];
+      // 評価で学習記録(activityLog)が1回増えたか(元に戻すときに取り消すため。保存できなかったときは増えない)
+      const day = DateUtil.today();
+      const actBefore = activityCount(day);
       // 評価後のカード(保存できなかったとき=容量不足でも、次に出す日を通知に出せるよう戻り値を使う)
       const graded = Srs.grade(term.id, g);
+      const counted = activityCount(day) > actBefore;
       // 別のタブでの変更を消さないよう、保存前に最新の値を読み直してから反映する
       const latestKnown = Storage.get(`flashcards`, {});
       Object.keys(known).forEach((k) => { if (!(k in latestKnown)) delete known[k]; });
@@ -408,7 +431,7 @@ window.Views.review = (function () {
       } else {
         session.done += 1;
       }
-      undoStack.push({ term, prevCard, prevKnown, item, g, isNew });
+      undoStack.push({ term, prevCard, prevKnown, item, g, isNew, day, counted });
       if (undoStack.length > 20) undoStack.shift();
       renderQueue();
       showCardTop();
@@ -432,6 +455,8 @@ window.Views.review = (function () {
       const last = undoStack.pop();
       if (!last || !document.body.contains(wrap)) return;
       Srs.restore(last.term.id, last.prevCard);
+      // 評価で付けた学習記録も1回分取り消す(評価し直すと二重に数えるため)
+      if (last.counted) uncountActivity(last.day);
       if (last.prevKnown) known[last.term.id] = true; else delete known[last.term.id];
       Storage.set(`flashcards`, known);
       if (last.isNew && !last.prevCard) {
@@ -471,6 +496,13 @@ window.Views.review = (function () {
       }
     }
     document.addEventListener(`keydown`, onKey);
+    // 画面を離れたら外す(次のキー入力まで残すと、開くたびに前の画面の要素とリスナーが残り続ける)
+    const offKey = () => document.removeEventListener(`keydown`, onKey);
+    if (window.UI && typeof UI.onLeave === `function`) UI.onLeave(wrap, offKey);
+    else {
+      const onKeyHash = () => { if (!document.body.contains(wrap)) { offKey(); window.removeEventListener(`hashchange`, onKeyHash); } };
+      window.addEventListener(`hashchange`, onKeyHash);
+    }
 
     // iPhone のホーム画面アプリは翌日に開いても前日の画面のまま戻ることがある。
     // 日付が変わっていたら、その日の期限・新規の上限で出題し直す(シート・確認を開いている間は待つ)

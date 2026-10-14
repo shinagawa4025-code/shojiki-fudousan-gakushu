@@ -146,7 +146,7 @@ window.Recommend = (function () {
     steps.push({
       id: `review`,
       title: first ? `最初の${newAvail}語を覚える` : `今日の復習カード`,
-      sub: reviewDone ? (cardsLeft ? `今日の分は完了・間違えた用語${cardsLeft}枚が追加` : `今日の分は完了`)
+      sub: reviewDone ? (cardsLeft ? `今日の分は完了・間違えた用語${cardsLeft}枚を追加` : `今日の分は完了`)
         : first ? `カードをめくって意味を確認`
           : due && newAvail ? `復習${due}枚+新しい用語${newAvail}語`
             : due ? `復習${due}枚` : `新しい用語${newAvail}語をカードで`,
@@ -179,14 +179,20 @@ window.Recommend = (function () {
     // ③ 苦手の○×(間違えたことがある文がなければ、ふつうの○×で腕試し)
     const quiz = (window.APP_DATA && window.APP_DATA.quiz) || [];
     if (quiz.some((q) => q && (q.ask === `correct` || q.ask === `incorrect`))) {
+      // ○×画面(#ox/weak)が出せる文と同じ数え方にする: いまある文の記録で、回数が数値のものだけ
+      // (問題の削除・正誤判定型でなくなった問題・範囲外の番号・壊れた記録を数えると、出題できる数より多くなり完了にならない)
+      const QE = window.QuizEngine;
+      const stmtIds = QE && typeof QE.allStatements === `function` ? new Set(QE.allStatements().map((s) => s.id)) : null;
       const ids = new Set(quiz.map((q) => q && q.id));
+      const exists = (sid) => (stmtIds ? stmtIds.has(sid) : ids.has(sid.split(`#`)[0]));
+      const num = (v) => (typeof v === `number` && Number.isFinite(v) && v > 0 ? v : 0);
       const ox = Storage.get(`oxStats`, {});
       let weak = 0;
       let answeredToday = 0;
       Object.keys(ox).forEach((sid) => {
         const v = ox[sid];
-        if (!Storage.isPlainObject(v) || !ids.has(sid.split(`#`)[0])) return;
-        if (Number(v.w) > 0) weak += 1;
+        if (!Storage.isPlainObject(v) || !exists(sid) || !(num(v.c) + num(v.w))) return;
+        if (num(v.w) > 0) weak += 1;
         if (v.last === today) answeredToday += 1;
       });
       const useWeak = weak > 0;

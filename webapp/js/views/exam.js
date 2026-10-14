@@ -393,8 +393,10 @@ window.Views.exam = (function () {
     return !!(s && s.timed && typeof s.deadline === `number` && s.deadline <= (now || Date.now()));
   }
 
+  // 得点は 0〜問題数の整数だけを使う(壊れたバックアップの 60/50 や −3/20 で、割合が100%を超えたり棒がはみ出したりしないように)
   function validEntry(e) {
-    return !!e && typeof e === `object` && typeof e.id === `string` && typeof e.score === `number` && typeof e.total === `number` && e.total > 0;
+    return !!e && typeof e === `object` && typeof e.id === `string` && Number.isInteger(e.total) && e.total > 0
+      && Number.isInteger(e.score) && e.score >= 0 && e.score <= e.total;
   }
 
   function readHistory() {
@@ -625,7 +627,10 @@ window.Views.exam = (function () {
     return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
   }
 
-  function fmtDuration(sec) {
+  // 秒数が壊れていても(読み込んだバックアップの文字列など)「NaN秒」と出さない
+  function fmtDuration(raw) {
+    const n = Number(raw);
+    const sec = Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     if (m >= 60) return `${Math.floor(m / 60)}時間${m % 60}分`;
@@ -1518,7 +1523,7 @@ window.Views.exam = (function () {
           : `<p class="exam-next-lead">${catRows.length ? `すべての分野で正答率7割以上でした。` : ``}${isRetry ? `模擬試験でも確かめてみましょう。` : entry.mode === `short` ? `次はフル(50問)で、時間配分も含めて試してみましょう。` : `この調子で、間隔をあけてもう一度受けてみましょう。`}</p>`}
       </section>`;
 
-    const timeText = entry.timed && entry.limitMin
+    const timeText = entry.timed && Number.isInteger(entry.limitMin) && entry.limitMin > 0
       ? `${fmtDuration(entry.durationSec || 0)}(制限${entry.limitMin}分)`
       : `${fmtDuration(entry.durationSec || 0)}(時間制限なし)`;
     const guide = isRetry ? null : guideSecPerQuestion(entry.mode);
