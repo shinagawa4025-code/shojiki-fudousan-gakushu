@@ -11,9 +11,16 @@ window.Storage = (function () {
 
   // fallback がオブジェクト/配列/数値/真偽値/文字列のときは、保存値の型が違えば fallback を返す
   // (古い・壊れたバックアップや別のタブの書き込みで型が変わっていても、画面が落ちないように。null の fallback は型を問わない)
+  // 容量不足で保存できなかったキーは、保存しようとした値(failing)を返す。読んで足して書く記録(解答の記録・学習の記録・
+  // 解き直しの予定など)が、容量がいっぱいの間に最後の1回分だけになってしまわないように(画面の数も、解いた分だけ進む)。
+  // 学習時間など自分で書き直すキー(SELF_RETRY)は除く
   function get(key, fallback) {
     try {
-      const raw = localStorage.getItem(PREFIX + key);
+      let raw = null;
+      if (failing.has(key) && !SELF_RETRY.has(key)) {
+        try { raw = JSON.stringify(failing.get(key)); } catch (e) { raw = null; }
+      }
+      if (raw === null || raw === undefined) raw = localStorage.getItem(PREFIX + key);
       if (raw === null) return fallback;
       const value = JSON.parse(raw);
       if (Array.isArray(fallback) && !Array.isArray(value)) return fallback;
@@ -29,6 +36,9 @@ window.Storage = (function () {
 
   // 保存に失敗しているキーと、保存しようとした値(容量を空けたあとに書き直すため)
   const failing = new Map();
+  // 保存できなかった分を自分で持っていて、次の保存で読み直して足すキー(js/studyTime.js: まだ保存していない秒数を持ち、30秒ごとに保存し直す)。
+  // get で保存できなかった値を返すと、表示(保存済み + まだ保存していない分)で同じ時間を二重に数えてしまうので、get では返さない
+  const SELF_RETRY = new Set([`studyTime`, `studyTimeLock`]);
 
   function set(key, value) {
     try {
@@ -119,6 +129,7 @@ window.Storage = (function () {
         Views.exam.compactHistory(0, Array.isArray(pending) ? pending : undefined);
       }
     } catch (e) { console.error(`[保存] 古い記録の整理に失敗しました`, e); }
+    // 学習時間(SELF_RETRY)も書き直す。書き直した分は、StudyTime が次の保存の前に確かめて二重に足さない(studyTime.js の settleUnsaved)
     Array.from(failing.keys()).forEach((k) => set(k, failing.get(k)));
     if (!window.UI) return;
     if (!failing.size) UI.toast(`古い記録を整理して、保存できるようになりました`, `success`, { duration: 4000 });
@@ -181,5 +192,14 @@ window.Storage = (function () {
     try { return isIos() && !isStandalone(); } catch (e) { return false; }
   }
 
-  return { get, set, remove, isPlainObject, PREFIX, SCHEMA, migrate, schemaVersion, usageBytes, isIos, isStandalone, isIosBrowserTab, isWriteFailing: () => failing.size > 0 };
+  // 容量不足で保存できていない記録 { キー: 保存しようとした値 }(バックアップに含めるため。写しを返す)
+  function unsaved() {
+    const out = {};
+    failing.forEach((v, k) => {
+      try { out[k] = JSON.parse(JSON.stringify(v)); } catch (e) { /* 写せない値は含めない */ }
+    });
+    return out;
+  }
+
+  return { get, set, remove, isPlainObject, PREFIX, SCHEMA, migrate, schemaVersion, usageBytes, isIos, isStandalone, isIosBrowserTab, isWriteFailing: () => failing.size > 0, unsaved };
 })();

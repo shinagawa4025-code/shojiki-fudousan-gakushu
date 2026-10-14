@@ -197,6 +197,66 @@ window.AppIndex = (function () {
       tp.basicIds.forEach((id) => { if (!termsById[id]) issues.push(`${tp.id}.basicIds: 存在しない ${id}`); });
       tp.episodes.forEach((id) => { if (!episodesById[id]) issues.push(`${tp.id}.episodes: 存在しない ${id}`); });
     });
+    // 個数・組合せの問題(style: 'count' | 'combo')の形と答え(js/quizEngine.js の styledAnswer と同じ決まり)。
+    // このファイルは問題エンジンより先に読み込まれるので、組合せの読み取りはここでも行う。
+    // 公開版の本体では stmts・stmtNotes が仮の値(「…」「……」…)になるため、文の中身ではなく数・型・重複だけを見る
+    // (本体だけの状態と詳細を戻した状態で、警告がまったく同じになるように。文の中身は tools/lint_quiz.js が見る)
+    const STMT_LABELS = [`ア`, `イ`, `ウ`, `エ`];
+    const COUNT_CHOICES = [`一つ`, `二つ`, `三つ`, `四つ`];
+    const comboOf = (text) => {
+      const parts = String(text == null ? `` : text).normalize(`NFKC`).trim().split(/\s*[、,・]\s*|\s*と\s*|\s+/);
+      const out = [];
+      for (const p of parts) {
+        const i = STMT_LABELS.indexOf(p);
+        if (i < 0 || out.includes(i)) return [];
+        out.push(i);
+      }
+      return out.sort((a, b) => a - b);
+    };
+    const strings4 = (v) => Array.isArray(v) && v.length === 4 && v.every((s) => typeof s === `string` && !!s);
+    function checkStyled(q) {
+      const id = q.id;
+      if (q.style !== `count` && q.style !== `combo`) { issues.push(`${id}: style は count(個数)/ combo(組合せ)のどちらか`); return; }
+      const kind = q.style === `count` ? `個数問題` : `組合せ問題`;
+      if (q.format !== `mc`) { issues.push(`${id}: ${kind}は format: 'mc' にする`); return; }
+      let ok = true;
+      const bad = (m) => { issues.push(`${id}: ${kind}の${m}`); ok = false; };
+      if (q.ask !== `correct` && q.ask !== `incorrect`) bad(`ask は correct / incorrect のどちらか(必須)`);
+      if (!strings4(q.stmts)) bad(`stmts(記述ア〜エ)は空でない文字列4つ`);
+      else if (new Set(q.stmts).size !== 4) bad(`stmts(記述ア〜エ)に同じ文がある`);
+      if (!Array.isArray(q.stmtTruths) || q.stmtTruths.length !== 4 || q.stmtTruths.some((t) => typeof t !== `boolean`)) bad(`stmtTruths は true / false を4つ`);
+      if (!strings4(q.stmtNotes)) bad(`stmtNotes(記述ごとの注)は空でない文字列4つ`);
+      if (q.choiceNotes != null) bad(`choiceNotes は書かない(記述ごとの注は stmtNotes に書く)`);
+      if (!Array.isArray(q.choices) || q.choices.length !== 4 || !Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex > 3) ok = false; // 上の4択の検査で知らせる
+      let combos = null;
+      if (Array.isArray(q.choices) && q.choices.length === 4) {
+        if (q.style === `count`) {
+          if (q.choices.some((c, i) => c !== COUNT_CHOICES[i])) bad(`選択肢は「${COUNT_CHOICES.join(`」「`)}」(この順)にする`);
+        } else {
+          combos = q.choices.map((c) => comboOf(c).join(`,`));
+          if (q.choices.some((c) => comboOf(c).length !== 2)) bad(`選択肢は「ア、イ」のような2つの記号(ア〜エ)の組にする`);
+          else if (new Set(combos).size !== 4) bad(`選択肢に同じ組がある`);
+        }
+      }
+      if (!ok) return;
+      // 答えの検算: 問われている側(ask が correct なら正しい記述、incorrect なら誤っている記述)
+      const want = q.ask === `correct`;
+      const matching = [];
+      q.stmtTruths.forEach((t, i) => { if (t === want) matching.push(i); });
+      const side = want ? `正しい` : `誤っている`;
+      if (q.style === `count`) {
+        if (!matching.length) bad(`答えが合わない(${side}記述が0個。個数は一つ〜四つ)`);
+        else if (q.correctIndex !== matching.length - 1) bad(`答えが合わない(${side}記述は${matching.length}個なので correctIndex は ${matching.length - 1})`);
+        return;
+      }
+      if (matching.length !== 2) { bad(`答えが合わない(${side}記述が${matching.length}個。組合せ問題はちょうど2つ)`); return; }
+      const key = matching.join(`,`);
+      const hits = combos.map((c, i) => (c === key ? i : -1)).filter((i) => i >= 0);
+      const pair = matching.map((i) => STMT_LABELS[i]).join(`、`);
+      if (hits.length !== 1) bad(`答えが合わない(${side}記述の組「${pair}」の選択肢が${hits.length}個)`);
+      else if (q.correctIndex !== hits[0]) bad(`答えが合わない(${side}記述の組「${pair}」は選択肢${hits[0] + 1}なので correctIndex は ${hits[0]})`);
+    }
+
     data.quiz.forEach((q) => {
       checkExamCats(q.id, q.examCats);
       checkReviewBy(q);
@@ -207,11 +267,13 @@ window.AppIndex = (function () {
         else if (new Set(q.choices).size !== 4) issues.push(`${q.id}: 選択肢に重複がある`);
         if (!Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex > 3) issues.push(`${q.id}: correctIndex が0〜3ではない`);
         if (q.ask != null && q.ask !== `correct` && q.ask !== `incorrect`) issues.push(`${q.id}: ask は correct / incorrect のどちらか`);
-        if (q.choiceNotes != null && (!Array.isArray(q.choiceNotes) || q.choiceNotes.length !== 4 || q.choiceNotes.some((n) => typeof n !== `string` || !n))) issues.push(`${q.id}: choiceNotes は空でない文字列4つ`);
+        if (q.style == null && q.choiceNotes != null && (!Array.isArray(q.choiceNotes) || q.choiceNotes.length !== 4 || q.choiceNotes.some((n) => typeof n !== `string` || !n))) issues.push(`${q.id}: choiceNotes は空でない文字列4つ`);
         if (!q.explanation) issues.push(`${q.id}: 4択問題に explanation がない`);
       } else if (!q.answer) {
         issues.push(`${q.id}: 記述式なのに answer がない`);
       }
+      if (q.style != null) checkStyled(q);
+      else if (q.stmts != null || q.stmtTruths != null || q.stmtNotes != null) issues.push(`${q.id}: stmts・stmtTruths・stmtNotes は個数・組合せの問題(style あり)だけに書く`);
     });
     data.laws.laws.forEach((law) => {
       (law.topicIds || []).forEach((tid) => { if (!topicsById[tid]) issues.push(`${law.id}: 存在しないトピック ${tid}`); });
@@ -229,9 +291,10 @@ window.AppIndex = (function () {
     const packs = window.ContentPack ? ContentPack.list() : [];
     const packNote = packs.map((p) => p.patched != null ? `${p.id}(上書き${p.patched})` : `${p.id}(基礎${p.basics}・問題${p.quiz})`).join(` `) || `なし`;
     const mcCount = data.quiz.filter((q) => q.format === `mc`).length;
+    const styledCount = data.quiz.filter((q) => q.style != null).length;
     const emptyTopics = data.topics.filter((t) => !t.basicIds.length).map((t) => t.id);
     if (emptyTopics.length) issues.push(`基礎知識が0件のトピック: ${emptyTopics.join(`, `)}`);
-    console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length}, topics=${data.topics.length} (期待値16), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length}(うち4択${mcCount}・廃止${retiredQuizIds.size - retiredQuizMissing.length}), sources=${data.sources.length}, 試験種別=${examTypeCount} (期待値3), 追加パック=${packNote}, 見直し期限切れ=${reviewDue.length}件, 警告=${issues.length}件`);
+    console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length}, topics=${data.topics.length} (期待値16), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length}(うち4択${mcCount}・個数/組合せ${styledCount}・廃止${retiredQuizIds.size - retiredQuizMissing.length}), sources=${data.sources.length}, 試験種別=${examTypeCount} (期待値3), 追加パック=${packNote}, 見直し期限切れ=${reviewDue.length}件, 警告=${issues.length}件`);
     issues.forEach((msg) => console.warn(`[データ整合性チェック] ${msg}`));
     if (reviewDue.length) console.warn(`[見直し時期] reviewBy を過ぎた項目 ${reviewDue.length}件(法改正・統計の更新を確認して、内容と reviewBy を直す): ${reviewDue.join(`, `)}`);
   } // if (CHECK)

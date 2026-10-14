@@ -20,6 +20,9 @@
 .ox-quick-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ox-quick-meta { font-size: var(--fs-sm); font-weight: 400; opacity: .9; }
 .ox-view .ox-auto-next { margin-top: var(--sp-2); font-size: var(--fs-sm); color: var(--color-text-muted); }
+/* 「自信度も答える」は「自動で次へ」のすぐ下(2つの設定を縦に並べる) */
+.ox-view .ox-confidence-toggle { display: flex; margin-top: 0; }
+.ox-confidence-help { margin: 0 0 0 calc(18px + var(--sp-2)); font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
 .ox-view .ox-stats .stat-tile { padding: var(--sp-2) var(--sp-3); }
 .ox-view .ox-stats .stat-value { font-size: var(--fs-xl); }
 
@@ -125,6 +128,10 @@
 .ox-context { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
 .ox-statement { margin: var(--sp-2) 0 0; font-size: var(--fs-lg); font-weight: 400; line-height: var(--lh-body); color: var(--color-text); }
 .ox-statement:focus { outline: none; }
+/* 個数・組合せの記述は文の前に「ア」などの記号(4択の記述ア〜エと同じ部品 .stmt-label。practice.css) */
+.ox-statement.has-label, .ox-wrong-text.has-label { display: flex; align-items: flex-start; gap: var(--sp-2); }
+.ox-statement.has-label .ox-stmt-label { margin-top: 4px; }
+.ox-wrong-text.has-label .ox-stmt-label { margin-top: 2px; }
 
 /* ○ / × の大きなボタン(左右に二分) */
 .ox-answer-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin-top: var(--sp-5); }
@@ -169,6 +176,57 @@
 .ox-btn.is-answer .ox-btn-tag { background: var(--color-success-fill); }
 .ox-btn.is-wrong .ox-btn-tag { background: var(--color-danger-fill); }
 
+/* 自信度つき(v12): ボタンの並び(HTML)は 1 もちろん○・2 たぶん○・3 たぶん×・4 もちろん×(キーの番号・読み上げの順)。
+   スマホは 2×2(左の列に○・右の列に×、上に「もちろん」・下に「たぶん」)で、記号と文字を横に並べて低めにする。
+   600px 以上は左からキーの番号の順に1列(○の2つと×の2つの間を少し空ける)。 */
+.ox-answer-row.is-conf { gap: var(--sp-3); grid-template-areas: "c1 c4" "c2 c3"; }
+.ox-btn-conf[data-level="1"] { grid-area: c1; }
+.ox-btn-conf[data-level="2"] { grid-area: c2; }
+.ox-btn-conf[data-level="3"] { grid-area: c3; }
+.ox-btn-conf[data-level="4"] { grid-area: c4; }
+.ox-btn-conf {
+  position: relative;
+  flex-direction: row;
+  gap: var(--sp-2);
+  min-height: 64px;
+  padding: var(--sp-2) var(--sp-3);
+}
+.ox-btn-conf .ox-glyph { width: 30px; height: 30px; }
+.ox-btn-conf .ox-btn-label { font-size: var(--fs-base); }
+/* 320px などの狭い画面では、記号と余白を詰めて「もちろん」を1行に収める */
+@media (max-width: 359px) {
+  .ox-btn-conf { gap: var(--sp-1); padding-inline: var(--sp-2); }
+  .ox-btn-conf .ox-glyph { width: 26px; height: 26px; }
+  .ox-btn-conf .ox-btn-label { white-space: nowrap; }
+}
+/* 「たぶん」は点線の枠(文字でも分かる。色だけに頼らない) */
+.ox-btn-conf.is-maybe { border-style: dashed; }
+.ox-btn-conf.is-maybe .ox-btn-label { font-weight: 600; }
+/* キーボードの番号(マウス・キーボードの端末だけ) */
+.ox-btn-key {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+@media (hover: none), (pointer: coarse) { .ox-btn-key { display: none; } }
+/* 2×2 では番号が 1・4/2・3 と並んで読みにくいので出さない(番号はキーの番号の順に1列で並ぶ幅のときだけ) */
+@media (max-width: 599px) { .ox-btn-key { display: none; } }
+/* 回答後の「正解」「あなたの回答」は枠の上に重ねる(ボタンの高さを変えずに、下の解説がずれないように) */
+.ox-btn-conf .ox-btn-tag { position: absolute; top: -10px; right: var(--sp-2); margin: 0; white-space: nowrap; }
+@media (min-width: 600px) {
+  .ox-answer-row.is-conf { grid-template-columns: 1fr 1fr var(--sp-2) 1fr 1fr; grid-template-areas: "c1 c2 . c3 c4"; gap: var(--sp-2); }
+  .ox-btn-conf { flex-direction: column; gap: var(--sp-1); min-height: 88px; padding: var(--sp-3) var(--sp-1) var(--sp-2); }
+  .ox-btn-conf .ox-btn-label { white-space: nowrap; }
+}
+@media (min-width: 768px) {
+  .ox-btn-conf { min-height: 96px; }
+  .ox-btn-conf .ox-glyph { width: 36px; height: 36px; }
+}
+
 /* 回答後の判定と解説 */
 /* 固定ヘッダー・下部タブの分は style.css の html の scroll-padding で確保済み */
 .ox-view [data-role="result"] { scroll-margin-top: var(--sp-2); scroll-margin-bottom: var(--sp-2); }
@@ -193,6 +251,13 @@
 .ox-result .review-added { margin-top: var(--sp-2); color: var(--color-text); }
 .ox-links { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 .ox-links .chip { min-height: 40px; background: var(--color-surface); color: var(--color-text); }
+/* 指で押す端末では 44px の高さに(押し間違いを防ぐ) */
+@media (pointer: coarse) { .ox-links .chip { min-height: 44px; } }
+/* 「たぶん」で正解したときの1行 */
+.ox-result .ox-unsure-line a { color: var(--color-primary); font-weight: 700; text-underline-offset: 2px; }
+/* 「AIに聞く」(js/askAi.js のボタンを置く場所。ボタンがなければ消す) */
+.ox-ask-ai { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.ox-ask-ai:empty { display: none; }
 .ox-next-wrap { margin-top: var(--sp-3); }
 
 /* 正解したら自動で次へ: 残り時間の細いバー(動きを減らす設定では出さない) */

@@ -8,6 +8,8 @@
 //   5. ○×の文の固定(tools/statement_lock.js)
 //   6. 公開用ビルドの前提(警告のみ。満たさなければビルドが失敗し、元のファイルのまま公開される):
 //      スクリプトと CSS が build の範囲の中にある / ファイルの最上位に const・let・class がない
+//   7. 個数・組合せの問題(style)の自己テスト(tools/selftest_styled.js): 見本(tools/fixtures/q4_example.js)を本物の
+//      問題エンジン・整合性チェック・検索・lint・ビルドの分割・○×の文の固定に通す
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -17,6 +19,7 @@ const { loadApp, summarize, scriptList, styleList } = require('./lib/appload.js'
 const { topLevelLexical } = require('./lib/minify.js');
 const lock = require('./statement_lock.js');
 const { parseBlocks, localRefs, readPrecacheList } = require('./lib/html.js');
+const styledSelftest = require('./selftest_styled.js');
 
 const WEBAPP = path.resolve(process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : path.join(__dirname, '..', 'webapp'));
 const GH = !!process.env.GITHUB_ACTIONS;
@@ -63,6 +66,7 @@ step('スクリプトの存在と構文');
 // 3. データの読み込みと整合性
 step('データの読み込みと整合性(AppIndex.issues)');
 let summary = null;
+let styledNote = '';
 try {
   const { ctx, logs } = loadApp(WEBAPP, { hostname: 'localhost' });
   summary = summarize(ctx);
@@ -71,7 +75,19 @@ try {
   else if (issues.length) { E(`データ整合性チェックの警告 ${issues.length}件`); issues.forEach((m) => console.log(`  - ${m}`)); }
   logs.warn.filter((m) => /^\[ContentPack\]/.test(m)).forEach((m) => E(m));
   logs.error.forEach((m) => E(`読み込み中のエラー: ${m.split('\n')[0]}`));
-  console.log(`問題 ${summary.quiz}問(4択 ${summary.mc})・○×の文 ${summary.statements}・用語 ${summary.terms}・基礎知識 ${summary.basics}・トピック ${summary.topics}`);
+  // 個数・組合せの問題(style)の数と、○×の文の内訳(選択肢の文「#n」/ 記述ア〜エ「#sn」)
+  const quiz = ctx.APP_DATA.quiz || [];
+  const nCount = quiz.filter((q) => q.style === 'count').length;
+  const nCombo = quiz.filter((q) => q.style === 'combo').length;
+  const stmts = ctx.QuizEngine ? ctx.QuizEngine.allStatements() : [];
+  const nSub = stmts.filter((s) => /#s\d$/.test(s.id)).length;
+  const badKeys = stmts.filter((s) => !lock.KEY_RE.test(String(s.id)));
+  if (badKeys.length) E(`○×の文のキーの形が違うものがあります: ${badKeys.slice(0, 5).map((s) => s.id).join(', ')}`);
+  // 個数・組合せの問題で○×の文を作れないもの(形の誤りは上の整合性チェックが理由を出す)
+  const noStmt = quiz.filter((q) => q.style != null && !(ctx.QuizEngine && ctx.QuizEngine.hasStatements(q)));
+  if (noStmt.length) E(`個数・組合せの問題で○×の文を作れないもの: ${noStmt.map((q) => q.id).join(', ')}`);
+  styledNote = nCount || nCombo ? `(個数 ${nCount}・組合せ ${nCombo})` : '';
+  console.log(`問題 ${summary.quiz}問(4択 ${summary.mc}${styledNote ? `・うち個数 ${nCount}・組合せ ${nCombo}` : ''})・○×の文 ${summary.statements}(選択肢の文 ${summary.statements - nSub}・記述ア〜エ ${nSub})・用語 ${summary.terms}・基礎知識 ${summary.basics}・トピック ${summary.topics}`);
 } catch (e) {
   E(`データの読み込みに失敗しました: ${e.message}`);
 }
@@ -104,7 +120,8 @@ step('sw.js のプリキャッシュ(元のファイルのまま公開する場�
 step('○×の文の固定(statement_lock.json)');
 try {
   const r = lock.run({ mode: 'check', webapp: WEBAPP });
-  r.info.forEach((m) => console.log(m));
+  // まだ固定していない新しい文は警告にする(公開する前に --update してコミットしないと、公開後の正誤の変更を CI が止められない)
+  r.info.forEach((m) => (/^まだ固定していない新しい文/.test(m) ? W(`公開する前に固定する: ${m}`) : console.log(m)));
   r.warns.forEach((m) => W(m));
   r.errors.forEach((m) => E(m));
 } catch (e) {
@@ -130,5 +147,15 @@ step('公開用ビルドの前提');
   }
 }
 
-console.log(`\n確認の結果: エラー ${errors.length}件・警告 ${warns.length}件${summary ? `(問題 ${summary.quiz}・○×の文 ${summary.statements})` : ''}`);
+// 7. 個数・組合せの問題の自己テスト
+step('個数・組合せの問題の自己テスト(tools/selftest_styled.js・見本 tools/fixtures/q4_example.js)');
+try {
+  const r = styledSelftest.run(WEBAPP);
+  r.errors.forEach((m) => E(`個数・組合せの自己テスト: ${m.split('\n')[0]}`));
+  console.log(`成功 ${r.passed}件・失敗 ${r.errors.length}件`);
+} catch (e) {
+  E(`個数・組合せの自己テストを実行できませんでした: ${e.message}`);
+}
+
+console.log(`\n確認の結果: エラー ${errors.length}件・警告 ${warns.length}件${summary ? `(問題 ${summary.quiz}${styledNote}・○×の文 ${summary.statements})` : ''}`);
 process.exit(errors.length ? 1 : 0);

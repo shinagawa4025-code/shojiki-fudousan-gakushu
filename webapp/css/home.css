@@ -259,8 +259,57 @@
 .home-install-steps { margin-top: var(--sp-1); font-weight: 600; color: var(--color-heading); }
 .home-install-sub { margin-top: var(--sp-1); font-size: var(--fs-xs); color: var(--color-text-muted); }
 
+/* ---------- v12: 1日の目標のリング・合格予測の1行・今週やること・試験の後・見込みの試験日 ---------- */
+/* 分の目標(「125/240分」など)は数字が長いので小さく */
+.ring.is-long .ring-label strong { font-size: var(--fs-base); }
+/* 見込み(公式発表前)の試験日の札 */
+.tag-tentative { display: inline-flex; align-items: center; flex-shrink: 0; margin-left: var(--sp-1); padding: 0 6px; border: 1px dashed var(--color-warning); border-radius: var(--radius-pill); background: var(--color-warning-bg); color: var(--color-warning); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.6; white-space: nowrap; }
+/* 見込みの候補は文が長く2行になることがあるので、錠剤型にしない */
+.chip.chip-tentative { border-style: dashed; border-color: var(--color-warning); border-radius: var(--radius-md); padding-block: 4px; text-align: left; }
+.chip.chip-tentative[aria-pressed="true"] { border-style: solid; }
+.hero2-tent-note, .target-tent-note { margin: 0; flex-basis: 100%; }
+/* 試験日の登録フォーム: 見込みの日付として登録するか */
+.target-tentative { display: flex; align-items: flex-start; gap: var(--sp-2); margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 1px dashed var(--color-warning); border-radius: var(--radius-md); background: var(--color-warning-bg); color: var(--color-text); font-size: var(--fs-sm); line-height: var(--lh-snug); cursor: pointer; }
+.target-tentative[hidden] { display: none; }
+.target-tentative input { flex-shrink: 0; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--color-primary-fill); }
+.target-tentative span { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-weight: 600; }
+.target-tentative small { font-size: var(--fs-xs); font-weight: 400; color: var(--color-text-muted); }
+/* 設定の目標一覧の「見込み」(js/views/settings.js が使う) */
+.target-tentative-tag { border-style: dashed; border-color: var(--color-warning); background: var(--color-warning-bg); color: var(--color-warning); }
+
+/* 合格予測の1行(ヒーローの中) */
+.hero-predict { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; margin: calc(var(--sp-1) * -1) 0 0; padding: 6px var(--sp-3); border-radius: var(--radius-md); background: var(--color-primary-soft); color: var(--color-text); font-size: var(--fs-sm); line-height: var(--lh-snug); text-decoration: none; transition: box-shadow var(--dur-1); }
+.hero-predict > .icon { flex-shrink: 0; color: var(--color-primary); }
+.hero-predict > .icon:last-child { color: var(--color-text-muted); }
+.hero-predict > span { flex: 1; min-width: 0; }
+.hero-predict small { font-size: var(--fs-xs); color: var(--color-text-muted); }
+.hero-predict strong { font-size: var(--fs-base); color: var(--color-primary); }
+.hero-predict.is-pending { background: var(--color-surface-muted); }
+.hero-predict.is-pending strong { margin: 0 1px; color: var(--color-heading); }
+.hero-predict:active { box-shadow: inset 0 0 0 100px var(--color-press); }
+@media (hover: hover) { .hero-predict:hover { box-shadow: inset 0 0 0 100px var(--color-press); } }
+
+/* 試験の後: お疲れさまでした・合格発表の案内・次の目標 */
+.hero2-days.is-after strong { font-size: var(--fs-xl); line-height: 1.3; color: var(--color-heading); text-wrap: balance; }
+.after-panel { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); margin-bottom: var(--sp-1); }
+.after-result { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; padding: var(--sp-2) var(--sp-3); align-self: stretch; border-radius: var(--radius-md); background: var(--color-surface-muted); font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text); }
+.after-result > .icon { flex-shrink: 0; margin-top: 2px; color: var(--color-primary); }
+.after-result strong { color: var(--color-heading); }
+.after-link { display: inline-flex; align-items: center; gap: 2px; margin-left: var(--sp-1); font-weight: 600; }
+.after-next { align-self: stretch; justify-content: flex-start; gap: var(--sp-3); min-height: 56px; padding: var(--sp-2) var(--sp-4); text-align: left; }
+.after-next > .icon { flex-shrink: 0; }
+.after-next-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.after-next-title { font-weight: 700; text-wrap: balance; }
+.after-next small { font-size: var(--fs-xs); font-weight: 600; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.after-note { margin: 0; }
+
+/* 今週やること(ホーム) */
+.home-plan-phase { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0 var(--sp-1) var(--sp-2); font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); }
+.home-plan-phase > .icon { flex-shrink: 0; margin-top: 2px; color: var(--color-primary); }
+.home-plan-phase strong { color: var(--color-heading); }
+
 /* 日本語の見出し・ボタンは、対応ブラウザでは文節の切れ目で折り返す */
-:is(.home-title, .theme-title, .cta-title, .list-row-title, .purpose-note > span, .purpose-item > span, .hero2-eyebrow > span, .home-news-head .card-title, .onb-title, .onb-choice-title, .onb-choice-desc, .onb-interest-text b, .onb-official > span) { word-break: auto-phrase; }
+:is(.home-title, .theme-title, .after-next-title, .hero-predict > span, .home-plan-phase > span, .cta-title, .list-row-title, .purpose-note > span, .purpose-item > span, .hero2-eyebrow > span, .home-news-head .card-title, .onb-title, .onb-choice-title, .onb-choice-desc, .onb-interest-text b, .onb-official > span) { word-break: auto-phrase; }
 
 /* ---------- 初回ガイド・使い方(features.css の .onb-* を上書き。スマホは全画面) ---------- */
 /* 初回ガイドの上に用語のシートを開いたときは、シートを前に出す */

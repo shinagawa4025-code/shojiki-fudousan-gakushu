@@ -426,7 +426,8 @@ window.Views.calculators = (function () {
       }
       bldg.fixedTax = floorTo(Math.max(0, bldg.fixedRaw - bldg.reduction), 100);
       bldg.cityTax = cityPlan ? floorTo(bldg.base * cityRate, 100) : 0;
-      if (bldg.base < 200000) notes.push(`家屋の課税標準額が20万円未満です。同じ市町村内の家屋の合計が免税点(20万円、令和9年度分からは30万円)未満なら課税されません。`);
+      // 家屋の免税点は令和8年度分まで20万円、令和9年度分から30万円(地方税法351条。令和8年法律第2号)。どちらの年度の計算にも当てはまるよう、30万円未満で案内する
+      if (bldg.base < 300000) notes.push(`家屋の課税標準額が30万円未満です。同じ市町村内の家屋の課税標準額の合計が免税点(令和8年度分までは20万円、令和9年度分からは30万円)未満なら課税されません。`);
     }
 
     const fixedTotal = land.fixedTax + bldg.fixedTax;

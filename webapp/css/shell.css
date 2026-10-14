@@ -136,3 +136,51 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
 .settings-protect.is-on .icon { color: var(--color-success); }
 .settings-protect-text { display: inline-flex; align-items: center; gap: var(--sp-1); }
 .settings-usage { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--color-text-muted); }
+
+/* ---------- 設定: 1日の目標(v12) ---------- */
+.settings-goal-kind { margin-bottom: var(--sp-3); }
+.settings-goal-kind .segmented-item { flex: 1 1 0; min-height: 44px; }
+.settings-goal-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-2) var(--sp-3); }
+.settings-goal-field { flex: 0 0 auto; }
+.settings-goal-input { display: flex; align-items: center; gap: var(--sp-2); color: var(--color-text); font-size: var(--fs-md); font-weight: 600; }
+.settings-goal-input .field-input { width: 7.5em; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.settings-goal-form .btn { min-height: 44px; }
+.settings-goal-range { margin: var(--sp-1) 0 0; font-size: var(--fs-xs); color: var(--color-text-muted); }
+.settings-goal-msg { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); }
+.settings-goal-msg:empty { display: none; }
+.settings-goal-msg.is-ng { color: var(--color-danger); font-weight: 700; }
+.settings-goal-msg.is-ok { color: var(--color-success); }
+.settings-goal-field .field-input[aria-invalid="true"] { border-color: var(--color-danger); }
+.settings-goal-now { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); }
+
+/* ---------- 設定: 問題の解き方(v12) ---------- */
+.settings-answer-opts { display: grid; gap: var(--sp-1); }
+.settings-answer-opts .check-inline { min-height: 44px; align-items: center; }
+.settings-answer-help { margin: 0 0 var(--sp-2) calc(18px + var(--sp-2)); font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
+.settings-answer-note { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); }
+
+/* ---------- AIに聞く(v12・js/askAi.js) ---------- */
+.ask-ai-btn { min-height: 44px; }
+/* 選択してコピーするための一時的な入力欄(画面の外。iPhone で拡大されないよう 16px) */
+.ask-ai-buffer { position: fixed; top: 0; left: -9999px; width: 1px; height: 1px; padding: 0; border: 0; font-size: 16px; opacity: 0; pointer-events: none; }
+.ask-ai-sheet { display: grid; gap: var(--sp-3); }
+.ask-ai-sheet > p { margin: 0; }
+.ask-ai-status { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-md); background: var(--color-surface-muted); font-size: var(--fs-md); font-weight: 700; color: var(--color-heading); }
+.ask-ai-status-icon { display: inline-grid; flex-shrink: 0; }
+.ask-ai-status.is-ok { background: var(--color-success-bg); color: var(--color-success); }
+.ask-ai-status.is-ng { background: var(--color-warning-bg); color: var(--color-warning); }
+.ask-ai-lead { font-size: var(--fs-md); color: var(--color-text); line-height: var(--lh-snug); }
+/* スマホは縦に1列(2つと1つに分かれないように)、広い画面は横に3つ */
+.ask-ai-links { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+@media (min-width: 480px) { .ask-ai-links { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.ask-ai-link { min-height: 48px; }
+.ask-ai-caution { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--color-text); line-height: var(--lh-snug); }
+.ask-ai-caution .icon { flex-shrink: 0; margin-top: 1px; color: var(--color-warning); }
+.ask-ai-preview summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: var(--fs-md); font-weight: 600; color: var(--color-primary); }
+.ask-ai-text { display: block; min-height: 12em; resize: vertical; font-size: var(--fs-base); line-height: var(--lh-snug); white-space: pre-wrap; }
+.ask-ai-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.ask-ai-actions .btn { min-height: 44px; }
+.ask-ai-privacy { font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
+
+/* ---------- 初回ガイドの「まず1問」では、「勘で当たった」と「AIに聞く」を出さない(1問目は解説を読むことに集中してもらう) ---------- */
+.onb-overlay :is(.quiz-unsure, .quiz-ask-ai) { display: none; }

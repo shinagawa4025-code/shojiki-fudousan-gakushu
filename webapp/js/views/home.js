@@ -4,6 +4,9 @@
 //  暮らし・仕事向け: 今日の1テーマ・目的から選ぶ・続きから・次にやること(気になるテーマの基礎知識)
 // 「次にやること」は弱点分析(Analysis)の優先順を基準にし、同じリンク先のボタンは画面の中で1回だけ出す
 // (今日のメニューに出したリンクは、ヒーロー・次にやることでは重ねない。メニューが終わるまではヒーローの主ボタンも出さない)
+// v12: 今日の学習リングは1日の目標(Goals: 回数か分)、宅建士のヒーローに合格予測の1行(Predict)、「今週やること」(Plan)、
+//      試験日が過ぎて次の目標がないときは残り日数の代わりに「お疲れさまでした」と合格発表の案内(Plan の state 'after')
+//      見込みの試験日(tentative)の目標は、日付を出すところに必ず「見込み」と添える
 window.Views = window.Views || {};
 window.Views.home = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 20 });
@@ -60,6 +63,10 @@ window.Views.home = (function () {
         </label>
       </div>
       <div class="chip-row target-official" data-role="officials" hidden></div>
+      <label class="target-tentative" data-role="tentative-row" hidden>
+        <input type="checkbox" name="tentative">
+        <span>見込みの試験日(公式発表の前)として登録する<small>ホームなどに「見込み」と表示します。発表されたら日付を確かめてください</small></span>
+      </label>
       <label class="field target-form-name">表示名
         <input class="field-input" type="text" name="name" list="exam-name-suggestions" maxlength="40" placeholder="例: 宅建士試験" required value="${editing ? esc(existing.name) : ``}">
         <datalist id="exam-name-suggestions">${NAME_SUGGESTIONS.map((n) => `<option value="${esc(n)}">`).join(``)}</datalist>
@@ -73,6 +80,16 @@ window.Views.home = (function () {
     const nameInput = form.querySelector(`[name="name"]`);
     const dateInput = form.querySelector(`[name="date"]`);
     const officialsEl = form.querySelector(`[data-role="officials"]`);
+    const tentRow = form.querySelector(`[data-role="tentative-row"]`);
+    const tentBox = form.querySelector(`[name="tentative"]`);
+    // 見込みの日付: 見込みの候補を選んだとき・見込みの目標を編集するときだけ、チェックを出す(日付を変えたら外す)
+    let tentDate = editing && existing.tentative === true ? existing.date : ``;
+    function syncTentative() {
+      const on = !!tentDate && dateInput.value === tentDate;
+      tentRow.hidden = !tentDate;
+      if (!on) tentBox.checked = false;
+    }
+    if (tentDate) tentBox.checked = true;
     // 編集時は付けてある名前を勝手に書き換えない
     if (editing) nameInput.dataset.touched = `1`;
     function suggestName() {
@@ -80,35 +97,45 @@ window.Views.home = (function () {
       const t = Stats.examType(typeSel.value);
       nameInput.value = t && t.id !== `other` ? (t.id === `zeirishi` ? `税理士試験(消費税法)` : `宅建士試験`) : ``;
     }
-    // 公式の試験日(まだ来ていないもの)をワンタップで入れる
+    // 公式の試験日(まだ来ていないもの)をワンタップで入れる。公式の日付がまだない試験は、見込みの日付(未発表と明記)も出す
     function paintOfficials() {
-      const list = Stats.officialDates ? Stats.officialDates(typeSel.value) : [];
+      const official = Stats.officialDates ? Stats.officialDates(typeSel.value) : [];
+      const expected = Stats.expectedDates ? Stats.expectedDates(typeSel.value).filter((e) => !official.some((o) => o.date === e.date)) : [];
+      const list = official.map((o) => Object.assign({ tentative: false }, o)).concat(expected);
       officialsEl.hidden = !list.length;
       officialsEl.innerHTML = list.map((o) => {
         const d = DateUtil.parse(o.date);
         const md = d ? `${d.getMonth() + 1}月${d.getDate()}日(${WEEKDAYS[d.getDay()]})` : o.date;
-        return `<button type="button" class="chip chip-small" data-date="${o.date}" aria-pressed="${dateInput.value === o.date}">${ic(`calendar`, 14)}${esc(o.label)} ${md}</button>`;
-      }).join(``);
+        const label = o.tentative ? `${esc(o.label)}(見込み・未発表) ${md}` : `${esc(o.label)} ${md}`;
+        return `<button type="button" class="chip chip-small${o.tentative ? ` chip-tentative` : ``}" data-date="${o.date}"${o.tentative ? ` data-tentative="1"` : ``} aria-pressed="${dateInput.value === o.date}"${o.tentative && o.note ? ` aria-describedby="target-tent-note"` : ``}>${ic(`calendar`, 14)}${label}</button>`;
+      }).join(``) + (expected.length ? `<p class="calc-note target-tent-note" id="target-tent-note">${esc(expected[0].note)}。公式の試験日は発表後に実施機関のサイトで確認してください。</p>` : ``);
       officialsEl.querySelectorAll(`[data-date]`).forEach((b) => b.addEventListener(`click`, () => {
         dateInput.value = b.dataset.date;
         officialsEl.querySelectorAll(`[data-date]`).forEach((x) => x.setAttribute(`aria-pressed`, String(x === b)));
+        if (b.dataset.tentative) { tentDate = b.dataset.date; tentBox.checked = true; }
+        syncTentative();
       }));
     }
     nameInput.addEventListener(`input`, () => { nameInput.dataset.touched = `1`; });
     typeSel.addEventListener(`change`, () => { suggestName(); paintOfficials(); });
-    dateInput.addEventListener(`input`, () => officialsEl.querySelectorAll(`[data-date]`).forEach((x) => x.setAttribute(`aria-pressed`, String(x.dataset.date === dateInput.value))));
+    dateInput.addEventListener(`input`, () => {
+      officialsEl.querySelectorAll(`[data-date]`).forEach((x) => x.setAttribute(`aria-pressed`, String(x.dataset.date === dateInput.value)));
+      syncTentative();
+    });
     suggestName();
     paintOfficials();
+    syncTentative();
 
     const sheet = UI.sheet({ title: editing ? `試験日を編集` : `試験日を登録`, content: form });
     form.addEventListener(`submit`, (e) => {
       e.preventDefault();
       const date = dateInput.value;
       if (!DateUtil.isValid(date)) return;
+      const tentative = !tentRow.hidden && tentBox.checked && date === tentDate;
       if (editing) {
-        Stats.updateTarget(existing.id, { name: nameInput.value, examTypeId: typeSel.value, date });
+        Stats.updateTarget(existing.id, { name: nameInput.value, examTypeId: typeSel.value, date, tentative });
       } else {
-        Stats.addTarget({ name: nameInput.value, examTypeId: typeSel.value, date });
+        Stats.addTarget({ name: nameInput.value, examTypeId: typeSel.value, date, tentative });
       }
       sheet.close();
       UI.toast(editing ? `試験日を更新しました` : `試験日を登録しました`, `success`);
@@ -141,7 +168,7 @@ window.Views.home = (function () {
   }
 
   // ---- 画面全体で1回だけ集計する ----
-  function buildContext() {
+  function buildContext(light) {
     const profile = Stats.getProfile ? Stats.getProfile() : null;
     const target = Stats.primaryTarget();
     const type = target ? Stats.examType(target.examTypeId) : null;
@@ -166,7 +193,7 @@ window.Views.home = (function () {
       }
     }
     const activeDays = Streak.totalActiveDays();
-    return {
+    const ctx = {
       profile,
       target,
       type,
@@ -187,6 +214,21 @@ window.Views.home = (function () {
       streak: Streak.getCurrentStreak(),
       todayCount: Streak.todayCount ? Streak.todayCount() : Streak.countOf(Storage.get(`activityLog`, {})[DateUtil.today()]),
     };
+    // v12: 1日の目標・学習計画・合格予測(どれも保存値だけの軽い計算。計画には上で作った弱点分析をそのまま渡す)
+    // ほかの画面から使うとき(oxLink・menuOptions)は要らないので作らない
+    if (light) return ctx;
+    ctx.goal = window.Goals && Goals.today ? safe(() => Goals.today(), null) : null;
+    ctx.plan = window.Plan && Plan.current ? safe(() => Plan.current({ snap, cardsPerDay: ctx.due + ctx.newAvail }), null) : null;
+    ctx.predict = ctx.variant === `exam` && ctx.typeId === `takken` && window.Predict && Predict.estimate ? safe(() => Predict.estimate(), null) : null;
+    return ctx;
+  }
+
+  // 新しい部品(目標・計画・予測)が失敗しても、ホームはこれまでどおり表示する
+  function safe(fn, fallback) {
+    try { return fn(); } catch (e) {
+      console.error(`[ホーム] 表示の一部を作れませんでした`, e);
+      return fallback;
+    }
   }
 
   function snapCtx(ctx) {
@@ -370,17 +412,27 @@ window.Views.home = (function () {
       ${inner}`);
   }
 
-  // 今日の学習リング(今日の学習記録の回数 / 10)
-  function ringHtml(n) {
-    const count = Math.max(0, Math.floor(num(n)));
+  // 今日の学習リング: 1日の目標(Goals.today() = { kind: 回数|分, value, done, met })。目標の仕組みがなければ今日の学習回数 / 10
+  function ringGoal(ctx) {
+    if (ctx.goal && Number.isFinite(Number(ctx.goal.value)) && ctx.goal.value > 0) return ctx.goal;
+    return { kind: `actions`, value: DAILY_GOAL, done: ctx.todayCount, met: ctx.todayCount >= DAILY_GOAL };
+  }
+
+  function ringHtml(g) {
+    const goal = Math.max(1, Math.floor(num(g.value)));
+    const count = Math.max(0, Math.floor(num(g.done)));
+    const minutes = g.kind === `minutes`;
     const C = 2 * Math.PI * 36;
-    const shown = Math.min(count, DAILY_GOAL);
-    const reached = count >= DAILY_GOAL;
-    const fill = shown ? `<circle class="ring-fill" cx="42" cy="42" r="36" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - shown / DAILY_GOAL)).toFixed(1)}"/>` : ``;
+    const shown = Math.min(count, goal);
+    const reached = !!g.met;
+    const fill = shown ? `<circle class="ring-fill" cx="42" cy="42" r="36" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - shown / goal)).toFixed(1)}"/>` : ``;
+    // 分の目標は「12/30分」。数字が長くなる(3桁)ときは小さくする
+    const unit = minutes ? `分` : ``;
+    const long = String(shown).length + String(goal).length >= 5;
     return `
-      <div class="ring${reached ? ` is-done` : ``}" role="img" aria-label="今日の学習 ${count}/${DAILY_GOAL}">
+      <div class="ring${reached ? ` is-done` : ``}${long ? ` is-long` : ``}" role="img" aria-label="今日の学習 ${minutes ? `${count}分/目標${goal}分` : `${count}/${goal}`}${reached ? `(目標達成)` : ``}">
         <svg viewBox="0 0 84 84" aria-hidden="true"><circle class="ring-track" cx="42" cy="42" r="36"/>${fill}</svg>
-        <div class="ring-label" aria-hidden="true"><div>${reached ? `<strong>達成</strong>` : `<strong>${shown}<small>/${DAILY_GOAL}</small></strong>`}<small>今日</small></div></div>
+        <div class="ring-label" aria-hidden="true"><div>${reached ? `<strong>達成</strong>` : `<strong>${shown}<small>/${goal}${unit}</small></strong>`}<small>今日</small></div></div>
       </div>`;
   }
 
@@ -408,26 +460,37 @@ window.Views.home = (function () {
     let p = null;
     let meta;
     let afterMeta = ``;
+    let predict = ``;
     if (target) {
       p = Stats.pace(target);
       const date = shortDate(target.date, true);
+      // 見込み(公式発表前)の試験日は、日付のそばに必ず「見込み」と出す
+      const tent = target.tentative === true ? tentativeTag() : ``;
       if (p.daysLeft > 0) {
         // paceLine はアプリが作る数値と定型文だけ(利用者の入力を含まない)なので、句切りで折り返すよう HTML で組む
         let paceLine = ``;
         if (p.remaining > 0) paceLine = `<span class="nowrap">残り${p.remaining}項目</span>・<span class="nowrap">1日${p.perDay}項目ペース</span>${p.buffer ? `<span class="nowrap">(直前${p.buffer}日は総復習用)</span>` : ``}`;
         else if (p.total > 0) paceLine = `範囲はすべて学習済み。復習と解き直しで仕上げましょう`;
         meta = `
-          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}まで</span></p>
+          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}まで</span>${tent}</p>
           <p class="hero2-days"><strong class="num">${p.daysLeft}</strong>日</p>
-          <p class="hero2-sub"><span class="nowrap">${date}</span>${paceLine ? `・${paceLine}` : ``}</p>`;
+          <p class="hero2-sub"><span class="nowrap">${date}${target.tentative === true ? `(見込み)` : ``}</span>${paceLine ? `・${paceLine}` : ``}</p>`;
+        predict = predictLine(ctx);
       } else if (p.daysLeft === 0) {
         meta = `
-          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}</span></p>
+          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}</span>${tent}</p>
           <p class="hero2-days"><strong>今日</strong></p>
           <p class="hero2-sub">今日が試験日です。落ち着いて、がんばってください</p>`;
+      } else if (ctx.plan && ctx.plan.state === `after`) {
+        // 試験の後(次の目標なし): 残り日数の代わりに、お疲れさまでした・合格発表の案内・次の目標の登録
+        meta = `
+          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}</span>${tent}</p>
+          <p class="hero2-days is-after"><strong>お疲れさまでした</strong></p>
+          <p class="hero2-sub">${date}の試験から${-p.daysLeft}日</p>`;
+        afterMeta = afterHtml(ctx.plan);
       } else {
         meta = `
-          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}</span></p>
+          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}</span>${tent}</p>
           <p class="hero2-days is-ended"><strong>終了</strong></p>
           <p class="hero2-sub">${date}・${-p.daysLeft}日前に終了</p>`;
         afterMeta = `<button type="button" class="link-btn hero2-link" data-role="add-target">${ic(`calendar`, 16)}次の目標を登録</button>`;
@@ -447,15 +510,20 @@ window.Views.home = (function () {
       // 目的は試験だが、試験日が未登録
       const t = Stats.examType(ctx.typeId);
       const officials = Stats.officialDates ? Stats.officialDates(ctx.typeId) : [];
-      const o = officials[0] || null;
+      // 公式の試験日がまだ発表されていない(今年の試験が終わった)ときは、次の年度の見込みの日付を「見込み・未発表」と明記して出す
+      const expected = !officials.length && Stats.expectedDates ? Stats.expectedDates(ctx.typeId) : [];
+      const o = officials[0] || expected[0] || null;
+      const oLabel = o ? `${esc(o.label)}${o.tentative ? `(見込み・未発表)` : ``} ${o.tentative ? DateUtil.toJapanese(o.date, true) : shortDate(o.date, true)}で登録` : ``;
       meta = `
         <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(t ? `${t.shortName}試験` : `試験`)}の対策</span></p>
         <p class="hero2-sub hero2-sub-lead">試験日を登録すると、残り日数と1日の学習量の目安を表示します</p>`;
       afterMeta = `
         <div class="hero2-target-actions">
-          ${o ? `<button type="button" class="chip chip-small" data-role="official" data-date="${o.date}">${ic(`calendar`, 14)}${esc(o.label)} ${shortDate(o.date, true)}で登録</button>` : ``}
+          ${o ? `<button type="button" class="chip chip-small${o.tentative ? ` chip-tentative` : ``}" data-role="official" data-date="${o.date}"${o.tentative ? ` data-tentative="1"` : ``}>${ic(`calendar`, 14)}${oLabel}</button>` : ``}
           <button type="button" class="link-btn hero2-link" data-role="add-target">${ic(`calendar`, 16)}${o ? `別の日付で登録` : `試験日を登録`}</button>
-        </div>`;
+        </div>
+        ${o && o.tentative ? `<p class="calc-note hero2-tent-note">${esc(o.note || `見込み・未発表`)}。公式の試験日が発表されたら、設定で日付を確かめてください。</p>` : ``}`;
+      predict = predictLine(ctx);
     }
 
     // 主ボタンは今日の復習(はじめての人は最初の用語)、残っていなければ弱点分析の最優先。小さいタイルは○×と次の学習
@@ -509,9 +577,10 @@ window.Views.home = (function () {
     const others = Stats.listTargets().filter((t) => !target || t.id !== target.id);
     card.innerHTML = `
       <div class="hero2-head">
-        ${ringHtml(ctx.todayCount)}
+        ${ringHtml(ringGoal(ctx))}
         <div class="hero2-meta">${meta}</div>
       </div>
+      ${predict}
       ${afterMeta}
       ${doneLine}
       ${primary ? ctaHtml(primary) : ``}
@@ -520,19 +589,98 @@ window.Views.home = (function () {
       ${others.length ? `<div class="chip-row hero-others">${others.map((t) => {
         const d = DateUtil.diffDays(today, t.date);
         const left = Number.isFinite(d) && d >= 0 ? `あと${d}日` : `終了`;
-        return `<a class="chip chip-small chip-muted" href="#settings/targets" aria-label="${esc(t.name)} ${left}(設定でホームに表示する試験を切り替え)">${esc(t.name)} ${left}</a>`;
+        const name = `${t.name}${t.tentative === true ? `(見込み)` : ``}`;
+        return `<a class="chip chip-small chip-muted" href="#settings/targets" aria-label="${esc(name)} ${left}(設定でホームに表示する試験を切り替え)">${esc(name)} ${left}</a>`;
       }).join(``)}</div>` : ``}`;
     card.querySelectorAll(`[data-role="add-target"]`).forEach((b) => b.addEventListener(`click`, () => openTargetForm(rerender, null, { examTypeId: ctx.typeId })));
     const official = card.querySelector(`[data-role="official"]`);
     if (official) {
       official.addEventListener(`click`, () => {
         const typeId = ctx.typeId || `takken`;
-        Stats.addTarget({ name: typeId === `zeirishi` ? `税理士試験(消費税法)` : `宅建士試験`, examTypeId: typeId, date: official.dataset.date, primary: true });
-        UI.toast(`試験日を登録しました`, `success`);
+        const tentative = official.dataset.tentative === `1`;
+        Stats.addTarget({ name: typeId === `zeirishi` ? `税理士試験(消費税法)` : `宅建士試験`, examTypeId: typeId, date: official.dataset.date, primary: true, tentative });
+        UI.toast(tentative ? `見込みの試験日で登録しました` : `試験日を登録しました`, `success`);
         rerender();
       });
     }
+    if (ctx.plan && ctx.plan.state === `after`) wireAfter(card, ctx.plan, rerender);
     return card;
+  }
+
+  // 「見込み」の小さな札(公式発表前の試験日)
+  function tentativeTag() {
+    return `<span class="tag-tentative" title="公式発表前の見込みの試験日">見込み</span>`;
+  }
+
+  // ---- 合格予測の1行(宅建士。js/predict.js。数字はアプリ独自の推定と明記する) ----
+  function predictLine(ctx) {
+    const r = ctx.predict;
+    if (!r) return ``;
+    if (r.status === `ok`) {
+      return `
+        <a class="hero-predict" href="#progress/predict">${ic(`chart`, 16)}
+          <span>合格予測<small>(アプリ独自の推定)</small> <strong class="num nowrap">${r.low}〜${r.high}点</strong>${r.exempt ? `<small class="nowrap">(5問免除)</small>` : ``}</span>
+          ${ic(`chevron-right`, 16)}
+        </a>`;
+    }
+    return `
+      <a class="hero-predict is-pending" href="#progress/predict">${ic(`chart`, 16)}
+        <span>合格予測: 4択をあと<strong class="num">${r.need}</strong>問解くと表示</span>
+        ${ic(`chevron-right`, 16)}
+      </a>`;
+  }
+
+  // ---- 試験の後(Plan.current().state === 'after'): 合格発表の案内・次の目標の登録 ----
+  // ホームのヒーローと学習計画の画面(js/views/plan.js)で同じものを使う。wireAfter でボタンを動かす
+  function afterHtml(plan) {
+    const a = (plan && plan.after) || {};
+    const res = a.results;
+    const today = DateUtil.today();
+    let resLine = ``;
+    if (res && res.url) {
+      const when = res.date ? `${shortDate(res.date, true)}${res.time ? ` ${res.time}` : ``}` : ``;
+      // 発表日の当日は時刻の前後どちらでも読めるように「今日(…)」。年が変わってから見るときは年も付ける
+      const text = res.date && res.date === today ? `合格発表は<strong class="nowrap">今日(${esc(when)})</strong>です。`
+        : res.date && res.date > today ? `合格発表は<strong class="nowrap">${esc(when)}</strong>の予定です。`
+          : res.date ? `合格発表は${esc(res.date.slice(0, 4) === today.slice(0, 4) ? shortDate(res.date, true) : DateUtil.toJapanese(res.date, true))}に行われました。`
+            : `合格発表の日程と結果は、実施機関のサイトで確認できます。`;
+      resLine = `
+        <p class="after-result">${ic(`calendar`, 16)}
+          <span>${text}<a class="after-link" href="${esc(res.url)}" target="_blank" rel="noopener noreferrer">${esc(res.org || `実施機関`)}のサイト${ic(`external`, 14)}<span class="sr-only">(新しいタブで開きます)</span></a></span>
+        </p>`;
+    }
+    // 次の目標の候補: 公式の試験日 > 見込みの日付(「見込み・未発表」と明記)
+    const next = a.official || a.next || null;
+    const nextBtn = next ? `
+      <button type="button" class="btn btn-secondary after-next" data-role="after-next" data-date="${esc(next.date)}" data-type="${esc(next.examTypeId)}"${next.tentative ? ` data-tentative="1"` : ``}>
+        ${ic(`calendar`, 18)}
+        <span class="after-next-text">
+          <span class="after-next-title">${esc(next.label)}で次の目標を登録</span>
+          <small>${DateUtil.toJapanese(next.date, true)}${next.tentative ? `・${esc(next.note || `見込み・未発表`)}` : ``}</small>
+        </span>
+      </button>` : ``;
+    return `
+      <div class="after-panel">
+        ${resLine}
+        ${nextBtn}
+        ${next && next.tentative ? `<p class="calc-note after-note">見込みの日付で登録すると「見込み」と表示します。公式の試験日が発表されたら、設定で日付を確かめてください。</p>` : ``}
+        <button type="button" class="link-btn hero2-link" data-role="after-add">${ic(`calendar`, 16)}${next ? `別の日付で次の目標を登録` : `次の目標を登録`}</button>
+      </div>`;
+  }
+
+  function wireAfter(root, plan, onChange) {
+    const btn = root.querySelector(`[data-role="after-next"]`);
+    if (btn) {
+      btn.addEventListener(`click`, () => {
+        const typeId = btn.dataset.type && Stats.examType(btn.dataset.type) ? btn.dataset.type : plan.examTypeId;
+        const tentative = btn.dataset.tentative === `1`;
+        Stats.addTarget({ name: typeId === `zeirishi` ? `税理士試験(消費税法)` : `宅建士試験`, examTypeId: typeId, date: btn.dataset.date, primary: true, tentative });
+        UI.toast(tentative ? `見込みの試験日で登録しました` : `試験日を登録しました`, `success`);
+        if (onChange) onChange();
+      });
+    }
+    const add = root.querySelector(`[data-role="after-add"]`);
+    if (add) add.addEventListener(`click`, () => openTargetForm(onChange, null, { examTypeId: plan.examTypeId }));
   }
 
   // ---- 暮らし・仕事向けのヒーロー(今日の1テーマ) ----
@@ -642,14 +790,53 @@ window.Views.home = (function () {
     return null;
   }
 
-  function nextSectionExam(ctx, used, withLink) {
-    const rows = studyActions(ctx).filter((a) => !used.has(a.nav) && !sameOxCatUsed(used, a) && !(a.kind === `ox-try` && used.has(`kind:ox`)) && !(a.kind === `exam` && used.has(`kind:exam`))).slice(0, 3).map((a) => {
+  // planNavs: 今週やること(下の planRows)に出す行き先。同じ行き先(問題数だけ違う分野の○×も)は次にやることに重ねない
+  function nextSectionExam(ctx, used, withLink, planNavs) {
+    const inPlan = (a) => !!planNavs && (planNavs.has(a.nav) || sameOxCatUsed(planNavs, a));
+    const rows = studyActions(ctx).filter((a) => !used.has(a.nav) && !sameOxCatUsed(used, a) && !inPlan(a) && !(a.kind === `ox-try` && used.has(`kind:ox`)) && !(a.kind === `exam` && used.has(`kind:exam`))).slice(0, 3).map((a) => {
       used.add(a.nav);
       if (a.kind === `exam`) used.add(`kind:exam`);
       return { nav: a.nav, icon: a.icon, warn: isWeakKind(a), title: verbTitle(ctx, a), sub: a.detail || `` };
     });
     if (!rows.length) return null;
     return sectionEl(`次にやること`, withLink ? { nav: `#progress/weak`, label: `弱点分析` } : null, `<div class="list-group">${rows.map(listRowHtml).join(``)}</div>`, `home-next`);
+  }
+
+  // ---- 今週やること(試験向け。js/plan.js の上位3つ) ----
+  // 1週間の量(問題数・分)の目安。学習計画の画面の並びの上位3つを出す。
+  // ただし毎日の習慣の作業(今日の復習・間違えた4択・間違えた○×の解き直し)で、今日のメニュー(またはヒーローの主ボタン)が
+  // もう同じ行き先を案内しているものは、ホームでは重ねずに次の作業を出す(学習計画の画面にはすべて出る)。
+  // 分野の作業は「今週の量」の案内なので、メニュー・ヒーローと行き先が近くても出す。ここでは used に足さない
+  const PLAN_ICONS = { exam: `timer`, drill: `repeat`, 'ox-weak': `o-x`, review: `layers`, basic: `book-open`, quiz: `pencil-check`, ox: `o-x` };
+  const PLAN_HABIT = { review: [`#review`], drill: [`#quiz/due`], 'ox-weak': [`#ox/weak`] };
+  function planRows(ctx, used) {
+    const plan = ctx.plan;
+    if (!plan || plan.state !== `before` || !Array.isArray(plan.week) || !plan.week.length || !plan.phase) return [];
+    const all = plan.week.filter((it) => it && typeof it.href === `string`);
+    const shown = (it) => (PLAN_HABIT[it.kind] || []).some((nav) => used.has(nav) || used.has(it.href));
+    let list = all.filter((it) => !shown(it));
+    if (!list.length) list = all;
+    return list.slice(0, 3).map((it) => (
+      { nav: it.href, icon: PLAN_ICONS[it.kind] || `lightbulb`, title: it.label, sub: `${it.sub ? `${it.sub}・` : ``}今週 約${hoursText(it.minutes)}` }
+    ));
+  }
+
+  function planSection(ctx, rows) {
+    const plan = ctx.plan;
+    if (!rows || !rows.length) return null;
+    // 試験日まで7日を切ったら、学習計画の画面と同じく「試験日までのn日の目安」
+    const span = plan.budget && plan.budget.days < 7 ? `試験日までの${plan.budget.days}日の目安` : `1週間の目安`;
+    const sec = sectionEl(`今週やること`, { nav: `#plan`, label: `学習計画を見る` }, `
+      <p class="home-plan-phase">${ic(plan.phase.icon || `flag`, 16)}<span>いまは<strong>${esc(plan.phase.name)}</strong>の時期・${span} 約${esc(hoursText(plan.budget ? plan.budget.week : 0))}</span></p>
+      <div class="list-group">${rows.map(listRowHtml).join(``)}</div>`, `home-plan`);
+    return sec;
+  }
+
+  // 95分 → 1時間35分
+  function hoursText(min) {
+    const m = Math.max(0, Math.round(num(min)));
+    if (m < 60) return `${m}分`;
+    return `${Math.floor(m / 60)}時間${m % 60 ? `${m % 60}分` : ``}`;
   }
 
   function nextSectionGeneral(ctx, plan, used) {
@@ -813,8 +1000,17 @@ window.Views.home = (function () {
     const mcCount = window.APP_DATA && Array.isArray(APP_DATA.quiz) ? APP_DATA.quiz.filter(isMc).length : 0;
     // 以前から使っている人は学ぶ目的が未設定(ホームは暮らし向けの表示になる)ので、設定の場所を案内する
     const profileHint = Stats.getProfile && !Stats.getProfile() ? `<a href="#settings/profile">学ぶ目的</a>(宅建士試験・暮らし・仕事・税理士試験)を選ぶと、ホームのおすすめが目的に合わせて変わります` : ``;
-    // v11 以降(onboarding.js の WHATS_NEW を上げたとき)は、苦手を自動で潰す仕組みを中心に案内する
-    const items = version !== `v10` ? [
+    const styledCount = window.APP_DATA && Array.isArray(APP_DATA.quiz) ? APP_DATA.quiz.filter((q) => isMc(q) && q.style).length : 0;
+    // v12(onboarding.js の WHATS_NEW を v12 にしたとき): 合格予測・学習計画・学習時間と目標・バッジ・個数問題など
+    const items = version === `v12` ? [
+      mcCount >= 300 ? `4択問題を約${Math.round(mcCount / 50) * 50}問に増やしました${styledCount ? `(本試験と同じ形式の「個数問題」「組合せ問題」${styledCount}問を含む)` : ``}` : ``,
+      `<a href="#progress/predict">合格予測</a>を追加しました。最近の4択・模擬試験の分野別の正答率から、得点の見込みを幅つきで表示します(アプリ独自の推定です)`,
+      `試験日から逆算した<a href="#plan">学習計画</a>を追加しました。いまの時期と「今週やること」がホームにも出ます`,
+      `1日の目標(回数か学習時間)と、<a href="#progress/time">学習時間</a>・<a href="#progress/badges">バッジ</a>を追加しました`,
+      `4択で正解しても自信がなかったときは「勘で当たった」を押すと、3日後の解き直しに入ります`,
+      profileHint,
+    ].filter(Boolean) : version !== `v10` ? [
+      // v11: 苦手を自動で潰す仕組みを中心に案内する
       name ? `アプリの名前を「${esc(name)}」に変えました(商標の確認によるものです)。URL・学習の記録はそのままです` : ``,
       `ホームの一番上に<strong>今日のメニュー(約15分)</strong>を追加しました。復習・解き直し・苦手の○×・新しい基礎知識を順に案内し、終わった手順にチェックが付きます`,
       `間違えた4択を1→3→7→21日後に出し直す<a href="#quiz/due">解き直し</a>を追加しました(4択・模擬試験・○×で間違えた問題が対象)`,
@@ -1076,7 +1272,10 @@ window.Views.home = (function () {
       place(main, examHero(ctx, used), 1);
       news.forEach((n) => place(main, n, 2));
       place(side, weekCard(ctx), 3);
-      place(main, nextSectionExam(ctx, used, !analysis), 4);
+      // 今週やること: 次にやることのあと。PCでは右の列。行き先は次にやることより先に決め、次にやることでは重ねない
+      const week = safe(() => planRows(ctx, used), []);
+      place(main, nextSectionExam(ctx, used, !analysis, new Set(week.map((r) => r.nav))), 4);
+      place(side, safe(() => planSection(ctx, week), null), 4);
       place(side, analysis, 5);
       place(side, examCard(ctx, used), 6);
     } else {
@@ -1144,16 +1343,16 @@ window.Views.home = (function () {
 
   // 今日の復習の完了画面などから使う: ホームの「○×で10問」と同じリンク { nav, label, scope }
   function oxLinkNow() {
-    try { return oxLink(buildContext()); } catch (e) { return { nav: `#ox`, label: `○×一問一答`, scope: `` }; }
+    try { return oxLink(buildContext(true)); } catch (e) { return { nav: `#ox`, label: `○×一問一答`, scope: `` }; }
   }
 
   // 解き直しの結果などの「次のメニュー」から使う: ホームの今日のメニューと同じ条件(Recommend.todayMenu の opts)。作れなければ undefined
   function menuOptionsNow() {
     try {
-      const ctx = buildContext();
+      const ctx = buildContext(true);
       return menuOptions(ctx, ctx.variant === `exam` ? null : generalPlan(ctx));
     } catch (e) { return undefined; }
   }
 
-  return { render, openTargetForm, oxLink: oxLinkNow, menuOptions: menuOptionsNow };
+  return { render, openTargetForm, oxLink: oxLinkNow, menuOptions: menuOptionsNow, afterHtml, wireAfter, tentativeTag, hoursText };
 })();

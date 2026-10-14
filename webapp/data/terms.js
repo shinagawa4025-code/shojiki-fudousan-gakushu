@@ -120,7 +120,7 @@ window.APP_DATA.terms = [
     relatedEpisodes: [`21-22`] },
   { id: `term29`, name: `三為業者(第三者のためにする契約)`, aliases: [`三為業者`, `第三者のためにする契約`], level: `上級`, source: `episode`, topicIds: [`topicF`], sources: [`src12`], lawRef: `民法537条〜539条(第三者のためにする契約)`,
     simpleExplanation: `転売目的で物件を安く仕入れ、決済と同時に別の買主へ転売する業者`,
-    deepDive: `登記を一度も自分名義にしないため税負担を押えられる一方、悪質な高値転売に使われることもある`,
+    deepDive: `登記を一度も自分名義にしないため税負担を抑えられる一方、悪質な高値転売に使われることもある`,
     relatedEpisodes: [`49-50`] },
   { id: `term30`, name: `地面師`, aliases: [], level: `上級`, source: `episode`, topicIds: [`topicG`], sources: [`src10`], lawRef: `刑法246条(詐欺)、刑法155条(公文書偽造)・158条(偽造公文書行使)、刑法159条(私文書偽造)`,
     simpleExplanation: `他人の土地の所有者になりすまして偽造の書類で売却し、代金をだまし取る詐欺集団`,

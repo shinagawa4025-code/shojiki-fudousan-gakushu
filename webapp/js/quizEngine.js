@@ -3,6 +3,8 @@
 //
 // 問題オブジェクト:
 // { key, kind:'term'|'fixed', refId, termId, level, type, stem, choices:[{text, correct}], explanation, term }
+// 固定問題(fromFixedMc)はさらに ask・style・statements を持つ。個数問題・組合せ問題(style: 'count' | 'combo')は
+// statements: [{ key, label, text, truth, note }](記述ア〜エ)を持ち、選択肢も記述も並べ替えない
 window.QuizEngine = (function () {
   function shuffle(arr) {
     const a = arr.slice();
@@ -463,19 +465,98 @@ window.QuizEngine = (function () {
       && Number.isInteger(item.correctIndex) && item.correctIndex >= 0 && item.correctIndex < 4;
   }
 
+  // ===== 個数問題・組合せ問題(style: 'count' | 'combo') =====
+  // 記述ア〜エ(stmts)の正誤(stmtTruths)と注(stmtNotes)を問題が持ち、選択肢は「一つ〜四つ」か「ア、イ」のような記号の組。
+  // ○×一問一答には記述ア〜エが「問題ID#s0」〜「#s3」の文として出る(選択肢の番号の「#0」〜「#3」と重ならないように)
+  // (画面からも読むので、書き換えられないようにしておく)
+  const STMT_LABELS = Object.freeze([`ア`, `イ`, `ウ`, `エ`]);
+  const COUNT_CHOICES = Object.freeze([`一つ`, `二つ`, `三つ`, `四つ`]);
+
+  function styleOf(item) {
+    const s = item && typeof item === `object` ? item.style : null;
+    return s === `count` || s === `combo` ? s : null;
+  }
+
+  // 組合せの選択肢の文字(「ア、イ」「ウ・エ」など)→ 記述の番号の配列(昇順・重複なし)。読めなければ []
+  // (選択肢ごとに番号の配列を持たせると、公開用ビルドが同じ配列の共有を拒むので、文字から読む)
+  function parseCombo(text) {
+    const s = String(text == null ? `` : text).normalize(`NFKC`).trim();
+    if (!s) return [];
+    const parts = s.split(/\s*[、,・]\s*|\s*と\s*|\s+/);
+    const out = [];
+    for (const p of parts) {
+      const i = STMT_LABELS.indexOf(p);
+      if (i < 0 || out.includes(i)) return [];
+      out.push(i);
+    }
+    return out.sort((a, b) => a - b);
+  }
+
+  // 個数・組合せの問題で、記述ア〜エが○×の文として使える形か(stmts は公開版の本体では仮の値だが、数と型は同じ)
+  function styledTruths(item) {
+    if (!styleOf(item) || !isMcItem(item)) return null;
+    const st = item.stmts;
+    const tr = item.stmtTruths;
+    if (!Array.isArray(st) || st.length !== 4 || st.some((s) => typeof s !== `string` || !s)) return null;
+    if (!Array.isArray(tr) || tr.length !== 4 || tr.some((t) => typeof t !== `boolean`)) return null;
+    return tr.slice();
+  }
+
+  // ○×の文を作れる問題か(正誤判定型の4択、または個数・組合せの問題)
+  function hasStatements(item) {
+    return !!(styleOf(item) ? styledTruths(item) : statementTruths(item));
+  }
+
+  // 個数・組合せの問題の答えの検算: { ok, expected, matching, problem }
+  // matching = 問われている側(ask が correct なら正しい記述、incorrect なら誤っている記述)の番号
+  // 個数: 当てはまる数が1〜4で、correctIndex = 数 − 1。組合せ: 当てはまる記述がちょうど2つで、その組の選択肢がちょうど1つ
+  // (選択肢は公開版の本体でも仮の値にしない(tools/lib/split.js)ので、詳細が届く前でも同じ結果になる)
+  function styledAnswer(item) {
+    const style = styleOf(item);
+    const truths = styledTruths(item);
+    const res = (expected, matching, problem) => ({ ok: !problem && expected === item.correctIndex, expected, matching, problem: problem || `` });
+    if (!style || !truths) return res(-1, [], `個数・組合せの問題の形になっていない`);
+    if (item.ask !== `correct` && item.ask !== `incorrect`) return res(-1, [], `ask が correct / incorrect ではない`);
+    const want = item.ask === `correct`;
+    const matching = [];
+    truths.forEach((t, i) => { if (t === want) matching.push(i); });
+    if (style === `count`) {
+      if (!matching.length) return res(-1, matching, `当てはまる記述が0個(個数問題の答えは一つ〜四つ)`);
+      return res(matching.length - 1, matching, ``);
+    }
+    if (matching.length !== 2) return res(-1, matching, `当てはまる記述が${matching.length}個(組合せ問題はちょうど2つ)`);
+    const key = matching.join(`,`);
+    const hits = [];
+    item.choices.forEach((c, i) => { if (parseCombo(c).join(`,`) === key) hits.push(i); });
+    if (hits.length !== 1) return res(-1, matching, `当てはまる組(${matching.map((i) => STMT_LABELS[i]).join(`、`)})の選択肢が${hits.length}個`);
+    return res(hits[0], matching, ``);
+  }
+
   // 公開版で、詳細(選択肢・解説)が届く前に呼ばれたことを記録する(画面は詳細を待ってから描くので、通常は起きない)
   function noteEarly(where) {
     if (window.AppData && AppData.note && AppData.hasDetail && !AppData.hasDetail()) AppData.note(where);
   }
 
   // 4択形式の固定問題(data/quiz.js の format:'mc')を問題オブジェクトに変換
+  // 個数・組合せの問題は、選択肢(一つ〜四つ・記号の組)も記述ア〜エも並べ替えない(順番そのものが意味を持つため)。
+  // その場合の選択肢は note: ''・truth: null で、記述ごとの正誤と注は statements に入る。
+  // 知らない style の問題(データの誤り。js/dataIndex.js が知らせる)も、選択肢が記号の組などのことがあるので並べ替えない
   function fromFixedMc(item, opts) {
     opts = opts || {};
     if (!isMcItem(item)) return null;
     noteEarly(`QuizEngine.fromFixedMc`);
+    const style = styleOf(item);
     const truths = statementTruths(item);
-    const notes = cleanNotes(item.choiceNotes, !!truths);
+    const notes = style ? null : cleanNotes(item.choiceNotes, !!truths);
     const choices = item.choices.map((text, i) => ({ text, correct: i === item.correctIndex, note: notes ? notes[i] : ``, truth: truths ? truths[i] : null }));
+    let statements = null;
+    if (style) {
+      const st = styledTruths(item);
+      if (st) {
+        const stNotes = cleanNotes(item.stmtNotes, true);
+        statements = item.stmts.map((text, i) => ({ key: `${item.id}#s${i}`, label: STMT_LABELS[i], text, truth: st[i], note: stNotes ? stNotes[i] : `` }));
+      }
+    }
     return {
       key: `quiz:${item.id}`,
       kind: `fixed`,
@@ -484,10 +565,12 @@ window.QuizEngine = (function () {
       level: item.level,
       type: `mc`,
       stem: item.question,
-      choices: opts.keepOrder ? choices : shuffle(choices),
+      choices: opts.keepOrder || item.style != null ? choices : shuffle(choices),
       explanation: item.explanation || item.answer || ``,
       term: item.relatedTermId ? AppIndex.termsById[item.relatedTermId] || null : null,
       ask: item.ask || null,
+      style,
+      statements,
     };
   }
 
@@ -502,17 +585,20 @@ window.QuizEngine = (function () {
   }
 
   // 正誤判定型(ask: 'correct' = 正しいものを選ぶ / 'incorrect' = 誤っているものを選ぶ)の各選択肢の正誤
+  // 個数・組合せの問題(style あり)は、選択肢(一つ〜四つ・記号の組)が文ではないので null(記述ア〜エの正誤は stmtTruths)。
+  // 知らない style の問題も、選択肢を○×の文にしない(データの誤りは js/dataIndex.js が知らせる)
   function statementTruths(item) {
-    if (!isMcItem(item) || (item.ask !== `correct` && item.ask !== `incorrect`)) return null;
+    if (!isMcItem(item) || (item.ask !== `correct` && item.ask !== `incorrect`) || item.style != null) return null;
     return item.choices.map((_, i) => (item.ask === `correct` ? i === item.correctIndex : i !== item.correctIndex));
   }
 
   // 4択問題の問いかけから「〜に関する記述(民法の規定によれば)」の形で前提を取り出す(○×一問一答・弱点分析で表示)
   // 「正しいもの/誤っているもの/最も適当なもの」は文の正誤の手がかりになるため含めない
   // 「どれか。」の後ろの補足(「なお、…ものとする。」)は前提として残す。形が合わなければ空文字
+  // 個数問題「…正しいものはいくつあるか。」・組合せ問題「…正しいものの組合せはどれか。」も同じ形で取り出す
   function stemContext(question) {
     const q = String(question || ``).trim();
-    const m = q.match(/^([\s\S]+?)次の記述のうち、?([\s\S]*?)(?:最も)?(?:正しい|誤っている|誤りである|適切な|不適切な|適当な|不適当な)もの(?:はどれか|を選べ)?(?:。|$)([\s\S]*)$/);
+    const m = q.match(/^([\s\S]+?)次の記述のうち、?([\s\S]*?)(?:最も)?(?:正しい|誤っている|誤りである|適切な|不適切な|適当な|不適当な)もの(?:はどれか|を選べ|はいくつあるか|の組合せはどれか|の組み合わせはどれか)?(?:。|$)([\s\S]*)$/);
     if (!m) return ``;
     const head = m[1].trim();
     const qual = m[2].replace(/[、,]\s*$/, ``).trim();
@@ -522,9 +608,12 @@ window.QuizEngine = (function () {
 
   // ○×一問一答用: 正誤判定型の4択問題を1文ずつの○×問題に分解する
   // 戻り値: [{ id: 'quiz-K-01#2', quizId, index, text, truth, note, context, termId, level, topicIds }]
+  // 個数・組合せの問題は記述ア〜エを分解する:
+  //   [{ id: 'quiz-K4-007#s0', quizId, index(0〜3 = ア〜エ), label: 'ア', sub: true, text, truth, note, context, termId, level, topicIds }]
   // note(選択肢ごとの解説)と context(問いかけの前提)は使うときに作る(ホームの集計では id・正誤・分野しか使わないため)。
   // どちらも同じ問題の4つの文で1回だけ作り、作った値を覚えておく。項目の順と値は、すぐに作った場合と同じ(JSON にしても同じ)
   function statementsFrom(item) {
+    if (styleOf(item)) return styledStatementsFrom(item);
     const truths = statementTruths(item);
     if (!truths) return [];
     let notes;
@@ -541,6 +630,36 @@ window.QuizEngine = (function () {
       id: `${item.id}#${i}`,
       quizId: item.id,
       index: i,
+      text,
+      truth: truths[i],
+      get note() { return noteAt(i); },
+      get context() { return contextOf(); },
+      termId: item.relatedTermId || null,
+      level: item.level,
+      topicIds: item.topicIds || [],
+    }));
+  }
+
+  // 個数・組合せの問題の記述ア〜エ(statementsFrom の続き。注は stmtNotes、正誤は stmtTruths から)
+  function styledStatementsFrom(item) {
+    const truths = styledTruths(item);
+    if (!truths) return [];
+    let notes;
+    let context;
+    const noteAt = (i) => {
+      if (notes === undefined) notes = cleanNotes(item.stmtNotes, true);
+      return notes ? notes[i] : ``;
+    };
+    const contextOf = () => {
+      if (context === undefined) context = stemContext(item.question);
+      return context;
+    };
+    return item.stmts.map((text, i) => ({
+      id: `${item.id}#s${i}`,
+      quizId: item.id,
+      index: i,
+      label: STMT_LABELS[i],
+      sub: true,
       text,
       truth: truths[i],
       get note() { return noteAt(i); },
@@ -592,5 +711,6 @@ window.QuizEngine = (function () {
     buildQuestionForTerm, buildQuestionsFromTerms, generateAutoQuiz, isMcItem, fromFixedMc,
     statementTruths, statementsFrom, allStatements, clearStatementCache, stemContext, lawRefsOverlap, lawCitations,
     nameVariants, maskNames, stripLawNotes, lawRefLeaks, isLawRefEligible,
+    STMT_LABELS, COUNT_CHOICES, styleOf, parseCombo, hasStatements, styledAnswer,
   };
 })();

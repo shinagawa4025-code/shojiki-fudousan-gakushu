@@ -46,7 +46,7 @@
   // about・works は新しい画面(読み込めなかったときはエラー画面を出す)。#summary は #works の別名(古いURL・リンク用)
   const Views = window.Views || {};
   [`home`, `topics`, `glossary`, `bookmarks`, `figures`, `review`, `quiz`, `ox`, `exam`, `progress`,
-    `works`, `calculators`, `sources`, `settings`, `more`, `about`].forEach((name) => {
+    `works`, `calculators`, `sources`, `settings`, `more`, `about`, `plan`].forEach((name) => {
     const view = Views[name] || (name === `works` ? Views.summary : null);
     if (view) { Router.register(name, view); return; }
     console.warn(`[app] 画面 ${name} が見つかりません`);
@@ -295,6 +295,9 @@
     window.addEventListener(`storage`, (e) => {
       // e.key が null は、別のタブでのデータ全消去
       if (e.key !== null && String(e.key).indexOf(Storage.PREFIX || `shojikiLearn.v1.`) !== 0) return;
+      // v12: 学習時間の記録と数えているタブの印(30秒ごと)では描き直さない
+      const name = e.key === null ? `` : String(e.key).slice((Storage.PREFIX || `shojikiLearn.v1.`).length);
+      if (name === `studyTime` || name === `studyTimeLock`) return;
       if (window.Nav) Nav.refreshBadge();
       clearTimeout(timer);
       timer = setTimeout(() => redrawSummaryView({ keepScroll: true }), 500);
@@ -375,6 +378,8 @@
     step(`日付`, initDayRollover);
     step(`別のタブ`, initCrossTabSync);
     step(`保護`, initPersistOnFirstGrade);
+    step(`学習時間`, () => { if (window.StudyTime) StudyTime.start(); });
+    step(`バッジ`, () => { if (window.Badges) Badges.start(); });
     step(`通知`, showImportDoneToast);
     step(`基準日`, fillAsOf);
     // 画面を出せなかった(Router が動かなかった)ときは、読み込み中の表示のままにせず案内を出す

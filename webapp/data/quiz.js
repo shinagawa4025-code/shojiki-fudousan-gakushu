@@ -39,7 +39,7 @@ window.APP_DATA.quiz = [
 
   // 上級編
   { id: `quiz-adv-01`, level: `上級`, topicIds: [`topicF`], question: `「三為業者」が転売益を得やすい仕組みは?`,
-    answer: `登記を一度も自分名義にせず決済と同時に転売するため、登録免許税・不動産取得税などの負担を押えられる`, relatedTermId: `term29`, episodes: [`49-50`] },
+    answer: `登記を一度も自分名義にせず決済と同時に転売するため、登録免許税・不動産取得税などの負担を抑えられる`, relatedTermId: `term29`, episodes: [`49-50`] },
   { id: `quiz-adv-02`, level: `上級`, topicIds: [`topicG`], question: `地面師詐欺の典型的な手口は?`,
     answer: `他人の土地の所有者になりすまし、偽造した本人確認書類・印鑑証明などで売却契約を結び代金を詐取する`, relatedTermId: `term30`, episodes: [`27-28`] },
   { id: `quiz-adv-03`, level: `上級`, topicIds: [`topicE`], question: `「かぼちゃの馬車事件」のようなサブリース契約で問題になったことは?`,

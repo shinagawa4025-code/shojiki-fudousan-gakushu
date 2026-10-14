@@ -10,6 +10,7 @@
 //   ※「学習済み」は記憶済み(★)・学習済み(✓)にしたものだけ(着手とは別の数)
 //   ・重み: 4択 1 / 記述(自己採点) 0.5 / 自動生成クイズ 1 / ○× 1(直近の1回をもう1回分) /
 //           模擬試験 直近×2・その前×1.5・それ以前×1
+//   ・自信なしの正解(4択の「勘で当たった」など。Storage `quizUnsure`)は 0.5問の正解として数える(v12。正答率の表示にも反映)
 // ■ 優先度 = (分野の例年出題数 ÷ その試験で最大の出題数)×(100 − 習熟度)÷ 100
 // 画面に出す「正答率」は重みなしの単純な正答率(正解数 ÷ 回答数)
 // ■ 模擬試験の推移 = その分野が4問以上出た回のうち、同じ形式(フル/ショート)の直近2回の正答率の差
@@ -20,6 +21,7 @@ window.Analysis = (function () {
   const COVER_WEIGHT = 0.3;
   const EXAM_WEIGHTS = [2, 1.5]; // 直近・その前(それ以前は1)
   const OX_RECENT_BONUS = 1;
+  const UNSURE_CREDIT = 0.5; // 自信なしの正解は半分だけ正解として数える
   const TREND_STEP = 5; // ±5ポイント以上で上昇・下降
   const TREND_MIN_TOTAL = 4; // 分野の出題がこれ未満の回は推移に使わない(1〜3問の正答率は振れが大きい)
   const WEAK_EXAM_WINDOW = 3; // 苦手判定に使う直近の模擬試験の回数
@@ -187,6 +189,10 @@ window.Analysis = (function () {
     const qhRaw = readObj(`quizHistory`);
     const quizHistory = dict();
     Object.keys(qhRaw).forEach((id) => { if (qhRaw[id] === `ok` || qhRaw[id] === `ng`) quizHistory[id] = qhRaw[id]; });
+    // 自信なしで正解した問題(日付として正しい印のものだけ)
+    const unsureRaw = readObj(`quizUnsure`);
+    const unsure = dict();
+    Object.keys(unsureRaw).forEach((id) => { if (DateUtil.isValid(unsureRaw[id])) unsure[id] = true; });
 
     const auto = loadAuto();
 
@@ -226,7 +232,7 @@ window.Analysis = (function () {
 
     const known = readObj(`flashcards`);
     const bp = readObj(`basicsProgress`);
-    return { quizHistory, auto, ox, exams, srs, known, bp, statements, statementById };
+    return { quizHistory, unsure, auto, ox, exams, srs, known, bp, statements, statementById };
   }
 
   // ---- 集計の器 ----
@@ -324,7 +330,7 @@ window.Analysis = (function () {
       const q = quizById[qid];
       if (!q) return;
       const src = isMc(q) ? `mc` : `self`;
-      const ok = d.quizHistory[qid] === `ok` ? 1 : 0;
+      const ok = d.quizHistory[qid] === `ok` ? (d.unsure && d.unsure[qid] ? UNSURE_CREDIT : 1) : 0;
       mapQuiz(q).forEach((k) => { if (buckets[k]) addTo(buckets[k], src, ok, 1, src === `self` ? 0.5 : 1); });
     });
     Object.keys(d.auto).forEach((tid) => {
@@ -850,6 +856,6 @@ window.Analysis = (function () {
   return {
     analyze, byCategory, byTopic, weakPoints, nextActions, summary, weakTermIds, weakTermCount,
     SOURCE_DEFS, CONFIDENCE_LABELS, MIN_CONFIDENT,
-    _internal: { load, normalizeExam, masteryScore, confidenceOf, trendOf, pickTopic, categoryAction, buildActions, focusReasons, resolveType, count, validTs, termNav, isMc, constants: { MIN_CONFIDENT, MID_CONFIDENT, ACC_WEIGHT, COVER_WEIGHT, EXAM_WEIGHTS, OX_RECENT_BONUS, TREND_STEP, TREND_MIN_TOTAL, WEAK_EXAM_WINDOW, GOOD_ACC } },
+    _internal: { load, normalizeExam, masteryScore, confidenceOf, trendOf, pickTopic, categoryAction, buildActions, focusReasons, resolveType, count, validTs, termNav, isMc, constants: { MIN_CONFIDENT, MID_CONFIDENT, ACC_WEIGHT, COVER_WEIGHT, EXAM_WEIGHTS, OX_RECENT_BONUS, UNSURE_CREDIT, TREND_STEP, TREND_MIN_TOTAL, WEAK_EXAM_WINDOW, GOOD_ACC } },
   };
 })();

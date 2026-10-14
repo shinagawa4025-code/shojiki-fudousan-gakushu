@@ -3,7 +3,7 @@
 
 /* ---------- 共通 ---------- */
 /* タップしてすぐ反応するように(ダブルタップによる拡大の待ち時間をなくす) */
-.choice-btn, .grade-btn, .review-reveal, .ox-btn, .ox-next, .quiz-next, .quiz-filter-btn, .auto-cond-btn { touch-action: manipulation; }
+.choice-btn, .grade-btn, .review-reveal, .ox-btn, .ox-next, .quiz-next, .quiz-filter-btn, .auto-cond-btn, .quiz-unsure-chip { touch-action: manipulation; }
 
 /* 見出しの行: 見出し + ⓘ(画面の説明はシートで開く)。復習では右端に「n / 全体」 */
 :is(.quiz-view, .ox-view, .review-view) .view-head { display: flex; align-items: center; gap: var(--sp-1); min-height: 40px; margin: 0 0 var(--sp-3); }
@@ -116,6 +116,10 @@
 .quiz-filter-chips:empty { display: none; }
 .quiz-filter-chip { gap: var(--sp-1); padding: 0 var(--sp-2) 0 var(--sp-3); background: var(--color-primary-soft); border-color: transparent; color: var(--color-primary); }
 .quiz-filter-chip .icon { opacity: .8; }
+/* 指で押す端末では、絞り込みのボタン・条件のチップ・解説の下のチップを 44px の高さに(押し間違いを防ぐ) */
+@media (pointer: coarse) {
+  .quiz-filter-btn, .quiz-filter-chip, .quiz-after-links :is(.chip, .link-btn) { min-height: 44px; }
+}
 @media (hover: hover) { .quiz-filter-chip:hover { border-color: var(--color-primary); } }
 .quiz-progress { margin: 0 0 var(--sp-2); }
 /* 直リンクで途中から表示したときの「前の問題を表示」(一覧の上) */
@@ -175,6 +179,95 @@
   line-height: var(--lh-snug);
   color: var(--color-text);
 }
+
+/* ---------- 個数・組合せの問題(v12) ---------- */
+/* 見出しの「4択」の横の「個数」「組合せ」 */
+.source-tag-style { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* 記述ア〜エ(問題文の下・選択肢の上)。選択肢と同じ文字の大きさ・行間で、記号は四角(選択肢の丸い番号と区別する)。
+   模擬試験(exam.css)からも同じ部品を使える(.stmt-list / .stmt-item / .stmt-label / .stmt-body / .stmt-text / .stmt-note) */
+.stmt-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  list-style: none;
+}
+.stmt-item { display: flex; align-items: flex-start; gap: var(--sp-2); min-width: 0; }
+.stmt-label {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: 1;
+}
+.stmt-body { display: flex; flex-direction: column; gap: var(--sp-1); flex: 1 1 auto; min-width: 0; }
+.stmt-text { font-size: var(--fs-md); line-height: 1.7; letter-spacing: .02em; color: var(--color-text); overflow-wrap: anywhere; }
+/* 回答後: 記述ごとの○×と注(選択肢の解説 .choice-note と同じ形。「正しい」「誤り」は文字でも出す) */
+.stmt-note { overflow-wrap: anywhere; }
+.stmt-truth { margin-right: var(--sp-1); font-weight: 700; }
+.stmt-item.is-true .stmt-label { border-color: var(--color-success); color: var(--color-success); }
+.stmt-item.is-false .stmt-label { border-color: var(--color-danger); color: var(--color-danger); }
+.stmt-item.is-true .stmt-truth { color: var(--color-success); }
+.stmt-item.is-false .stmt-truth { color: var(--color-danger); }
+/* 狭いスマホでは枠の内側の余白を詰めて、記述の1行の文字数を確保する */
+@media (max-width: 359px) {
+  .stmt-list { padding: var(--sp-2); margin-inline: calc(var(--sp-1) * -1); }
+  .stmt-item { gap: 6px; }
+}
+/* 記述を読み込めなかったとき */
+.quiz-stmt-missing {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+  color: var(--color-text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+.quiz-stmt-missing > .icon { flex-shrink: 0; margin-top: 2px; color: var(--color-warning); }
+/* 選択肢(一つ〜四つ・「ア、イ」)は短いので2列。回答後の「正解」「あなたの回答」は文字の下に */
+.choice-list.choice-list-styled { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.choice-list-styled .choice-btn { min-height: 52px; padding: var(--sp-3); align-items: center; }
+.choice-list-styled .choice-key { margin-top: 0; }
+.choice-list-styled .choice-text { font-weight: 600; letter-spacing: .04em; }
+.choice-list-styled .choice-btn.is-done { align-items: flex-start; }
+.choice-list-styled .choice-btn.is-done .choice-key { margin-top: 2px; }
+/* 320px などの狭い画面では、「あなたの回答」が2行に割れないよう、印を番号の下から始めて1行で出す */
+@media (max-width: 359px) {
+  .choice-list-styled .choice-btn.is-done .choice-tags { margin-left: calc(-24px - var(--sp-2)); }
+  .choice-list-styled .choice-tag { white-space: nowrap; }
+}
+
+/* 「勘で当たった」(正解したあとだけ。押すと3日後の解き直しに入れる) */
+.quiz-unsure { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); margin-top: var(--sp-3); }
+.quiz-after > .quiz-unsure:first-child { margin-top: var(--sp-3); }
+.quiz-unsure-chip { min-height: 44px; gap: var(--sp-1); }
+.quiz-unsure-chip::after { content: none; }
+.quiz-unsure-help { font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); }
+.drill-result + .quiz-unsure { margin-top: var(--sp-2); }
+
+/* 「AIに聞く」(js/askAi.js のボタンを置く場所。ボタンがなければ消す) */
+.quiz-ask-ai { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
+.quiz-ask-ai:empty { display: none; }
+
+/* 絞り込みの「形式」(件数はラベルの下に) */
+.filter-sheet .filter-sheet-format .segmented-item { flex-direction: column; gap: 0; min-height: 48px; padding: var(--sp-1) var(--sp-2); line-height: 1.25; white-space: normal; text-align: center; }
+.filter-sheet-format .segmented-count { margin-left: 0; }
 
 /* 動きは1つだけ: 選んだ誤りの選択肢を小さく揺らす(カードの点滅・正解の拡大はしない) */
 .quiz-card { transition: none; }

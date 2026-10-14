@@ -1,7 +1,9 @@
 // 模擬試験(宅建士・本番形式): 問題数・制限時間・分野配分を本試験に合わせ、アプリ内の問題から出題する
 // ルート: #exam(受験メニュー・履歴) / #exam/short・#exam/full(形式を選んだ状態でメニュー) / #exam/run(受験中) / #exam/result/<id>(結果)
 // 保存キー: examSession(受験中の状態) / examHistory(結果の履歴、新しい順・最大30件) / examRetryResult(直近の解き直し結果)
-// 古い形式の保存データ(activeMs・asked・flagged・truths などが無いもの)もそのまま読めるようにしている
+// 古い形式の保存データ(activeMs・asked・flagged・truths・style などが無いもの)もそのまま読めるようにしている
+// v12: 個数・組合せの問題(style と記述ア〜エ statements を持つ。並べ替えない)を分野ごとの枠で出題する。
+//      採点時に解答を AnswerLog に記録し、見直し印を付けて正解した問題は「自信なし」として扱う(結果の unsure にその数)
 // 履歴の容量: 問題文・選択肢まで残すのは新しい5回分だけ。それより古い回の4択問題は ID と解答(と選択肢の並び)だけにし
 // (compact: true)、結果を開いたときに今のデータから問題文を復元する。データから消えた問題は「現在のデータにありません」と出す
 window.Views = window.Views || {};
@@ -17,6 +19,10 @@ window.Views.exam = (function () {
   const STORAGE_PREFIX = `shojikiLearn.v1.`;
   const SHORT_QUOTAS = { kenri: 6, horei: 3, zei: 1, gyoho: 8, menjo: 2 };
   const SHORT_TOTAL = 20;
+  // 個数問題・組合せ問題(style: count / combo)を各分野に入れる数(このアプリの目安。上限も兼ねる)。
+  // 本試験でも業法を中心に出るので、フルは業法4・権利関係1・法令上の制限1、ショートは業法2。ほかの分野には入れない
+  // (直近の模擬試験に出した問題を後回しにする決まりのほうを優先するので、収録数が少ないうちは枠より少なくなることがある)
+  const STYLED_QUOTAS = { full: { gyoho: 4, kenri: 1, horei: 1 }, short: { gyoho: 2 } };
   const ANNOUNCE_MINUTES = [10, 5, 1];
   const PACE_INTERVAL = 15000; // ペース表示の更新間隔
   const GOOD_PCT = 70; // 分野の正答率がこれ未満なら「次にやること」に挙げる
@@ -74,12 +80,12 @@ window.Views.exam = (function () {
     const fullTotal = type.totalQuestions || 50;
     const fullMinutes = type.minutes || 120;
     if (mode === `short`) {
-      return { id: `short`, label: `ショート`, total: SHORT_TOTAL, minutes: Math.round((fullMinutes * SHORT_TOTAL) / fullTotal), quotas: SHORT_QUOTAS };
+      return { id: `short`, label: `ショート`, total: SHORT_TOTAL, minutes: Math.round((fullMinutes * SHORT_TOTAL) / fullTotal), quotas: SHORT_QUOTAS, styled: STYLED_QUOTAS.short };
     }
-    if (mode === `retry`) return { id: `retry`, label: `解き直し`, total: null, minutes: null, quotas: null };
+    if (mode === `retry`) return { id: `retry`, label: `解き直し`, total: null, minutes: null, quotas: null, styled: null };
     const quotas = {};
     categories().forEach((c) => { quotas[c.id] = c.questions || 0; });
-    return { id: `full`, label: `フル`, total: fullTotal, minutes: fullMinutes, quotas };
+    return { id: `full`, label: `フル`, total: fullTotal, minutes: fullMinutes, quotas, styled: STYLED_QUOTAS.full };
   }
 
   // 目安のペース(1問あたりの秒数)。解き直しにはない
@@ -98,6 +104,33 @@ window.Views.exam = (function () {
 
   function mcItemsIn(catId) {
     return window.APP_DATA.quiz.filter((q) => QuizEngine.isMcItem(q) && catIdOf(q) === catId);
+  }
+
+  // ===== 個数問題・組合せ問題(記述ア〜エを持つ問題) =====
+  // 保存した問題は style と statements: [{ key, label, text, truth, note }] を持つ(通常の4択は持たない)。
+  // 選択肢も記述も並べ替えない(「一つ〜四つ」「ア、イ」は順番そのものが意味を持つため)
+
+  // 保存した問題の形式(知らない値は通常の4択として扱う)
+  function styleOfQ(q) {
+    return q && (q.style === `count` || q.style === `combo`) ? q.style : null;
+  }
+
+  // 記述ア〜エが使える形か(インポートされたデータも来るので型を確かめる)
+  function validStatements(list) {
+    return Array.isArray(list) && list.length >= 2 && list.length <= 6 && list.every((x) => !!x && typeof x === `object`
+      && typeof x.label === `string` && !!x.label && typeof x.text === `string` && !!x.text && typeof x.truth === `boolean`
+      && (x.note === undefined || x.note === null || typeof x.note === `string`));
+  }
+
+  // 保存用の形に写す(問題エンジンの note は getter のことがあるので、値として持たせる)
+  function packStatements(list) {
+    return list.map((x) => ({ key: typeof x.key === `string` ? x.key : ``, label: x.label, text: x.text, truth: x.truth, note: typeof x.note === `string` ? x.note : `` }));
+  }
+
+  // 個数・組合せの問題なら { style, statements } を返す(問題に足す用)。記述が壊れていれば null
+  function styledPart(q) {
+    const style = styleOfQ(q);
+    return style && validStatements(q.statements) ? { style, statements: packStatements(q.statements) } : null;
   }
 
   // 問題IDから今のデータの4択問題を引く(データは読み込み後に変わらないので1回だけ作る)
@@ -134,8 +167,10 @@ window.Views.exam = (function () {
 
   // 問題オブジェクトを保存用の形に固定する(再開しても同じ問題・同じ選択肢順になるように)
   // 4択の確認問題には選択肢の並び(order)も残す(古い履歴で問題文を省いても、今のデータから同じ並びで復元できるように)
+  // 個数・組合せの問題は style と記述ア〜エ(statements)も持たせる
   function packQuestion(q, catId) {
     const order = q.kind === `fixed` ? orderFromTexts(q.choices.map((c) => c.text), quizItem(q.refId)) : null;
+    const styled = q.kind === `fixed` ? styledPart(q) : null;
     return Object.assign({
       kind: q.kind,
       refId: q.refId,
@@ -152,7 +187,7 @@ window.Views.exam = (function () {
       notes: q.choices.some((c) => c.note) ? q.choices.map((c) => c.note || ``) : null,
       // 選択肢ごとの記述の正誤(「正しいもの/誤っているものはどれか」型のみ)。結果で○×を付けるのに使う
       truths: q.choices.length && q.choices.every((c) => typeof c.truth === `boolean`) ? q.choices.map((c) => c.truth) : null,
-    }, order ? { order } : null);
+    }, order ? { order } : null, styled);
   }
 
   // 直近の模擬試験で出した問題: refId → 2(前回) / 1(前々回)。asked を持たない古い記録は使わない
@@ -169,19 +204,33 @@ window.Views.exam = (function () {
   // 分野ごとに 4択の確認問題 → 用語からの自動生成 の順で配分どおりに選ぶ。
   // 足りない分野は、残りの多い分野から順番に1問ずつ補充する。
   // recent(省略可): 直近に出した問題。シャッフルしたうえで、出していない問題 → 前々回 → 前回 の順に並べ替える
+  // 個数・組合せの問題は分野ごとの枠(STYLED_QUOTAS)の数だけ先に選び、枠を超える分は最後に回す
   function buildExam(mode, recent) {
     const def = modeDef(mode);
     const cats = categories();
+    const styledQuota = def.styled || {};
     const seen = recent || Object.create(null);
     const rankOf = (id) => seen[id] || 0;
     const later = (list, idOf) => list.map((x, i) => ({ x, i, r: rankOf(idOf(x)) }))
       .sort((a, b) => (a.r - b.r) || (a.i - b.i)).map((o) => o.x);
+    // list は later で並べた後のもの。枠に入れる個数・組合せの問題(直近に出していない順に quota 問)は、
+    // 同じ順位(出していない/前々回/前回)の通常の問題より前に置く(直近に出した問題を後回しにする決まりは崩さない)。
+    // 枠に入らなかった個数・組合せの問題は最後に回し、通常の問題が尽きたときだけ使う
+    const styledFirst = (list, quota) => {
+      const styled = list.filter((q) => QuizEngine.styleOf(q));
+      if (!styled.length) return list;
+      const pick = new Set(styled.slice(0, quota));
+      const head = list.filter((q) => !QuizEngine.styleOf(q) || pick.has(q))
+        .map((q, i) => ({ q, i, r: rankOf(q.id), g: pick.has(q) ? 0 : 1 }))
+        .sort((a, b) => (a.r - b.r) || (a.g - b.g) || (a.i - b.i)).map((o) => o.q);
+      return head.concat(styled.filter((q) => !pick.has(q)));
+    };
     const usedTerms = new Set();
     const pools = {};
     const repeats = {};
     cats.forEach((c) => {
       pools[c.id] = {
-        fixed: later(QuizEngine.shuffle(mcItemsIn(c.id)), (q) => q.id),
+        fixed: styledFirst(later(QuizEngine.shuffle(mcItemsIn(c.id)), (q) => q.id), styledQuota[c.id] || 0),
         terms: later(QuizEngine.shuffle(Stats.termsInCategory(TYPE_ID, c.id)), (t) => t.id),
       };
     });
@@ -201,6 +250,8 @@ window.Views.exam = (function () {
         const item = p.fixed.shift();
         const q = QuizEngine.fromFixedMc(item);
         if (!q || q.choices.findIndex((c) => c.correct) < 0) continue;
+        // 記述ア〜エが読めない個数・組合せの問題は出さない(問題文だけでは答えられないため)
+        if (QuizEngine.styleOf(q) && !validStatements(q.statements)) continue;
         if (item.relatedTermId) usedTerms.add(item.relatedTermId);
         return picked(q, catId);
       }
@@ -270,6 +321,13 @@ window.Views.exam = (function () {
       notices.push(`「${c.name}」は収録問題が${mcItemsIn(c.id).length}問のため、${parts.join(`・`)}含まれます。`);
     });
 
+    // 個数・組合せの問題は枠のぶん先に選ぶので、そのままだと分野の最初にかたまる。分野の中で確認問題の順を混ぜ直す
+    // (用語から作った問題は従来どおり分野の最後)
+    cats.forEach((c) => {
+      const list = byCat[c.id];
+      if (!list.some((q) => styleOfQ(q))) return;
+      byCat[c.id] = QuizEngine.shuffle(list.filter((q) => q.kind === `fixed`)).concat(list.filter((q) => q.kind !== `fixed`));
+    });
     const questions = [];
     cats.forEach((c) => { byCat[c.id].forEach((q) => questions.push(q)); });
     return { questions, notices };
@@ -306,8 +364,11 @@ window.Views.exam = (function () {
   }
 
   // 選択肢の並びを入れ替える(選択肢ごとの解説・正誤も一緒に動かし、正解の位置を付け直す)
+  // 個数・組合せの問題は並べ替えない(同じ形に写すだけ。記述ア〜エもそのまま)
   function reshuffleQuestion(w) {
-    const order = QuizEngine.shuffle(w.choices.map((_, i) => i));
+    const styled = styledPart(w);
+    const ids = w.choices.map((_, i) => i);
+    const order = styled ? ids : QuizEngine.shuffle(ids);
     const notes = validNotes(w) ? w.notes : null;
     const truths = validTruths(w) ? w.truths : null;
     const dataOrder = isPermutation(w.order, w.choices.length) ? w.order : null;
@@ -319,7 +380,7 @@ window.Views.exam = (function () {
       explanation: w.explanation || ``,
       notes: notes ? order.map((i) => String(notes[i] || ``)) : null,
       truths: truths ? order.map((i) => truths[i]) : null,
-    }, dataOrder ? { order: order.map((i) => dataOrder[i]) } : null);
+    }, dataOrder ? { order: order.map((i) => dataOrder[i]) } : null, styled);
   }
 
   // 結果の「間違えた問題」(と、選べば見直し印を付けて正解した問題)から、時間制限なしの解き直しセッションを作る(履歴には残さない)
@@ -352,10 +413,12 @@ window.Views.exam = (function () {
 
   // ===== 保存・読み込み(インポートされたデータも来るので型を必ず確認) =====
 
+  // 個数・組合せの問題(style あり)は記述ア〜エもそろっていること(記述がないと問題文だけでは答えられない)
   function validQuestion(q) {
     return !!q && typeof q === `object` && typeof q.stem === `string` && Array.isArray(q.choices) && q.choices.length >= 2
       && q.choices.every((c) => typeof c === `string`) && Number.isInteger(q.correctIndex)
-      && q.correctIndex >= 0 && q.correctIndex < q.choices.length;
+      && q.correctIndex >= 0 && q.correctIndex < q.choices.length
+      && (!styleOfQ(q) || validStatements(q.statements));
   }
 
   function loadSession() {
@@ -414,7 +477,7 @@ window.Views.exam = (function () {
       correctIndex: q.correctIndex, chosen, explanation: q.explanation || ``,
       notes: validNotes(q) ? q.notes.slice() : null,
       truths: validTruths(q) ? q.truths.slice() : null,
-    }, isPermutation(q.order, q.choices.length) ? { order: q.order.slice() } : null, flagged ? { flagged: true } : null);
+    }, isPermutation(q.order, q.choices.length) ? { order: q.order.slice() } : null, styledPart(q), flagged ? { flagged: true } : null);
   }
 
   // ===== 履歴の容量を抑える(古い回は問題文を省き、ID と解答だけにする) =====
@@ -426,10 +489,13 @@ window.Views.exam = (function () {
 
   // 1問を省いた形にする。今のデータから同じ問題・同じ並びに戻せる4択の確認問題だけを省き、
   // 戻せないもの(用語から作った問題・データの文や正解が変わった問題)は全文のまま残す
+  // 個数・組合せの問題は、今のデータも同じ形式で記述ア〜エが読めるときだけ省く(記述は開いたときに今のデータから戻す)
   function compactQuestion(w) {
     if (!validQuestion(w) || w.kind !== `fixed`) return w;
     const item = quizItem(w.refId);
     if (!QuizEngine.isMcItem(item) || item.choices.length !== w.choices.length) return w;
+    const style = styleOfQ(w);
+    if (style !== QuizEngine.styleOf(item) || (style && !QuizEngine.hasStatements(item))) return w;
     const order = isPermutation(w.order, w.choices.length) ? w.order : orderFromTexts(w.choices, item);
     if (!order || order[w.correctIndex] !== item.correctIndex) return w;
     const c = {
@@ -437,6 +503,8 @@ window.Views.exam = (function () {
       chosen: Number.isInteger(w.chosen) && w.chosen >= 0 && w.chosen < w.choices.length ? w.chosen : null,
       correctIndex: w.correctIndex, order: order.slice(),
     };
+    // 形式は残す(戻すときに、今のデータの形式と食い違っていないか確かめるため)
+    if (style) c.style = style;
     if (w.flagged === true) c.flagged = true;
     return c;
   }
@@ -489,11 +557,14 @@ window.Views.exam = (function () {
       termId: typeof w.termId === `string` ? w.termId : null, categoryId: typeof w.categoryId === `string` ? w.categoryId : null,
     };
     if (w.flagged === true) head.flagged = true;
-    if (!base || !isPermutation(w.order, n) || !okIndex(w.correctIndex) || w.order[w.correctIndex] !== item.correctIndex) {
+    // 個数・組合せの問題は、記録の形式(以前の版の記録は通常の4択)と今のデータの形式が同じで、記述ア〜エが読めるときだけ戻す
+    const styled = base ? styledPart(base) : null;
+    const styleOk = !!base && styleOfQ(w) === (base.style || null) && (!base.style || !!styled);
+    if (!base || !styleOk || !isPermutation(w.order, n) || !okIndex(w.correctIndex) || w.order[w.correctIndex] !== item.correctIndex) {
       return Object.assign(head, { missing: true, chosen: Number.isInteger(w.chosen) ? w.chosen : null, correctIndex: Number.isInteger(w.correctIndex) ? w.correctIndex : null });
     }
     const list = w.order.map((i) => base.choices[i]);
-    return Object.assign(head, {
+    return Object.assign(head, styled, {
       termId: head.termId || base.termId || null,
       level: base.level || ``, type: `mc`, prompt: ``, stem: base.stem,
       choices: list.map((c) => c.text),
@@ -556,14 +627,19 @@ window.Views.exam = (function () {
 
   // 解き直しの予定(Drill): 4択の確認問題を間違えたら翌日から出し直し、期限が来ていた問題に正解したら次の段階へ
   // 未回答は登録しない(解けなかったとは限らないため)。用語から作った問題は対象外
+  // 見直し印を付けて正解した問題は進めない(期限が来た問題を当て推量の正解で次の段階・卒業に進めないように)。
+  // その問題は続く noteAnswers → AnswerLog.recordMany → Drill.noteUnsure が「自信なし」として扱う
   function noteDrill(s) {
     if (!window.Drill) return;
+    const unsureLater = !!(window.AnswerLog && typeof AnswerLog.recordMany === `function`);
     try {
       s.questions.forEach((q, i) => {
         if (!q || q.kind !== `fixed` || typeof q.refId !== `string`) return;
         const chosen = Number.isInteger(s.answers[i]) ? s.answers[i] : null;
         if (chosen === null) return;
-        Drill.note(q.refId, chosen === q.correctIndex, `exam`);
+        const ok = chosen === q.correctIndex;
+        if (ok && unsureLater && Array.isArray(s.flags) && s.flags[i] === true) return;
+        Drill.note(q.refId, ok, `exam`);
       });
     } catch (e) { console.error(`[解き直し] 模擬試験の結果を記録できませんでした`, e); }
   }
@@ -578,15 +654,59 @@ window.Views.exam = (function () {
     return out;
   }
 
-  // 採点して記録する。副作用(SRS・解き直しの予定・ストリーク・履歴)は同じ試験IDにつき1回だけ
+  // v12: 日付つきの解答の記録(合格予測・バッジ用)。見直し印を付けて正解した問題は「自信なし」として記録し、
+  // AnswerLog が解き直しの予定(3日後)にも入れる。noteDrill のあとに呼ぶ(Drill の3日後への前倒しが効くように)
+  // 戻り値: 「自信なし」として記録した数(記録できる仕組みがない・失敗したときは null)
+  function noteAnswers(s) {
+    if (!window.AnswerLog || typeof AnswerLog.recordMany !== `function`) return null;
+    try {
+      const items = [];
+      s.questions.forEach((q, i) => {
+        if (!q || q.kind !== `fixed` || typeof q.refId !== `string`) return;
+        const chosen = Number.isInteger(s.answers[i]) ? s.answers[i] : null;
+        if (chosen === null) return;
+        const ok = chosen === q.correctIndex;
+        items.push({ quizId: q.refId, ok, unsure: ok && !!(Array.isArray(s.flags) && s.flags[i] === true) });
+      });
+      if (!items.length || !AnswerLog.recordMany(items, `exam`)) return 0;
+      // AnswerLog が記録するのは今のデータにある4択の問題だけなので、同じ条件で数える
+      return items.filter((it) => it.unsure && QuizEngine.isMcItem(quizItem(it.quizId))).length;
+    } catch (e) {
+      console.error(`[解答の記録] 模擬試験の結果を記録できませんでした`, e);
+      return null;
+    }
+  }
+
+  // 記録(解き直しの予定・解答の記録・復習・ストリーク)を済ませた試験: 試験ID → 「自信なし」の数。
+  // 履歴を保存できずに受験中のデータが残った試験を、もう一度提出・自動採点したときに数え直さないようにする
+  // (受験中のデータにも logged として残す。それも保存できないときは、このページを開いている間だけこの表で防ぐ)
+  const loggedRuns = new Map();
+  function loggedOf(s) {
+    if (loggedRuns.has(s.id)) return { unsure: loggedRuns.get(s.id) };
+    return Storage.isPlainObject(s.logged) ? s.logged : null;
+  }
+  function markLogged(s, entry, unsure) {
+    const n = Number.isInteger(unsure) && unsure >= 0 ? unsure : null;
+    loggedRuns.set(s.id, n);
+    s.logged = { unsure: n };
+    if (n !== null) entry.unsure = n;
+  }
+
+  // 採点して記録する。副作用(SRS・解き直しの予定・解答の記録・ストリーク・履歴)は同じ試験IDにつき1回だけ
+  // entry.unsure: 見直し印を付けて正解し「自信なし」として記録した数(v12 以降の記録だけが持つ)
   function finalizeSession(s, finishedAt) {
     const entry = gradeSession(s, finishedAt);
+    const done = loggedOf(s);
+    if (done && Number.isInteger(done.unsure) && done.unsure >= 0) entry.unsure = done.unsure;
     if (s.mode === `retry`) {
       entry.retryOf = s.retryOf || null;
-      Storage.set(RETRY_RESULT_KEY, entry);
       // 解き直しは何度でも受けられる。同じ日に同じ問題を何度間違えても、解き直しの予定は1回だけ登録される(Drill)
-      noteDrill(s);
-      if (window.Streak) Streak.recordToday();
+      if (!done) {
+        noteDrill(s);
+        markLogged(s, entry, noteAnswers(s));
+        if (window.Streak) Streak.recordToday();
+      }
+      Storage.set(RETRY_RESULT_KEY, entry);
       clearSession();
       return entry;
     }
@@ -596,22 +716,26 @@ window.Views.exam = (function () {
       clearSession();
       return existing;
     }
-    noteDrill(s);
-    const graded = new Set();
-    entry.wrong.forEach((w) => {
-      // 未回答は「もう一度」にしない(解けなかったとは限らず、長い復習間隔を消してしまうため)
-      if (w.chosen === null || !w.termId || graded.has(w.termId) || !AppIndex.termsById[w.termId]) return;
-      graded.add(w.termId);
-      // silent: 学習カレンダーへの記録は下で1回だけにする(問題数ぶん数えない)
-      Srs.grade(w.termId, 1, { silent: true });
-    });
-    if (window.Streak) Streak.recordToday();
+    if (!done) {
+      noteDrill(s);
+      markLogged(s, entry, noteAnswers(s));
+      const graded = new Set();
+      entry.wrong.forEach((w) => {
+        // 未回答は「もう一度」にしない(解けなかったとは限らず、長い復習間隔を消してしまうため)
+        if (w.chosen === null || !w.termId || graded.has(w.termId) || !AppIndex.termsById[w.termId]) return;
+        graded.add(w.termId);
+        // silent: 学習カレンダーへの記録は下で1回だけにする(問題数ぶん数えない)
+        Srs.grade(w.termId, 1, { silent: true });
+      });
+      if (window.Streak) Streak.recordToday();
+    }
     hist.unshift(entry);
     // 新しい5回分だけ問題文まで残す(以前の版の記録もここで少しずつ省いた形に移す)
     const list = trimHistory(hist.slice(0, HISTORY_MAX), HISTORY_FULL);
     // 保存できなければ(容量不足など)今回分以外をすべて省いてもう一度試す。
-    // それでも保存できなかったときは、結果を失わないよう受験中のデータを残しておく
+    // それでも保存できなかったときは、結果を失わないよう受験中のデータを残しておく(記録済みの印 logged も一緒に)
     if (Storage.set(HISTORY_KEY, list) || Storage.set(HISTORY_KEY, trimHistory(list, 1))) clearSession();
+    else saveSession(s);
     return entry;
   }
 
@@ -670,6 +794,23 @@ window.Views.exam = (function () {
     return LEVELS.includes(level) ? `<span class="badge badge-${level}">${level}</span>` : ``;
   }
 
+  // 個数・組合せの問題の記述ア〜エ(試験中: 正誤は出さない。本試験の問題用紙と同じく、記号のあとに文を並べる)
+  function statementsHtml(q) {
+    if (!styleOfQ(q) || !validStatements(q.statements)) return ``;
+    return `
+      <ol class="exam-stmts" role="list" aria-label="記述ア〜エ">
+        ${q.statements.map((st) => `<li class="exam-stmt"><span class="exam-stmt-label">${esc(st.label)}<span class="sr-only">、</span></span><span class="exam-stmt-text">${esc(st.text)}</span></li>`).join(``)}
+      </ol>`;
+  }
+
+  // AIに聞く(AskAi)に渡す「選んだ選択肢」: データの選択肢の番号(出題時に並べ替えていても元の番号に直す)。未回答・求められないときは null
+  function pickedDataIndex(w) {
+    const chosen = Number.isInteger(w.chosen) && w.chosen >= 0 && w.chosen < w.choices.length ? w.chosen : null;
+    if (chosen === null) return null;
+    const order = isPermutation(w.order, w.choices.length) ? w.order : orderFromTexts(w.choices, quizItem(w.refId));
+    return order ? order[chosen] : null;
+  }
+
   function modeText(mode, total) {
     const def = modeDef(mode);
     return mode === `retry` ? `解き直し(${total}問)` : `${def.label}(${total}問)`;
@@ -726,8 +867,21 @@ window.Views.exam = (function () {
 
     const type = examTypeData() || {};
     const cats = categories();
-    const mcTotal = cats.reduce((n, c) => n + mcItemsIn(c.id).length, 0);
+    const mcByCat = {};
+    cats.forEach((c) => { mcByCat[c.id] = mcItemsIn(c.id); });
+    const mcTotal = cats.reduce((n, c) => n + mcByCat[c.id].length, 0);
     const hist = readHistory();
+    // 個数・組合せの問題を出す数(分野ごとに 枠と収録数の小さいほう。多い順): 「宅建業法4問・権利関係1問」など。出さなければ ``
+    const styledCount = {};
+    cats.forEach((c) => { styledCount[c.id] = mcByCat[c.id].filter((q) => QuizEngine.styleOf(q)).length; });
+    function styledParts(mode) {
+      const quota = modeDef(mode).styled || {};
+      return cats.map((c, i) => ({ c, i, n: Math.min(quota[c.id] || 0, styledCount[c.id] || 0) })).filter((x) => x.n > 0)
+        .sort((a, b) => (b.n - a.n) || (a.i - b.i));
+    }
+    function styledText(mode) {
+      return styledParts(mode).map((x) => `${x.c.name}${x.n}問`).join(`・`);
+    }
 
     const wrap = document.createElement(`div`);
     wrap.className = `view exam-view`;
@@ -760,9 +914,11 @@ window.Views.exam = (function () {
           <li>${mcTotal
             ? `出題は確認問題の4択(現在${mcTotal}問)からです。分野の問題が足りないときだけ、用語集から自動生成した定義問題(本試験の文章問題とは形式が異なります)で補います。`
             : `宅建士の分野に該当する確認問題は準備中のため、用語集から自動生成した定義問題(本試験の文章問題とは形式が異なります)で出題します。`}</li>
+          ${styledText(`full`) ? `<li>本試験と同じように、記述ア〜エのうち当てはまるものの数を答える「個数問題」と、組合せを答える「組合せ問題」も出題します(フルは${esc(styledText(`full`))}${styledText(`short`) ? `、ショートは${esc(styledText(`short`))}` : ``}まで)。</li>` : ``}
           <li>直近${RECENT_EXAMS}回の模擬試験で出した問題は、なるべく後回しにして出題します(収録問題が少ない分野では同じ問題が含まれることがあります)。</li>
           <li>合否の目安${type.targetScore || 35}点は、このアプリ独自の目安です。本試験の合格点は毎年変わります。</li>
           <li>間違えた問題の用語は「今日の復習」に自動で追加されます(未回答の問題は追加しません)。</li>
+          <li>見直し印を付けて正解した問題は、まぐれ当たりかもしれないので「自信なし」として記録し、3日後の解き直しの予定に入れます。</li>
         </ul>
       </details>
     `;
@@ -781,11 +937,14 @@ window.Views.exam = (function () {
       timedNote.textContent = pref.timed
         ? `制限時間 ${def.minutes}分。途中で中断しても時計は止まりません(本番と同じ扱い)。時間切れになると自動で提出されます。`
         : `時間を気にせず解けます。中断していた時間を除いた経過時間が記録されます。`;
+      const styled = styledParts(pref.mode);
+      const styledSum = styled.reduce((n, x) => n + x.n, 0);
       breakdown.innerHTML = `
         <p class="exam-breakdown-title">分野別の問題数(${def.total}問)</p>
         <ul class="exam-breakdown-list">
           ${cats.map((c) => `<li><span>${esc(c.name)}</span><span class="num">${def.quotas[c.id] || 0}問</span></li>`).join(``)}
         </ul>
+        ${styledSum ? `<p class="exam-pace-note exam-styled-note">${ic(`list`, 16)}<span>うち個数・組合せの問題 最大${styledSum}問(${esc(styled.map((x) => `${x.c.name}${x.n}`).join(`・`))})</span></p>` : ``}
         <p class="exam-pace-note">${ic(`clock`, 16)}<span>1問あたり約${fmtPer(guideSecPerQuestion(pref.mode))}(${def.minutes}分÷${def.total}問)</span></p>`;
     }
     paintSetup();
@@ -1108,6 +1267,7 @@ window.Views.exam = (function () {
         </div>
         ${q.prompt ? `<p class="exam-q-prompt">${esc(q.prompt)}</p>` : ``}
         <p class="quiz-question exam-stem">${esc(q.stem)}</p>
+        ${statementsHtml(q)}
         <div class="choice-list" role="group" aria-label="問${i + 1}の選択肢">
           ${q.choices.map((text, ci) => `<button type="button" class="btn choice-btn exam-choice${chosen === ci ? ` is-selected` : ``}" data-choice="${ci}" aria-pressed="${chosen === ci}"><span class="choice-key">${ci + 1}</span><span>${esc(text)}</span></button>`).join(``)}
         </div>
@@ -1491,9 +1651,16 @@ window.Views.exam = (function () {
     const drillIds = drillIdsOf(wrong);
     const doneDay = DateUtil.format(new Date(entry.finishedAt || entry.startedAt));
     const oxNav = drillIds.length && window.Views.ox && typeof Views.ox.quizNav === `function` ? Views.ox.quizNav(drillIds) : null;
-    const drillHtml = drillIds.length && (doneDay === DateUtil.today() || oxNav) ? `
+    const isToday = doneDay === DateUtil.today();
+    // 見直し印を付けて正解した問題は「自信なし」として記録済み(v12 以降の記録だけが数を持つ。以前の記録では出さない)
+    const unsureN = Number.isInteger(entry.unsure) && entry.unsure > 0 ? entry.unsure : 0;
+    const unsureHtml = unsureN
+      ? `<p class="exam-drill-note">${ic(`flag`, 16)}<span>見直し印を付けて正解した${unsureN}問は「自信なし」として記録し、<a href="#quiz/due">解き直しの予定</a>に入れました${isToday ? `(3日以内に出ます)` : ``}</span></p>`
+      : ``;
+    const drillHtml = (drillIds.length && (isToday || oxNav)) || unsureHtml ? `
       <div class="exam-drill">
-        ${doneDay === DateUtil.today() ? `<p class="exam-drill-note">${ic(`calendar`, 16)}<span>間違えた${drillIds.length}問を<a href="#quiz/due">解き直しの予定</a>に追加しました(明日から)</span></p>` : ``}
+        ${drillIds.length && isToday ? `<p class="exam-drill-note">${ic(`calendar`, 16)}<span>間違えた${drillIds.length}問を<a href="#quiz/due">解き直しの予定</a>に追加しました(明日から)</span></p>` : ``}
+        ${unsureHtml}
         ${oxNav ? `<a class="btn btn-secondary btn-block" href="${esc(oxNav)}" data-role="drill-ox">${ic(`o-x`)}<span>この論点を○×で確認</span></a>` : ``}
       </div>` : ``;
     const nextHtml = `
@@ -1664,6 +1831,19 @@ window.Views.exam = (function () {
     list.innerHTML = `
       ${!wrong.length ? `<p class="exam-wrong-none">${ic(`trophy`, 18)}間違えた問題はありません。見直し印を付けた問題を表示しています。</p>` : ``}
       ${items.map((x) => wrongItemHtml(x.w, x.status, isFlagged(x.w))).join(``)}`;
+    // AIに聞く: ボタン(イベントつき)は AskAi が作る。使わない設定のとき(null)は置き場所ごと消す
+    list.querySelectorAll(`[data-ask]`).forEach((slot) => {
+      let b = null;
+      try {
+        b = window.AskAi && typeof AskAi.button === `function`
+          ? AskAi.button({ kind: `exam`, quizId: slot.dataset.ask, picked: slot.dataset.picked === `` ? null : Number(slot.dataset.picked) })
+          : null;
+      } catch (e) { console.error(`[AIに聞く] ボタンを作れませんでした`, e); }
+      if (b) {
+        if (slot.dataset.no) b.setAttribute(`aria-label`, `問${slot.dataset.no}についてAIに聞く`);
+        slot.appendChild(b);
+      } else slot.remove();
+    });
     // 最初は先頭の10問だけ。「残りを表示」は隠していた行を出すだけ(作り直さないのでスクロール位置が動かない)
     const more = document.createElement(`button`);
     more.type = `button`;
@@ -1752,6 +1932,20 @@ window.Views.exam = (function () {
       ? `<div class="exam-compare-row is-correct"><dt>${ic(`check-circle`, 14)}正解</dt><dd>${w.correctIndex + 1}. ${esc(w.choices[w.correctIndex])}</dd></div>`
       : `<div class="exam-compare-row is-yours"><dt>${ic(chosen === null ? `info` : `x-circle`, 14)}あなた</dt><dd>${chosen === null ? `未回答` : `${chosen + 1}. ${esc(w.choices[chosen])}`}</dd></div>
         <div class="exam-compare-row is-correct"><dt>${ic(`check-circle`, 14)}正解</dt><dd>${w.correctIndex + 1}. ${esc(w.choices[w.correctIndex])}</dd></div>`;
+    // 個数・組合せの問題: 記述ア〜エそれぞれの正誤(○=正しい記述・×=誤った記述)と注
+    const style = styleOfQ(w);
+    const stmtRows = style ? w.statements.map((st) => `
+        <li class="exam-review-choice">
+          <span class="exam-mark ${st.truth ? `is-true` : `is-false`}" aria-hidden="true">${st.truth ? `○` : `×`}</span>
+          <div class="exam-review-main">
+            <p class="exam-review-text"><span class="exam-stmt-tag">${esc(st.label)}</span><span class="sr-only">、${st.truth ? `正しい記述。` : `誤った記述。`}</span>${esc(st.text)}</p>
+            ${st.note ? `<p class="exam-choice-note">${esc(st.note)}</p>` : ``}
+          </div>
+        </li>`).join(``) : ``;
+    // AIに聞く(4択の確認問題だけ。ボタンは結果を描いたあとで AskAi に作ってもらう)
+    const picked = w.kind === `fixed` && w.refId ? pickedDataIndex(w) : null;
+    // data-no: 結果の一覧には同じ「AIに聞く」が問題の数だけ並ぶので、読み上げではどの問題のボタンかを付ける
+    const askSlot = w.kind === `fixed` && w.refId ? `<div class="exam-ask" data-ask="${esc(w.refId)}" data-picked="${picked === null ? `` : picked}" data-no="${Number.isInteger(w.no) ? w.no : ``}"></div>` : ``;
     // 全選択肢: 正誤判定型は記述の正誤(○=正しい記述・×=誤った記述)、それ以外は正解の選択肢に○
     const choiceRows = w.choices.map((text, ci) => {
       const good = truths ? truths[ci] : ci === w.correctIndex;
@@ -1776,17 +1970,22 @@ window.Views.exam = (function () {
           ${w.categoryId ? `<span class="badge badge-soft">${esc(catName(w.categoryId))}</span>` : ``}
           ${levelBadge(w.level)}
           ${w.kind !== `fixed` ? `<span class="source-tag">${typeLabel(w)}</span>` : ``}
+          ${style ? `<span class="source-tag">${style === `count` ? `個数` : `組合せ`}</span>` : ``}
           ${flagged ? `<span class="exam-flag-tag">${ic(`flag`, 14)}見直し印</span>` : ``}
         </div>
         ${w.prompt ? `<p class="exam-q-prompt">${esc(w.prompt)}</p>` : ``}
         <p class="exam-stem">${esc(w.stem)}</p>
         <dl class="exam-compare">${compare}</dl>
         <details class="exam-more">
-          <summary>${ic(`list`, 16)}<span>解説と全選択肢</span>${ic(`chevron-down`, 16)}</summary>
-          ${truths ? `<p class="exam-review-legend">○=正しい記述、×=誤った記述</p>` : ``}
+          <summary>${ic(`list`, 16)}<span>${style ? `解説と記述ア〜エ` : `解説と全選択肢`}</span>${ic(`chevron-down`, 16)}</summary>
+          ${style ? `
+            <p class="exam-review-legend">記述(○=正しい記述、×=誤った記述)</p>
+            <ol class="exam-review-list exam-stmt-review" role="list">${stmtRows}</ol>
+            <p class="exam-review-legend">選択肢</p>` : truths ? `<p class="exam-review-legend">○=正しい記述、×=誤った記述</p>` : ``}
           <ol class="exam-review-list">${choiceRows}</ol>
           ${showExplain ? `<p class="quiz-explanation"><strong>解説</strong> ${esc(w.explanation)}</p>` : ``}
           ${links.length ? `<div class="chip-row exam-wrong-links">${links.join(``)}</div>` : ``}
+          ${askSlot}
           ${reportHtml(w)}
         </details>
       </article>`;
@@ -1797,6 +1996,6 @@ window.Views.exam = (function () {
     // 保存容量が足りないときの「古い記録を整理」(Storage)から呼ぶ
     compactHistory,
     // テスト・他画面からの参照用
-    _internal: { buildExam, createSession, createRetrySession, gradeSession, finalizeSession, loadSession, passLine, modeDef, isExpired, recentAsked, reshuffleQuestion, compactEntry, compactQuestion, expandQuestion, trimHistory, HISTORY_FULL },
+    _internal: { buildExam, createSession, createRetrySession, gradeSession, finalizeSession, loadSession, passLine, modeDef, isExpired, recentAsked, reshuffleQuestion, compactEntry, compactQuestion, expandQuestion, trimHistory, validQuestion, noteAnswers, HISTORY_FULL, STYLED_QUOTAS },
   };
 })();

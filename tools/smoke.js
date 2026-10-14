@@ -12,10 +12,13 @@
 //      Service Worker のキャッシュに入らない・アプリへのリンクで起動する(ブラウザで)。
 //      静的ページがないときは、--require-static なら失敗、なければ確認を省く
 //   8. 直リンク(最初からホーム以外の画面を開く): 4択の1問・用語・トピックの基礎知識・模擬試験の結果・間違えた○× が出る。
-//      検索。ブラウザの中の APP_DATA と○×の文が元のファイル(--raw)を Node で読んだものとまったく同じ(ハッシュ)
+//      検索(v12 の画面・カード、個数・組合せの記述、表記ゆれも)。ブラウザの中の APP_DATA と○×の文が元のファイル(--raw)を Node で読んだものとまったく同じ(ハッシュ)
 //   9. 公開版(ビルドしたもの)だけ: 詳細の束(assets/detail.*.js)が遅いとき、ホームは詳細を待たずに出る・検索は届いた分で動く・
 //      ほかの画面は「読み込み中」のあと届いたら出る・再読み込みで保存したスクロール位置に戻る
 //   6 のオフラインでは、直リンクと、公開版では入れ子の URL(learn/)がアプリの入口へ移ることも確かめる
+//  10. v12: 個数・組合せの問題の直リンク(4択と○×の記述ア)・「AIに聞く」のシート(リンクに問い合わせの文字列がない)・
+//      模擬試験の個数・組合せの枠(Views.exam._internal.STYLED_QUOTAS)・試験の後の表示(日付を 2026-10-19 にして、
+//      ホームの「お疲れさまでした」と合格発表の案内・学習計画の試験後の表示)
 //   ブラウザが見つからないときは、--require-browser なら失敗、なければ確認を省いて成功で終わる
 'use strict';
 const fs = require('fs');
@@ -35,7 +38,8 @@ const REQUIRE = args.includes('--require-browser');
 const REQUIRE_STATIC = args.includes('--require-static');
 const BASE_PATH = '/shojiki-fudousan-gakushu/';
 const GH = !!process.env.GITHUB_ACTIONS;
-const ROUTES = ['home', 'topics', 'topics/topicL', 'glossary', 'bookmarks', 'figures', 'calculators', 'review', 'quiz', 'ox', 'exam', 'progress', 'works', 'summary', 'sources', 'about', 'about/privacy', 'settings', 'more'];
+const ROUTES = ['home', 'topics', 'topics/topicL', 'glossary', 'bookmarks', 'figures', 'calculators', 'review', 'quiz', 'ox', 'exam', 'progress',
+  'progress/predict', 'progress/time', 'progress/badges', 'plan', 'works', 'summary', 'sources', 'about', 'about/privacy', 'settings', 'settings/goal', 'settings/answer', 'more'];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const failures = [];
 const fail = (m) => { failures.push(m); console.log(GH ? `::error::smoke: ${m}` : `FAIL ${m}`); };
@@ -258,6 +262,15 @@ async function checkDeepLinks(browser, base, exp) {
   }
   const search = await page.eval(`['クーリング', '敷金', '35条'].map((q) => GlobalSearch.search(q, 8).length)`);
   if (search.some((n) => !n)) fail(`検索の結果がありません: ${JSON.stringify(search)}`); else ok(`検索(クーリング ${search[0]}件・敷金 ${search[1]}件・35条 ${search[2]}件)`);
+  // v12: 新しい画面・カード(学習計画・1日の目標)と、個数・組合せの問題の記述ア〜エ・表記ゆれ(建ぺい率 = 建蔽率)も検索で見つかる
+  const s12 = await page.eval(`(() => {
+    const top = (q) => (GlobalSearch.search(q, 8)[0] || {}).nav || null;
+    const sq = QuizEngine.styleOf ? APP_DATA.quiz.find((x) => QuizEngine.styleOf(x) && Array.isArray(x.stmts) && x.stmts.length) : null;
+    return { plan: top('学習計画'), goal: top('1日の目標'), variant: GlobalSearch.search('建ぺい率', 8).length,
+      stmt: sq ? GlobalSearch.search(String(sq.stmts[0]).slice(0, 20), 100000).some((r) => r.nav === '#quiz/q/' + sq.id) : null };
+  })()`);
+  if (s12.plan !== '#plan' || s12.goal !== '#settings/goal' || !s12.variant || s12.stmt === false) fail(`検索(v12)が想定と違います: ${JSON.stringify(s12)}`);
+  else ok(`検索(v12): 学習計画 → ${s12.plan}・1日の目標 → ${s12.goal}・建ぺい率 ${s12.variant}件・個数・組合せの記述${s12.stmt === null ? '(問題なし)' : 'も見つかる'}`);
   // ID を選び、間違えた○×と模擬試験の結果の記録を作る
   const ids = await page.eval(`(() => {
     const P = 'shojikiLearn.v1.';
@@ -279,8 +292,31 @@ async function checkDeepLinks(browser, base, exp) {
       localStorage.setItem(P + 'examHistory', JSON.stringify([entry]));
       examId = entry.id;
     }
-    return { quiz: q.id, term: term.id, topic: topic.id, basic, examId, stmtTexts: st.map((s) => String(s.text).slice(0, 20)) };
+    // v12: 個数・組合せの問題(記述ア〜エ)。○×では「問題ID#s0」が記述ア
+    const sq = QuizEngine.styleOf ? APP_DATA.quiz.find((x) => QuizEngine.isMcItem(x) && QuizEngine.styleOf(x) && QuizEngine.statementsFrom(x).length === 4) : null;
+    const styled = sq ? { id: sq.id, s0: String(QuizEngine.statementsFrom(sq)[0].text).slice(0, 20) } : null;
+    // v12: 模擬試験の個数・組合せの枠(分野ごとの数)
+    let quota = null;
+    if (E && E.buildExam && E.STYLED_QUOTAS) {
+      quota = {};
+      ['full', 'short'].forEach((mode) => {
+        const got = {};
+        E.buildExam(mode, {}).questions.forEach((x) => { if (x && x.style) got[x.categoryId] = (got[x.categoryId] || 0) + 1; });
+        quota[mode] = { want: E.STYLED_QUOTAS[mode] || {}, got };
+      });
+    }
+    return { quiz: q.id, term: term.id, topic: topic.id, basic, examId, styled, quota, stmtTexts: st.map((s) => String(s.text).slice(0, 20)) };
   })()`);
+  // 模擬試験の個数・組合せの枠: 分野ごとに枠の数だけ入り、枠のない分野には入らない
+  if (ids.quota) {
+    const bad = [];
+    Object.keys(ids.quota).forEach((mode) => {
+      const { want, got } = ids.quota[mode];
+      Object.keys(Object.assign({}, want, got)).forEach((cat) => { if ((got[cat] || 0) !== (want[cat] || 0)) bad.push(`${mode}/${cat} ${got[cat] || 0}問(枠 ${want[cat] || 0}問)`); });
+    });
+    if (bad.length) fail(`模擬試験の個数・組合せの枠と合いません: ${bad.join('・')}`);
+    else ok(`模擬試験の個数・組合せの枠(${Object.keys(ids.quota).map((m) => `${m} ${JSON.stringify(ids.quota[m].got)}`).join('・')})`);
+  } else if (exp) console.log('info 模擬試験の個数・組合せの枠: Views.exam._internal.STYLED_QUOTAS がないため省略');
   await page.close();
   const sel = (s) => JSON.stringify(s);
   const links = [
@@ -292,6 +328,11 @@ async function checkDeepLinks(browser, base, exp) {
   ];
   if (ids.examId) links.push([`exam/result/${ids.examId}`, 'exam', `!!document.querySelector('.exam-view.exam-result')`]);
   else console.log('info 模擬試験の結果の直リンク: Views.exam._internal がないため省略');
+  // v12: 個数・組合せの問題(4択の記述ア〜エ・○×の記述ア)
+  if (ids.styled) {
+    links.push([`quiz/q/${ids.styled.id}`, 'quiz', `!!document.querySelector('.quiz-view [data-quiz-id=' + ${sel(sel(ids.styled.id))} + '] .stmt-list')`]);
+    links.push([`ox/weak/${encodeURIComponent(`${ids.styled.id}#s0`)}`, 'ox', `!!document.querySelector('.ox-view .ox-stmt-label') && document.querySelector('.ox-view').textContent.includes(${sel(ids.styled.s0)})`]);
+  } else console.log('info 個数・組合せの問題がないため、その直リンクは省略');
   const shown = [];
   for (const [hash, view, expr] of links) {
     page = await openPage(browser.cdp);
@@ -305,6 +346,84 @@ async function checkDeepLinks(browser, base, exp) {
   }
   if (shown.length === links.length) ok(`直リンク ${shown.length}件(${shown.join('・')})`);
   return ids;
+}
+
+// 10. AIに聞く: 4択に答える → 「AIに聞く」→ シート(質問文と、ChatGPT・Claude・Gemini・e-Gov のリンク)。
+//     リンクはトップページだけ(? や # の付いた URL にしない = 問題や記録を URL に入れない)。コピーできたかはブラウザの許可しだいなので問わない
+const ASK_LINKS = ['https://chatgpt.com/', 'https://claude.ai/', 'https://gemini.google.com/', 'https://laws.e-gov.go.jp/'];
+async function checkAskAi(browser, base, ids) {
+  const id = (ids.styled && ids.styled.id) || ids.quiz;
+  const card = `.quiz-view [data-quiz-id=${JSON.stringify(id)}]`;
+  const page = await openPage(browser.cdp);
+  try {
+    await navigateNoWait(page, `${base}index.html#quiz/q/${encodeURIComponent(id)}`);
+    if (!(await page.waitFor(`window.__appBooted === true && !!document.querySelector(${JSON.stringify(`${card} .choice-list button`)})`, 30000))) { fail(`AIに聞く: 4択 ${id} が出ません`); return; }
+    await page.eval(`document.querySelector(${JSON.stringify(`${card} .choice-list button`)}).click(); true`);
+    if (!(await page.waitFor(`!!document.querySelector(${JSON.stringify(`${card} .ask-ai-btn`)})`, 5000))) { fail(`AIに聞く: 4択 ${id} に答えてもボタンが出ません`); return; }
+    // タップと同じく「利用者の操作」として押す(クリップボードの API はそのときだけ使える)
+    await page.send('Runtime.evaluate', { expression: `document.querySelector(${JSON.stringify(`${card} .ask-ai-btn`)}).click()`, userGesture: true });
+    const shown = await page.waitFor(`!!document.querySelector('.ask-ai-sheet') && /コピーしました|コピーできませんでした/.test(document.querySelector('.ask-ai-status').textContent)`, 5000);
+    const st = await page.eval(`(() => { const s = document.querySelector('.ask-ai-sheet'); const q = APP_DATA.quiz.find((x) => x.id === ${JSON.stringify(id)});
+      return s ? { links: Array.from(s.querySelectorAll('a[href]')).map((a) => ({ href: a.getAttribute('href'), target: a.target, rel: a.rel })),
+        text: s.querySelector('textarea').value, status: s.querySelector('.ask-ai-status').textContent.trim(), question: String(q.question).slice(0, 24) } : null; })()`);
+    if (!shown || !st) { fail('AIに聞く: シートが出ません'); return; }
+    const hrefs = st.links.map((l) => l.href);
+    const badLink = st.links.filter((l) => /[?#]/.test(l.href) || l.target !== '_blank' || !/\bnoopener\b/.test(l.rel) || !/\bnoreferrer\b/.test(l.rel));
+    if (JSON.stringify(hrefs.slice().sort()) !== JSON.stringify(ASK_LINKS.slice().sort())) fail(`AIに聞く: リンクが想定と違います ${JSON.stringify(hrefs)}`);
+    else if (badLink.length) fail(`AIに聞く: リンクの形が想定と違います ${JSON.stringify(badLink)}`);
+    else if (!st.text.includes(st.question) || !/【正解】/.test(st.text) || !/【私の解答】/.test(st.text)) fail(`AIに聞く: 質問文に問題・解答・正解がありません(${st.text.slice(0, 80)}…)`);
+    else if (page.errors.length) page.errors.forEach((e) => fail(`AIに聞く: ${e}`));
+    else ok(`AIに聞く: シート(${st.status}・質問文 ${st.text.length}字・リンク ${hrefs.length}件は問い合わせの文字列なし)`);
+  } finally {
+    await page.close();
+  }
+}
+
+// 11. 試験の後(日付を 2026-10-19 にする。宅建士試験 2026-10-18 を目標に登録した状態):
+//     ホームは残り日数の代わりに「お疲れさまでした」と合格発表(RETIO)の案内、学習計画は試験後の表示
+const AFTER_DATE_SHIM = `(() => {
+  const RealDate = Date;
+  const OFFSET = RealDate.UTC(2026, 9, 19, 3, 0, 0) - RealDate.now();
+  function FakeDate(...a) {
+    if (!new.target) return new RealDate(RealDate.now() + OFFSET).toString();
+    return a.length ? new RealDate(...a) : new RealDate(RealDate.now() + OFFSET);
+  }
+  FakeDate.prototype = RealDate.prototype;
+  FakeDate.now = () => RealDate.now() + OFFSET;
+  FakeDate.UTC = RealDate.UTC;
+  FakeDate.parse = RealDate.parse;
+  window.Date = FakeDate;
+})();`;
+async function checkAfterExam(browser, base) {
+  const page = await openPage(browser.cdp);
+  const P = 'shojikiLearn.v1.';
+  const keys = ['examTargets', 'learnerProfile'];
+  try {
+    await page.send('Page.addScriptToEvaluateOnNewDocument', { source: AFTER_DATE_SHIM });
+    await page.goto(`${base}index.html#settings`);
+    if (!(await page.waitFor(`window.__appBooted === true && DateUtil.today() === '2026-10-19'`, 20000))) { fail(`試験の後: 日付を 2026-10-19 にできません(${await page.eval('window.DateUtil && DateUtil.today()').catch(() => '?')})`); return; }
+    await page.eval(`(() => {
+      localStorage.setItem(${JSON.stringify(`${P}examTargets`)}, JSON.stringify([{ id: 'et_smoke', name: '宅建士試験', examTypeId: 'takken', date: '2026-10-18', primary: true, createdAt: 1 }]));
+      localStorage.setItem(${JSON.stringify(`${P}learnerProfile`)}, JSON.stringify({ goal: 'takken', interests: [], at: 1 }));
+      return true; })()`);
+    // 読み込み直す(同じ URL のハッシュだけの移動では読み込まれないので、問い合わせの文字列を付ける。Service Worker は無視して入口を返す)
+    await page.goto(`${base}index.html?smoke=after#home`);
+    const home = await page.waitFor(`window.__appBooted === true && !!document.querySelector('#view-root .home-view .hero2-days.is-after') && !!document.querySelector('#view-root .after-panel a[href="https://www.retio.or.jp/exam/"]')`, 20000);
+    await page.eval(`location.hash = '#plan'; true`);
+    const plan = await page.waitFor(`Router.current() === 'plan' && !!document.querySelector('#view-root .plan-after')`, 20000);
+    await page.eval(`location.hash = '#settings/targets'; true`);
+    const settings = await page.waitFor(`Router.current() === 'settings' && /終了/.test((document.querySelector('[data-role="target-list"]') || {}).textContent || '')`, 20000);
+    const st = await page.eval(STATE).catch(() => null);
+    if (!home) fail(`試験の後: ホームに「お疲れさまでした」と合格発表の案内が出ません ${JSON.stringify(st)}`);
+    else if (!plan) fail(`試験の後: 学習計画が試験後の表示になりません ${JSON.stringify(st)}`);
+    else if (!settings) fail('試験の後: 設定の目標の試験が「終了」になりません');
+    else if (page.errors.length) page.errors.forEach((e) => fail(`試験の後: ${e}`));
+    else ok('試験の後(2026-10-19): ホームの合格発表の案内・学習計画の試験後の表示・設定の「終了」');
+  } finally {
+    // ほかの確認に残さない(同じブラウザのページは保存領域を共有する)
+    await page.eval(`(() => { ${JSON.stringify(keys)}.forEach((k) => localStorage.removeItem(${JSON.stringify(P)} + k)); return true; })()`).catch(() => {});
+    await page.close();
+  }
 }
 
 // 9. 公開版で詳細の束が遅いとき(サーバーで3秒遅らせ、Service Worker とブラウザのキャッシュを使わないページで)
@@ -434,6 +553,9 @@ async function main() {
 
     // 8. 直リンク・検索・データのハッシュ
     deepIds = await checkDeepLinks(browser, base, exp);
+    // 10. AIに聞く・11. 試験の後の表示(v12)
+    if (deepIds) await checkAskAi(browser, base, deepIds);
+    await checkAfterExam(browser, base);
     // 9. 詳細の束が遅いとき(公開版だけ)
     if (built) await checkSlowDetail(browser, base, server);
 

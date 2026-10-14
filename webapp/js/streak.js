@@ -1,5 +1,6 @@
 // 学習の連続日数(ストリーク)管理
 // activityLog: { "YYYY-MM-DD": 学習アクション回数 } (旧形式の true は 1 回として扱う)
+// 記録するたびに window へ 'study:action' を送る(goals.js・badges.js が聞く)
 window.Streak = (function () {
   function getLog() {
     const log = Storage.get(`activityLog`, {});
@@ -17,6 +18,8 @@ window.Streak = (function () {
     const log = getLog();
     log[today] = countOf(log[today]) + 1;
     Storage.set(`activityLog`, log);
+    // 学習した操作のあとの処理(目標の達成・バッジ)に知らせる。v12
+    try { window.dispatchEvent(new CustomEvent(`study:action`)); } catch (e) { /* 古いブラウザ・テスト環境では知らせない */ }
   }
 
   function getCurrentStreak() {

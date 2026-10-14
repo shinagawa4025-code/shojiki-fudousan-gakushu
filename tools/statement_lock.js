@@ -13,8 +13,10 @@
 //
 // 判定:
 //   エラー: 固定済みの文の正誤が変わった / 選択肢の順番が入れ替わった(同じ問題の別の番号に同じ文がある) / 文が消えた(廃止の登録がない)
+//           文のキーの形が「問題ID#0〜3」(選択肢)・「問題ID#s0〜s3」(個数・組合せの問題の記述ア〜エ)でない
 //   警告:   文の言い回しが変わった(正誤は同じ)
 //   お知らせ: まだ固定していない新しい文(--update で追記する)
+// 個数・組合せの問題の記述ア〜エも同じ決まり(記述の順番と正誤は変えない。問題の style も変えない。変えるなら新しいID)
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -22,6 +24,8 @@ const crypto = require('crypto');
 const { loadApp } = require('./lib/appload.js');
 
 const LOCK_FILE = path.join(__dirname, 'statement_lock.json');
+// 文のキー: 「問題ID#選択肢の番号(0〜3)」か「問題ID#s記述の番号(0〜3。ア = s0)」(利用者の ○× の記録 oxStats のキーと同じ)
+const KEY_RE = /^[^#]+#(?:[0-3]|s[0-3])$/;
 
 // 文の正規化: NFKC、空白をすべて除く、末尾の「。」を除く
 const normalize = (s) => String(s).normalize('NFKC').replace(/\s+/g, '').replace(/。$/, '');
@@ -65,6 +69,17 @@ function compare(lock, stmts, dataRetired) {
   const retiredList = new Set([...(lock.retired || []), ...dataRetired]);
   const isRetired = (id) => retiredList.has(id) || retiredList.has(id.split('#')[0]);
   const now = new Map(stmts.map((s) => [s.id, s]));
+  // キーの形(固定済みのもの・今のデータのもの)。形の違うキーがあれば --update もしない
+  Object.keys(locked).forEach((id) => { if (!KEY_RE.test(id)) errors.push(`${id}: 固定済みの文のキーの形が違います(問題ID#0〜3 か 問題ID#s0〜s3)`); });
+  stmts.forEach((st) => { if (!KEY_RE.test(String(st.id))) errors.push(`${st.id}: 文のキーの形が違います(問題ID#0〜3 か 問題ID#s0〜s3。js/quizEngine.js の statementsFrom を確認)`); });
+  // 今の文がある問題(選択肢の文「#n」か記述ア〜エ「#sn」か。消えた文の理由の説明に使う)
+  const nowKinds = new Map();
+  stmts.forEach((st) => {
+    const q = String(st.id).split('#')[0];
+    const k = /#s\d$/.test(st.id) ? 's' : 'n';
+    if (!nowKinds.has(q)) nowKinds.set(q, new Set());
+    nowKinds.get(q).add(k);
+  });
   // 問題ごとの固定済みの文の目印(並べ替えの検出用)
   const lockedByQuiz = new Map();
   Object.keys(locked).forEach((id) => {
@@ -76,7 +91,12 @@ function compare(lock, stmts, dataRetired) {
     const [lh, lt] = String(locked[id]).split(':');
     const st = now.get(id);
     if (!st) {
-      if (!isRetired(id)) errors.push(`${id}: 固定済みの文が消えました(問題を廃止したなら APP_DATA.retiredQuizIds に問題IDを入れる)`);
+      if (isRetired(id)) return;
+      // 同じ問題の文が、選択肢の文(#n)と記述ア〜エ(#sn)の間で入れ替わった = 問題の形(個数・組合せかどうか)を変えた
+      const kinds = nowKinds.get(id.split('#')[0]);
+      const wasStyled = /#s\d$/.test(id);
+      if (kinds && kinds.has(wasStyled ? 'n' : 's')) errors.push(`${id}: 問題の形(個数・組合せの style)が変わり、固定済みの文が消えました。公開した問題の形は変えない(新しいIDの問題にして、古いIDを APP_DATA.retiredQuizIds に入れる)`);
+      else errors.push(`${id}: 固定済みの文が消えました(問題を廃止したなら APP_DATA.retiredQuizIds に問題IDを入れる)`);
       return;
     }
     const h = textHash(st.text);
@@ -98,6 +118,12 @@ function run(opts) {
   const { stmts, retired } = currentStatements(webappDir);
   const out = { errors: [], warns: [], info: [], count: stmts.length };
   if (opts.mode === 'write') {
+    const badKeys = stmts.filter((st) => !KEY_RE.test(String(st.id)));
+    if (badKeys.length) {
+      badKeys.forEach((st) => out.errors.push(`${st.id}: 文のキーの形が違います(問題ID#0〜3 か 問題ID#s0〜s3)`));
+      out.info.push('エラーがあるため --write はしませんでした');
+      return out;
+    }
     const entries = {};
     stmts.forEach((st) => { entries[st.id] = fingerprint(st); });
     const prev = readLock();
@@ -125,7 +151,7 @@ function run(opts) {
   return out;
 }
 
-module.exports = { run, compare, normalize, textHash, fingerprint, LOCK_FILE };
+module.exports = { run, compare, normalize, textHash, fingerprint, LOCK_FILE, KEY_RE };
 
 if (require.main === module) {
   const args = process.argv.slice(2);

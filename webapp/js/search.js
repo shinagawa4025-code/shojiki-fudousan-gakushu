@@ -1,5 +1,6 @@
 // サイト全体検索: 画面/トピック/用語/基礎知識/図解/クイズ/情報源/作品で学ぶ(動画)を横断検索
-// 全角・半角(NFKC)とカタカナ・ひらがなの違い、中黒・空白の有無(クーリング・オフ = クーリングオフ)を吸収して照合する
+// 全角・半角(NFKC)とカタカナ・ひらがなの違い、中黒・空白の有無(クーリング・オフ = クーリングオフ)、
+// 送りがなと法令の漢字表記のゆれ(引き渡し = 引渡し、建ぺい率 = 建蔽率。fold)を吸収して照合する
 window.GlobalSearch = (function () {
   let index = null;
   let indexKey = null;
@@ -12,7 +13,8 @@ window.GlobalSearch = (function () {
   // 画面そのものを探せるようにする(「バックアップ」で設定、「模試」で模擬試験など)
   const SCREEN_KEYWORDS = {
     home: { desc: `試験までの残り日数・今日やること`, words: [`ホーム`, `カウントダウン`, `今日やること`] },
-    progress: { desc: `分野別の達成度・弱点分析・学習の記録`, words: [`進捗`, `弱点分析`, `苦手`, `習熟度`, `学習の記録`] },
+    progress: { desc: `分野別の達成度・弱点分析・合格予測・バッジ・学習の記録`, words: [`進捗`, `弱点分析`, `苦手`, `習熟度`, `学習の記録`, `合格予測`, `予測`, `予想点`, `バッジ`, `実績`, `学習時間`] },
+    plan: { desc: `試験日から逆算した今週の学習計画`, words: [`学習計画`, `計画`, `逆算`, `スケジュール`, `今週やること`] },
     topics: { desc: `テーマごとの基礎知識`, words: [`トピック`, `基礎知識`] },
     glossary: { desc: `用語カードの一覧`, words: [`用語集`, `用語カード`, `フラッシュカード`] },
     figures: { desc: `図で理解する重要論点`, words: [`図解`, `図`] },
@@ -20,16 +22,25 @@ window.GlobalSearch = (function () {
     works: { desc: `『正直不動産』の動画をテーマ別に紹介(任意コーナー)`, words: [`作品`, `動画`, `エピソード`, `正直不動産`, `ドラマ`, `マンガ`] },
     about: { desc: `運営者・プライバシー・免責事項・更新履歴`, words: [`このアプリについて`, `運営者`, `プライバシー`, `免責`, `更新履歴`, `お問い合わせ`, `誤り`, `報告`] },
     review: { desc: `間隔反復で用語を復習する`, words: [`復習`, `今日の復習`, `間隔反復`, `SRS`] },
-    quiz: { desc: `確認問題・4択・自動生成クイズ`, words: [`クイズ`, `4択`, `確認問題`, `問題`] },
-    ox: { desc: `○×一問一答。間違えた文だけ解き直せる`, words: [`一問一答`, `○×`, `まるばつ`, `OX`, `マルバツ`] },
+    quiz: { desc: `確認問題・4択(個数・組合せの問題も)・自動生成クイズ`, words: [`クイズ`, `4択`, `確認問題`, `問題`, `個数問題`, `組合せ問題`, `個数・組合せ`] },
+    ox: { desc: `○×一問一答。間違えた文だけ解き直せる`, words: [`一問一答`, `○×`, `まるばつ`, `OX`, `マルバツ`, `自信度`] },
     exam: { desc: `本番形式の模擬試験(宅建士)`, words: [`模擬試験`, `模試`, `本試験`, `過去問形式`] },
     calculators: { desc: `住宅ローン・税金・諸費用の概算`, words: [`計算機`, `ローン`, `シミュレーション`, `税金計算`] },
     sources: { desc: `公的機関の一次情報・出典`, words: [`情報源`, `出典`, `一次情報`] },
-    settings: { desc: `試験日・今日の復習・テーマ・読み上げ・バックアップ`, words: [`設定`, `バックアップ`, `エクスポート`, `インポート`, `復元`, `テーマ`, `ダークモード`, `試験日`, `目標`, `読み上げ`, `新しい用語の数`] },
+    settings: { desc: `試験日・1日の目標・今日の復習・AIに聞く・テーマ・読み上げ・バックアップ`, words: [`設定`, `バックアップ`, `エクスポート`, `インポート`, `復元`, `テーマ`, `ダークモード`, `試験日`, `目標`, `1日の目標`, `AIに聞く`, `読み上げ`, `新しい用語の数`] },
   };
 
+  // 画面の中のカード(#progress/predict など)へ直接案内する項目。親の画面が索引にあるときだけ出す
+  const SUB_SCREENS = [
+    { view: `progress`, title: `合格予測`, nav: `#progress/predict`, desc: `宅建士の分野別の正答率から本試験の得点を推定(アプリ独自の目安)`, words: [`予測`, `予想点`, `合格ライン`] },
+    { view: `progress`, title: `学習時間`, nav: `#progress/time`, desc: `直近7日の学習時間`, words: [`勉強時間`] },
+    { view: `progress`, title: `バッジ`, nav: `#progress/badges`, desc: `学習の節目でもらえるバッジの一覧`, words: [`実績`] },
+    { view: `settings`, title: `1日の目標`, nav: `#settings/goal`, desc: `ホームの「今日の学習」の目標(回数か学習時間)`, words: [`目標`, `学習の目標`, `ノルマ`] },
+    { view: `settings`, title: `AIに聞く`, nav: `#settings/answer`, desc: `解説の「AIに聞く」ボタンを出すかどうか`, words: [`AI`, `ChatGPT`, `Claude`, `Gemini`] },
+  ];
+
   // メニュー(Nav.ITEMS)に無いときに使う画面名
-  const SCREEN_FALLBACK_LABELS = { works: `作品で学ぶ`, about: `このアプリについて` };
+  const SCREEN_FALLBACK_LABELS = { works: `作品で学ぶ`, about: `このアプリについて`, plan: `学習計画` };
 
   function norm(s) {
     return String(s || ``)
@@ -39,15 +50,39 @@ window.GlobalSearch = (function () {
       .replace(/[・\s　]/g, ``);
   }
 
+  // 表記ゆれをそろえた形(norm のあとに使う。照合だけに使い、画面の表示は変えない):
+  // 法令の漢字表記とかな交じりの表記(建蔽率 = 建ぺい率、斡旋 = あっせん、毀損 = き損)と、
+  // 漢字にはさまれた送りがな(引き渡し = 引渡し、取り消し = 取消し、申し込み = 申込み、売り主 = 売主、差し押さえ = 差押え)
+  const FOLD = [[/蔽/g, `ぺい`], [/斡旋/g, `あっせん`], [/毀/g, `き`], [/押さえ/g, `押え`]];
+  const KANJI_OKURI = /([一-鿿々])[きしちりみめけえい](?=[一-鿿々])/g;
+  function fold(n) {
+    let s = n;
+    FOLD.forEach(([re, to]) => { s = s.replace(re, to); });
+    return s.replace(KANJI_OKURI, `$1`);
+  }
+  // 検索語の表記ゆれをそろえる。末尾の送りがなも省く(「引き渡し」「取消し」で「引渡し時期」にも当たるように。
+  // 本文の「引渡し時期」は fold で「引渡時期」になるため)。1文字だけになるときは省かない
+  function foldQuery(q) {
+    const f = fold(q);
+    const t = f.replace(/([一-鿿々])[きしちりみめけえい]$/, `$1`);
+    return Array.from(t).length >= 2 ? t : f;
+  }
+
   function entry(type, title, snippet, nav, aliases, extra) {
     const parts = [title].concat(aliases || [], [snippet, extra || ``]);
-    return {
-      type, title, snippet, nav,
-      titleN: norm(title),
-      aliasesN: (aliases || []).map(norm),
-      // 空白を除いて照合するため、項目の境目をまたいで一致しないよう区切り文字でつなぐ
-      haystack: parts.map(norm).join(`\u0001`),
-    };
+    const titleN = norm(title);
+    const aliasesN = (aliases || []).map(norm);
+    // 空白を除いて照合するため、項目の境目をまたいで一致しないよう区切り文字でつなぐ
+    const haystack = parts.map(norm).join(`\u0001`);
+    const haystackF = fold(haystack);
+    const item = { type, title, snippet, nav, titleN, aliasesN, haystack };
+    // 表記ゆれをそろえた形(違うときだけ持つ)
+    if (haystackF !== haystack) {
+      item.haystackF = haystackF;
+      item.titleF = fold(titleN);
+      item.aliasesF = aliasesN.map(fold);
+    }
+    return item;
   }
 
   // 試験の分野(Stats)が分かる環境なら使う
@@ -112,6 +147,10 @@ window.GlobalSearch = (function () {
       if (screens.has(view) || !SCREEN_KEYWORDS[view]) return;
       const k = SCREEN_KEYWORDS[view];
       idx.push(entry(`画面`, SCREEN_FALLBACK_LABELS[view], k.desc, `#${view}`, k.words));
+      screens.add(view);
+    });
+    SUB_SCREENS.forEach((s) => {
+      if (screens.has(s.view)) idx.push(entry(`画面`, s.title, s.desc, s.nav, s.words));
     });
     window.APP_DATA.topics.forEach((t) => {
       idx.push(entry(`トピック`, t.name, t.description, `#topics/${t.id}`));
@@ -135,7 +174,11 @@ window.GlobalSearch = (function () {
     }
     window.APP_DATA.quiz.forEach((q) => {
       if (partial) idx.push(entry(`クイズ`, q.question, ``, `#quiz/q/${q.id}`, []));
-      else idx.push(entry(`クイズ`, q.question, q.answer || q.explanation || ``, `#quiz/q/${q.id}`, [], (q.choices || []).join(` `)));
+      else {
+        // 個数・組合せの問題は、選択肢(一つ〜四つ・記号の組)ではなく記述ア〜エに中身があるので、記述も探す対象にする
+        const stmts = q.style != null && Array.isArray(q.stmts) ? q.stmts : [];
+        idx.push(entry(`クイズ`, q.question, q.answer || q.explanation || ``, `#quiz/q/${q.id}`, [], (q.choices || []).concat(stmts).join(` `)));
+      }
     });
     if (!partial) {
       window.APP_DATA.sources.forEach((s) => {
@@ -145,12 +188,26 @@ window.GlobalSearch = (function () {
     return idx;
   }
 
-  function rankOf(item, q) {
-    if (item.titleN === q) return 0;
-    if (item.titleN.startsWith(q)) return 1;
-    if (item.aliasesN.some((a) => a === q || a.startsWith(q))) return 2;
-    if (item.titleN.includes(q)) return 3;
+  function rankIn(item, title, aliases, q) {
+    // 4択の問題文は長い文なので、名前の一致としては扱わない(「抵当権に関する次の記述…」が
+    // 抵当権の基礎知識より前に並ばないように)。問題文の先頭の一致は、学ぶ内容の名前の途中の一致と同じ順位、
+    // 問題文の途中の一致は、学ぶ内容の説明の一致と同じ順位、選択肢・解説だけの一致はその後
+    if (item.type === `クイズ`) return title.startsWith(q) ? 3 : title.includes(q) ? 4 : 5;
+    if (title === q) return 0;
+    if (title.startsWith(q)) return 1;
+    if (aliases.some((a) => a === q || a.startsWith(q))) return 2;
+    if (title.includes(q)) return 3;
     return 4;
+  }
+
+  function rankOf(item, q, qf) {
+    const r = rankIn(item, item.titleN, item.aliasesN, q);
+    if (r === 0 || !qf) return r;
+    return Math.min(r, rankIn(item, item.titleF || item.titleN, item.aliasesF || item.aliasesN, qf));
+  }
+
+  function matches(item, q, qf) {
+    return item.haystack.includes(q) || (item.haystackF || item.haystack).includes(qf);
   }
 
   function typeOrder(item) {
@@ -171,9 +228,10 @@ window.GlobalSearch = (function () {
     if (detailMissing()) AppData.whenDetail().catch(() => { /* 失敗の知らせは AppData が出す */ });
     const q = norm(String(query || ``).trim());
     if (!q) return [];
+    const qf = foldQuery(q);
     return index
-      .filter((item) => item.haystack.includes(q))
-      .map((item) => ({ item, rank: rankOf(item, q) }))
+      .filter((item) => matches(item, q, qf))
+      .map((item) => ({ item, rank: rankOf(item, q, qf) }))
       .sort((a, b) => (isLast(a.item) - isLast(b.item)) || (a.rank - b.rank) || (typeOrder(a.item) - typeOrder(b.item)) || (a.item.title.length - b.item.title.length))
       .slice(0, limit || 8)
       .map((e) => e.item);

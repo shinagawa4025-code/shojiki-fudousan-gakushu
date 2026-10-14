@@ -15,8 +15,10 @@ const vm = require('vm');
 const crypto = require('crypto');
 
 const PENDING = '…';
+// stmts・stmtNotes は個数・組合せの問題(style あり)の記述ア〜エと注。style・stmtTruths・correctIndex・ask は本体に残す
+// (ホームの集計・○×の文の id と正誤・整合性チェックが本体だけで元と同じになるように)
 const DETAIL_FIELDS = {
-  quiz: ['explanation', 'answer', 'choiceNotes', 'choices'],
+  quiz: ['explanation', 'answer', 'choiceNotes', 'choices', 'stmts', 'stmtNotes'],
   terms: ['deepDive', 'lawRef'],
   basics: ['deepDive', 'lawRef'],
   episodes: ['displayLabel', 'theme', 'summary', 'termsNote'],
@@ -117,6 +119,13 @@ function standIn(v) {
   return undefined;
 }
 
+// 集まりの項目ごとに、DETAIL_FIELDS にあっても本体に残す項目。
+// 個数・組合せの問題の選択肢(一つ〜四つ・「ア、イ」のような記号の組)は短く、答えの検算(組合せの読み取り)と
+// 整合性チェックに使うので、本体に残す(詳細が届く前でも、届いたあとと同じ結果になるように)
+function keepInCore(key, o, f) {
+  return key === 'quiz' && f === 'choices' && o.style != null;
+}
+
 // 本体と詳細に分ける
 function splitData(data) {
   const core = JSON.parse(JSON.stringify(data));
@@ -134,12 +143,13 @@ function splitData(data) {
       if (!o || typeof o !== 'object' || typeof o.id !== 'string' || !o.id) throw new Error(`APP_DATA.${key}[${i}] に id がありません`);
       if (ids.has(o.id)) throw new Error(`APP_DATA.${key} の id が重複しています: ${o.id}`);
       ids.add(o.id);
-      // 廃止した問題は起動時に取り除かれるので、詳細を持たせない(仮の値のまま取り除かれる)
+      // 廃止した問題は起動時に取り除かれるので、詳細に回さない(本体に元の値のまま入り、起動時に js/dataIndex.js が取り除く。
+      // 仮の値にすると、戻したときに元のデータと同じにならない。数問・数KBなので大きさへの影響は小さい)
       const skip = key === 'quiz' && retired.has(o.id);
       const row = [o.id];
       let any = false;
       fields.forEach((f) => {
-        const s = hasOwn(o, f) ? standIn(o[f]) : undefined;
+        const s = hasOwn(o, f) && !keepInCore(key, o, f) ? standIn(o[f]) : undefined;
         if (s === undefined || skip) { row.push(0); return; }
         row.push(o[f]);
         o[f] = s;
@@ -191,4 +201,4 @@ function firstDifference(a, b, p) {
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-module.exports = { PENDING, DETAIL_FIELDS, CODE_FILES, snapshotData, splitData, mergeForCheck, firstDifference, assertJsonSafe, sha };
+module.exports = { PENDING, DETAIL_FIELDS, CODE_FILES, snapshotData, splitData, mergeForCheck, firstDifference, assertJsonSafe, sha, standIn, keepInCore };

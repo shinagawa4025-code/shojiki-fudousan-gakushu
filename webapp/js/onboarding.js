@@ -1,13 +1,18 @@
 // 初回ガイド: はじめて開いた人に、ようこそ → 学ぶ目的 → 試験日・気になるテーマ → 実際の1問 の4ステップ(スマホは全画面)
 // 1問目を解くと、その日が学習の記録(1日目)になる。開いてから5タップ以内で1問解き終わるように組んでいる
 // 「使い方」(サイドバー・メニュー)からは showGuide(): 学び方と復習のしくみ(学ぶ目的は変えない)
+// v12: その年の試験が終わって公式の試験日がないときは、次の年度の見込みの日付(公式発表の前)を「見込み・未発表」と明記して選べる。
+//      「まず1問」では「勘で当たった」と「AIに聞く」を出さない(css/shell.css)
 window.Onboarding = (function () {
   const PREFIX = `shojikiLearn.v1.`;
   // ホームの「アプリが新しくなりました」の版。内容を変えたらここを変えると、既存の利用者に1度だけ表示される
-  const WHATS_NEW = `v11`;
+  // (v12: 4択約800問・個数/組合せ・合格予測・学習計画・目標/学習時間/バッジ・「勘で当たった」。文言は views/home.js の whatsNewCard)
+  const WHATS_NEW = `v12`;
   // 起動時に自動で書き込まれる・ガイド自身が使うキー、学習記録ではないキーは「既存ユーザー」の判定に含めない
   const IGNORE_KEYS = [`themePreference`, `ttsRate`, `oxPrefs`, `quizPrefs`, `srsMigrated`, `schemaVersion`, `onboardingDone`, `seenWhatsNew`,
-    `lastBackupAt`, `backupNoteDismissedAt`, `installNoteDismissedAt`, `learnerProfile`, `seenReviewTip`, `glossaryMode`, `audience`];
+    `lastBackupAt`, `backupNoteDismissedAt`, `installNoteDismissedAt`, `learnerProfile`, `seenReviewTip`, `glossaryMode`, `audience`,
+    // v12: 開いただけで作られる記録・設定(学習した記録ではない)
+    `studyTime`, `studyTimeLock`, `dailyGoal`, `goalDays`, `badges`, `answerPrefs`, `predictPrefs`, `planPrefs`];
   // 目的ごとの最初の1問(なければ最初の4択)
   const FIRST_QUESTION = { takken: `quiz-K-01`, life: `quiz-beg-01`, work: `quiz-beg-03`, zeirishi: `quiz-O-01` };
   // 試験日を登録するときの表示名
@@ -296,12 +301,26 @@ window.Onboarding = (function () {
     };
   }
 
+  // 「令和9年度試験(見込み・未発表) 2027年10月17日(日)で登録」(公式発表の前の日付は、必ず見込みと分かるように)
+  function expectedChipHtml(o) {
+    const era = (String(o.label || ``).match(/^(令和\d+年度)/) || [])[1];
+    return `<span class="nowrap">${esc(era ? `${era}試験` : o.label)}(見込み・未発表)</span> <span class="nowrap">${esc(DateUtil.toJapanese(o.date, true))}で登録</span>`;
+  }
+
+  // 公式の試験日がない(その年の試験が終わった)ときは、次の年度の見込みの日付を1つだけ出す(Stats.expectedDates)
+  function expectedFor(typeId, officials) {
+    if (officials.length || !window.Stats || typeof Stats.expectedDates !== `function`) return [];
+    try { return Stats.expectedDates(typeId).slice(0, 1); } catch (e) { return []; }
+  }
+
   function renderExamSetup(state) {
     const typeId = state.goal;
     const officials = window.Stats && Stats.officialDates ? Stats.officialDates(typeId) : [];
+    const expected = expectedFor(typeId, officials);
+    const quick = officials.length + expected.length;
     const today = DateUtil.today();
     const registered = state.targetDate
-      ? `<p class="onb-status">${ic(`check-circle`, 18)}<span>登録しました: <strong>${esc(DateUtil.toJapanese(state.targetDate, true))}</strong></span></p>` : ``;
+      ? `<p class="onb-status">${ic(`check-circle`, 18)}<span>登録しました: <strong>${esc(DateUtil.toJapanese(state.targetDate, true))}${state.targetTentative ? `(見込み)` : ``}</strong></span></p>` : ``;
     return `
       <div class="onb-hero"><span class="onb-hero-icon">${ic(`calendar`, 30)}</span></div>
       <h2 class="onb-title" id="onb-title" tabindex="-1">試験日を登録しましょう</h2>
@@ -309,8 +328,10 @@ window.Onboarding = (function () {
       ${registered}
       <div class="onb-date-actions">
         ${officials.map((o) => `<button type="button" class="btn btn-lg btn-block onb-official" data-date="${o.date}">${ic(`calendar`)}<span>${officialChipHtml(o)}</span></button>`).join(``)}
-        ${officials.length ? `<button type="button" class="btn btn-secondary btn-block" data-role="other-date" aria-expanded="false">${ic(`pencil-check`, 18)}別の日付を入力</button>` : ``}
-        <form class="onb-date-form" data-role="date-form"${officials.length ? ` hidden` : ``}>
+        ${expected.map((o) => `<button type="button" class="btn btn-lg btn-block onb-official onb-expected" data-date="${o.date}" data-tentative="1" aria-describedby="onb-expected-note">${ic(`calendar`)}<span>${expectedChipHtml(o)}</span></button>
+        <p class="onb-small" id="onb-expected-note">※${esc(o.note || `見込み・未発表`)}。公式に発表されたら、設定で試験日を確かめてください。</p>`).join(``)}
+        ${quick ? `<button type="button" class="btn btn-secondary btn-block" data-role="other-date" aria-expanded="false">${ic(`pencil-check`, 18)}別の日付を入力</button>` : ``}
+        <form class="onb-date-form" data-role="date-form"${quick ? ` hidden` : ``}>
           <label class="field">試験日
             <input class="field-input" type="date" name="date" required min="${today}">
           </label>
@@ -322,15 +343,17 @@ window.Onboarding = (function () {
 
   function wireExamSetup(body, ctl, state) {
     const typeId = state.goal;
-    function register(date) {
+    // tentative: 公式発表の前の見込みの日付(目標に tentative: true を付け、表示で「見込み」と添える)
+    function register(date, tentative) {
       if (!DateUtil.isValid(date) || date < DateUtil.today()) return false;
       const exists = Stats.listTargets().some((t) => t.examTypeId === typeId && t.date === date);
-      if (!exists) Stats.addTarget({ name: TARGET_NAMES[typeId] || `試験`, examTypeId: typeId, date, primary: true });
+      if (!exists) Stats.addTarget({ name: TARGET_NAMES[typeId] || `試験`, examTypeId: typeId, date, primary: true, tentative: tentative === true });
       state.targetDate = date;
+      state.targetTentative = tentative === true;
       return true;
     }
     body.querySelectorAll(`.onb-official`).forEach((b) => b.addEventListener(`click`, () => {
-      if (register(b.dataset.date)) ctl.go(1);
+      if (register(b.dataset.date, b.dataset.tentative === `1`)) ctl.go(1);
     }));
     const form = body.querySelector(`[data-role="date-form"]`);
     const other = body.querySelector(`[data-role="other-date"]`);
@@ -435,7 +458,7 @@ window.Onboarding = (function () {
     return openDialog({
       kind: `first`,
       steps,
-      state: { goal: null, interests: [], targetDate: null, answered: false },
+      state: { goal: null, interests: [], targetDate: null, targetTentative: false, answered: false },
       skipLabel: `スキップ`,
       arrows: false,
       onFinish: (reason, state) => {

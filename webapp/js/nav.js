@@ -13,6 +13,7 @@ window.Nav = (function () {
     { view: `ox`, label: `○×一問一答`, short: `一問一答`, icon: `o-x`, mobile: `practice`, section: `practice` },
     { view: `exam`, label: `模擬試験`, icon: `timer`, mobile: `practice`, section: `practice` },
     { view: `progress`, label: `学習の進捗`, icon: `chart`, mobile: `more`, section: `record` },
+    { view: `plan`, label: `学習計画`, icon: `calendar`, mobile: `more`, section: `record` },
     { view: `bookmarks`, label: `ブックマーク`, icon: `bookmark`, mobile: `more`, section: `record` },
     { view: `sources`, label: `情報源`, icon: `library`, mobile: `more`, section: `other` },
     { view: `works`, label: `作品で学ぶ`, icon: `play-square`, mobile: `more`, section: `other` },

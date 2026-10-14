@@ -1,5 +1,6 @@
-// 設定ビュー: 学ぶ目的・目標の試験・今日の復習・テーマ・読み上げ・学習データのエクスポート/インポート(バックアップ・端末間の手動移行)
-// #settings/profile・#settings/backup・#settings/limit・#settings/targets で該当のカードへ移動する(ホームのお知らせなどから使う)
+// 設定ビュー: 学ぶ目的・目標の試験・1日の目標・今日の復習・問題の解き方・テーマ・読み上げ・学習データのエクスポート/インポート(バックアップ・端末間の手動移行)
+// #settings/profile・#settings/backup・#settings/limit・#settings/targets・#settings/goal・#settings/answer で該当のカードへ移動する
+// (ホームのお知らせ・学習計画などから使う)
 window.Views = window.Views || {};
 window.Views.settings = (function () {
   const PREFIX = `shojikiLearn.v1.`;
@@ -12,6 +13,9 @@ window.Views.settings = (function () {
     flashcards: `object`, oxStats: `object`, quizHistory: `object`, srsCards: `object`, roadmap: `object`,
     oxPrefs: `object`, quizPrefs: `object`, reviewNewToday: `object`, onboardingDone: `object`, learnerProfile: `object`,
     quizRetry: `object`, quizRetryToday: `object`,
+    // v12: 解答の記録・自信なし・学習時間・目標・バッジ・各機能の設定
+    answerDaily: `object`, quizUnsure: `object`, studyTime: `object`, dailyGoal: `object`, goalDays: `object`, badges: `object`,
+    drillStats: `object`, answerPrefs: `object`, predictPrefs: `object`, planPrefs: `object`,
     examSession: `object|null`, examRetryResult: `object|null`,
     examHistory: `array`, examTargets: `array`,
     reviewNewLimit: `number`, ttsRate: `number`, lastBackupAt: `number`, backupNoteDismissedAt: `number`,
@@ -20,6 +24,8 @@ window.Views.settings = (function () {
     lastTopic: `string`, themePreference: `string`, seenWhatsNew: `string`, glossaryMode: `string`, audience: `string`,
   };
   const KNOWN_KEYS = new Set(Object.keys(KEY_TYPES));
+  // バックアップに入れないキー(学習時間を数えているタブの印。別の端末・あとで読み込んでも意味がない)
+  const NO_BACKUP = new Set([`studyTimeLock`]);
   const esc = (s) => UI.escapeHtml(s);
 
   function typeOk(key, v) {
@@ -137,15 +143,21 @@ window.Views.settings = (function () {
     return { refresh: () => paintNote(current().goal) };
   }
 
-  function collectAllData() {
+  // forBackup: バックアップに書き出すとき(NO_BACKUP のキーは入れない)。読み込みに失敗したときの戻し用には全部控える
+  function collectAllData(forBackup) {
     const data = {};
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith(PREFIX)) {
+      if (key && key.startsWith(PREFIX) && !(forBackup && NO_BACKUP.has(key.slice(PREFIX.length)))) {
         try {
           data[key.slice(PREFIX.length)] = JSON.parse(localStorage.getItem(key));
         } catch (e) { /* 壊れた値はスキップ */ }
       }
+    }
+    // 容量がいっぱいで保存できていない記録も、バックアップには入れる(画面下のお知らせの「バックアップ」から取ったときに欠けないように)
+    if (forBackup && typeof Storage.unsaved === `function`) {
+      const pending = Storage.unsaved();
+      Object.keys(pending).forEach((k) => { if (!NO_BACKUP.has(k) && KNOWN_KEYS.has(k)) data[k] = pending[k]; });
     }
     return data;
   }
@@ -191,6 +203,140 @@ window.Views.settings = (function () {
     group.querySelectorAll(`.segmented-item`).forEach((b) => b.setAttribute(`aria-pressed`, String(b.dataset.value === String(value))));
   }
 
+  // ===== 1日の目標(js/goals.js。ホームの「今日の学習」のリングの目標) =====
+  // 回数 = 4択・○×・用語カードなどの学習の回数(今までのリングと同じ数え方)、分 = 学習時間
+  const GOAL_KINDS = [
+    { id: `actions`, label: `回数`, unit: `回`, def: 10 },
+    { id: `minutes`, label: `学習時間(分)`, unit: `分`, def: 30 },
+  ];
+  const goalKind = (id) => GOAL_KINDS.find((k) => k.id === id) || GOAL_KINDS[0];
+
+  function goalCardHtml() {
+    return `
+      <div class="card settings-card" data-role="goal-card">
+        <h3 class="settings-card-title">${UI.icon(`flame`)}1日の目標</h3>
+        <p class="view-desc">ホームの「今日の学習」のリングの目標です。学習の回数(4択・○×・用語カードなど)か、学習時間(分)で決められます。達成した日は記録され、バッジにも数えます。</p>
+        <div data-role="goal-kind"></div>
+        <form class="settings-goal-form" data-role="goal-form" novalidate>
+          <div class="field settings-goal-field">
+            <label for="settings-goal-value">1日の目標</label>
+            <span class="settings-goal-input">
+              <input class="field-input" type="number" id="settings-goal-value" data-role="goal-value" inputmode="numeric" step="1" required aria-describedby="settings-goal-range settings-goal-msg">
+              <span data-role="goal-unit" aria-hidden="true">回</span>
+            </span>
+          </div>
+          <button type="submit" class="btn">${UI.icon(`check`, { size: 18 })}保存する</button>
+        </form>
+        <p class="settings-goal-range" id="settings-goal-range" data-role="goal-range"></p>
+        <p class="settings-goal-msg" id="settings-goal-msg" data-role="goal-msg" role="status"></p>
+        <p class="settings-goal-now" data-role="goal-now"></p>
+      </div>`;
+  }
+
+  function bindGoalCard(card) {
+    if (!card) return;
+    if (!window.Goals || typeof Goals.get !== `function` || !Goals.RANGE) { card.remove(); return; }
+    const kindBox = card.querySelector(`[data-role="goal-kind"]`);
+    const form = card.querySelector(`[data-role="goal-form"]`);
+    const input = card.querySelector(`[data-role="goal-value"]`);
+    const unitEl = card.querySelector(`[data-role="goal-unit"]`);
+    const rangeEl = card.querySelector(`[data-role="goal-range"]`);
+    const msgEl = card.querySelector(`[data-role="goal-msg"]`);
+    const nowEl = card.querySelector(`[data-role="goal-now"]`);
+    let kind = Goals.get().kind;
+    kindBox.innerHTML = segmentedHtml(`目標の決め方`, GOAL_KINDS.map((k) => ({ value: k.id, pressed: k.id === kind, html: k.label })));
+    const group = kindBox.querySelector(`.segmented`);
+    group.classList.add(`settings-goal-kind`);
+
+    function setMsg(text, state) {
+      msgEl.textContent = text || ``;
+      msgEl.classList.toggle(`is-ng`, state === `ng`);
+      msgEl.classList.toggle(`is-ok`, state === `ok`);
+      if (state === `ng`) input.setAttribute(`aria-invalid`, `true`);
+      else input.removeAttribute(`aria-invalid`);
+    }
+    // 決め方を切り替えたら、その決め方の保存済みの値(なければ標準の値)を入れる
+    function paintKind() {
+      const k = goalKind(kind);
+      const r = Goals.RANGE[kind];
+      const g = Goals.get();
+      input.min = String(r.min);
+      input.max = String(r.max);
+      input.value = String(g.kind === kind ? g.value : k.def);
+      unitEl.textContent = k.unit;
+      rangeEl.textContent = `${r.min}〜${r.max}${k.unit}の整数で決められます(単位: ${k.unit})`;
+      paintSegmented(group, kind);
+    }
+    function paintNow() {
+      let t = null;
+      try { t = Goals.today(); } catch (e) { t = null; }
+      if (!t) { nowEl.textContent = ``; return; }
+      const u = goalKind(t.kind).unit;
+      nowEl.textContent = `今の目標: 1日${t.value}${u}・今日は${t.done}${u}${t.met ? `(達成)` : ``}`;
+    }
+    group.addEventListener(`click`, (e) => {
+      const b = e.target.closest(`.segmented-item`);
+      if (!b || b.dataset.value === kind) return;
+      kind = b.dataset.value;
+      paintKind();
+      setMsg(kind === Goals.get().kind ? `` : `「保存する」を押すと目標が変わります`, null);
+    });
+    input.addEventListener(`input`, () => { if (input.getAttribute(`aria-invalid`) === `true`) setMsg(``, null); });
+    form.addEventListener(`submit`, (e) => {
+      e.preventDefault();
+      const k = goalKind(kind);
+      const r = Goals.RANGE[kind];
+      const raw = String(input.value || ``).trim();
+      const n = Number(raw);
+      const range = `${r.min}〜${r.max}${k.unit}`;
+      let err = ``;
+      if (input.validity && input.validity.badInput) err = `数字で入力してください(${range})`;
+      else if (!raw) err = `目標を入力してください(${range})`;
+      else if (!Number.isInteger(n)) err = `整数で入力してください(${range})`;
+      else if (n < r.min || n > r.max) err = `${range}の範囲で入力してください`;
+      if (err) { setMsg(err, `ng`); input.focus(); return; }
+      const saved = Goals.set({ kind, value: n });
+      if (!saved) { setMsg(`保存できませんでした。もう一度お試しください`, `ng`); return; }
+      input.value = String(saved.value);
+      setMsg(`保存しました。ホームのリングは「1日${saved.value}${goalKind(saved.kind).unit}」になります`, `ok`);
+      paintNow();
+    });
+    paintKind();
+    paintNow();
+  }
+
+  // ===== 問題の解き方(answerPrefs: AIに聞く) =====
+  function aiButtonOn() {
+    if (window.AskAi && typeof AskAi.enabled === `function`) return AskAi.enabled();
+    const p = Storage.get(`answerPrefs`, null);
+    return !(Storage.isPlainObject(p) && p.aiButton === false);
+  }
+
+  function answerCardHtml() {
+    return `
+      <div class="card settings-card" data-role="answer-card">
+        <h3 class="settings-card-title">${UI.icon(`pencil-check`)}問題の解き方</h3>
+        <div class="settings-answer-opts">
+          <label class="check-inline"><input type="checkbox" data-role="ai-button" aria-describedby="settings-ai-help"${aiButtonOn() ? ` checked` : ``}>解説に「AIに聞く」ボタンを出す</label>
+          <p class="settings-answer-help" id="settings-ai-help">4択・○×・模擬試験の結果で、問題・自分の答え・解説をまとめた質問文をコピーし、ChatGPT・Claude・Gemini に貼り付けて質問できます。アプリからAIのサービスには何も送信しません。</p>
+        </div>
+        <p class="settings-answer-help settings-answer-note">○×一問一答で「自信度も答える(もちろん/たぶん)」は、<a href="#ox">○×一問一答</a>の出題の条件で切り替えられます。</p>
+      </div>`;
+  }
+
+  function bindAnswerCard(card) {
+    if (!card) return;
+    const cb = card.querySelector(`[data-role="ai-button"]`);
+    cb.addEventListener(`change`, () => {
+      if (window.AskAi && typeof AskAi.setEnabled === `function`) AskAi.setEnabled(cb.checked);
+      else {
+        const p = Storage.get(`answerPrefs`, null);
+        Storage.set(`answerPrefs`, Object.assign({}, Storage.isPlainObject(p) ? p : {}, { aiButton: cb.checked }));
+      }
+      UI.toast(cb.checked ? `「AIに聞く」ボタンを表示します` : `「AIに聞く」ボタンを表示しません`, `success`);
+    });
+  }
+
   function render(root, param) {
     const ttsSupported = !!(window.TTS && TTS.supported);
     const wrap = document.createElement(`div`);
@@ -208,11 +354,15 @@ window.Views.settings = (function () {
         <button type="button" class="btn" data-role="add-target">${UI.icon(`calendar`)}試験日を登録</button>
       </div>
 
+      ${goalCardHtml()}
+
       <div class="card settings-card" data-role="limit-card">
         <h3 class="settings-card-title">${UI.icon(`repeat`)}今日の復習</h3>
         <p class="view-desc">「今日の復習」で1日に出す新しい用語の数です。期限が来た復習はこの数に関係なくすべて出題されます。</p>
         <div data-role="new-limit"></div>
       </div>
+
+      ${answerCardHtml()}
 
       <div class="card settings-card">
         <h3 class="settings-card-title">${UI.icon(`moon`)}テーマ</h3>
@@ -273,13 +423,15 @@ window.Views.settings = (function () {
           const d = DateUtil.diffDays(today, t.date);
           const type = Stats.examType(t.examTypeId);
           const onHome = !!(shown && shown.id === t.id);
+          // 公式発表の前の試験日(令和9年度など)は、日付に必ず「見込み」と添える
+          const tentative = t.tentative === true;
           const starLabel = t.primary ? (onHome ? `ホームに表示中` : `ホームに表示に指定(終了したため、ホームには次の試験を表示中)`) : `ホームに表示する`;
           return `
             <div class="target-row${onHome ? ` is-home` : ``}">
               <button type="button" class="btn btn-icon known-toggle${t.primary ? ` is-known` : ``}" data-primary="${esc(t.id)}" aria-pressed="${!!t.primary}" aria-label="${esc(`${t.name}: ${starLabel}`)}">${UI.icon(t.primary ? `star-fill` : `star`)}</button>
-              <button type="button" class="target-row-main target-row-edit" data-edit="${esc(t.id)}" aria-label="${esc(`「${t.name}」を編集`)}">
-                <span class="target-row-name">${esc(t.name)}<span class="source-tag">${esc(type ? type.shortName : `その他`)}</span>${onHome ? `<span class="source-tag target-home-tag">ホームに表示中</span>` : ``}</span>
-                <span class="target-row-date">${DateUtil.toJapanese(t.date, true)}・<span class="nowrap">${d > 0 ? `あと${d}日` : d === 0 ? `今日` : `終了`}</span></span>
+              <button type="button" class="target-row-main target-row-edit" data-edit="${esc(t.id)}" aria-label="${esc(`「${t.name}」を編集${tentative ? `(試験日は見込み)` : ``}`)}">
+                <span class="target-row-name">${esc(t.name)}<span class="source-tag">${esc(type ? type.shortName : `その他`)}</span>${tentative ? `<span class="source-tag target-tentative-tag">見込み</span>` : ``}${onHome ? `<span class="source-tag target-home-tag">ホームに表示中</span>` : ``}</span>
+                <span class="target-row-date">${DateUtil.toJapanese(t.date, true)}${tentative ? `<span class="nowrap">(見込み)</span>` : ``}・<span class="nowrap">${d > 0 ? `あと${d}日` : d === 0 ? `今日` : `終了`}</span></span>
                 <span class="target-row-hint" aria-hidden="true">${UI.icon(`chevron-right`, { size: 18 })}</span>
               </button>
               <button type="button" class="btn btn-icon" data-remove="${esc(t.id)}" aria-label="${esc(`「${t.name}」を削除`)}">${UI.icon(`trash`)}</button>
@@ -317,6 +469,10 @@ window.Views.settings = (function () {
     });
     renderTargets();
     addBtn.addEventListener(`click`, () => Views.home.openTargetForm(() => renderTargets()));
+
+    // ---- 1日の目標・問題の解き方 ----
+    bindGoalCard(wrap.querySelector(`[data-role="goal-card"]`));
+    bindAnswerCard(wrap.querySelector(`[data-role="answer-card"]`));
 
     // ---- 1日の新規用語数 ----
     const limitBox = wrap.querySelector(`[data-role="new-limit"]`);
@@ -456,7 +612,7 @@ window.Views.settings = (function () {
       // __app: このアプリのバックアップであることの目印と、データの版(読み込み時に新しすぎる版を断る)
       const app = { name: backupSlug(), schema: Storage.SCHEMA || 1, exportedAt: new Date().toISOString() };
       if (window.SITE && SITE.version) app.version = SITE.version;
-      const json = JSON.stringify(Object.assign({ __app: app }, collectAllData()), null, 2);
+      const json = JSON.stringify(Object.assign({ __app: app }, collectAllData(true)), null, 2);
       const name = `${backupSlug()}-backup-${DateUtil.today()}.json`;
       if (tryShare(json, name, prevBackupAt)) return;
       download(json, name);
@@ -533,7 +689,7 @@ window.Views.settings = (function () {
     });
 
     // ---- ホームのお知らせなどから: 該当のカードへ ----
-    const JUMPS = { profile: `profile-card`, backup: `backup-card`, limit: `limit-card`, targets: `targets-card` };
+    const JUMPS = { profile: `profile-card`, backup: `backup-card`, limit: `limit-card`, targets: `targets-card`, goal: `goal-card`, answer: `answer-card` };
     const jumpEl = param && Object.prototype.hasOwnProperty.call(JUMPS, param) ? wrap.querySelector(`[data-role="${JUMPS[param]}"]`) : null;
     if (jumpEl) {
       requestAnimationFrame(() => {

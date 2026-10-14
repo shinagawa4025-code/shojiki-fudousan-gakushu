@@ -237,10 +237,38 @@ window.Stats = (function () {
   }
 
   // ---- 試験目標 ----
+  // 目標: { id, name, examTypeId, date, primary, createdAt, tentative? }
+  // tentative: true = 公式発表前の「見込み」の試験日(令和9年度の 2027-10-17 など)。表示では必ず「見込み」と添える
   function listTargets() {
+    const published = publishedKeys();
     // id のない目標(壊れたバックアップなど)も、設定画面で編集・削除できるように仮の id を付ける
     return arr(`examTargets`).filter((t) => t && typeof t.name === `string` && DateUtil.isValid(t.date))
-      .map((t, i) => (typeof t.id === `string` && t.id ? t : Object.assign({}, t, { id: `et_r${i}` })));
+      .map((t, i) => {
+        let out = typeof t.id === `string` && t.id ? t : Object.assign({}, t, { id: `et_r${i}` });
+        // 見込みの印は true のときだけ残す(壊れた値で「見込み」と出したり、保存し直して広げたりしない)。
+        // 見込みで登録した日付が、あとで公式の試験日として発表された(data/exams.js の officialDates に入った)ときも外す
+        if (Object.prototype.hasOwnProperty.call(out, `tentative`) && (out.tentative !== true || published.has(`${out.examTypeId}|${out.date}`))) {
+          out = Object.assign({}, out);
+          delete out.tentative;
+        }
+        return out;
+      });
+  }
+
+  // 公式に発表された試験日「試験|日付」(過ぎた日付も含む。見込みの目標が公式の日付と同じかを見るため)
+  function publishedKeys() {
+    const exams = window.APP_DATA && window.APP_DATA.exams;
+    const keys = new Set();
+    const add = (o, typeId) => {
+      if (o && typeof o === `object` && DateUtil.isValid(o.date)) keys.add(`${typeof o.examTypeId === `string` ? o.examTypeId : typeId}|${o.date}`);
+    };
+    if (exams && Array.isArray(exams.officialDates)) exams.officialDates.forEach((o) => add(o, `takken`));
+    examTypes().forEach((t) => { if (Array.isArray(t.officialDates)) t.officialDates.forEach((o) => add(o, t.id)); });
+    return keys;
+  }
+
+  function isTentative(t) {
+    return !!t && t.tentative === true;
   }
 
   function saveTargets(list) {
@@ -257,6 +285,7 @@ window.Stats = (function () {
       primary: list.length === 0 || !!t.primary,
       createdAt: Date.now(),
     };
+    if (t.tentative === true) target.tentative = true;
     if (target.primary) list.forEach((x) => { x.primary = false; });
     list.push(target);
     saveTargets(list);
@@ -282,7 +311,15 @@ window.Stats = (function () {
     if (!t || !patch) return null;
     if (typeof patch.name === `string`) t.name = patch.name.trim() || `試験`;
     if (patch.examTypeId != null) t.examTypeId = examType(patch.examTypeId) ? patch.examTypeId : `other`;
+    const moved = DateUtil.isValid(patch.date) && patch.date !== t.date;
     if (DateUtil.isValid(patch.date)) t.date = patch.date;
+    // 見込みの印: 指定があればそのとおり。指定がなく日付を自分で変えたときは、もう見込みの日付ではないので外す
+    if (typeof patch.tentative === `boolean`) {
+      if (patch.tentative) t.tentative = true;
+      else delete t.tentative;
+    } else if (moved) {
+      delete t.tentative;
+    }
     saveTargets(list);
     return t;
   }
@@ -364,6 +401,44 @@ window.Stats = (function () {
     return list.filter((o) => o.date > today && (!examTypeId || o.examTypeId === examTypeId))
       .filter((o) => { const k = `${o.examTypeId}|${o.date}`; if (seen.has(k)) return false; seen.add(k); return true; })
       .sort((a, b) => (a.date < b.date ? -1 : 1));
+  }
+
+  // ---- 次の試験日の見込み(公式発表の前) ----
+  // 各試験の expectedDates(data/exams.js)。officialDates とは別に扱い、選んだ目標には tentative: true を付ける。
+  // 公式の試験日として同じ試験の同じ日付が出ていれば、そちらを使うので出さない。日付が過ぎたもの・登録済みのものも出さない
+  // [{ date, label, note, examTypeId, tentative: true }]
+  function expectedDates(examTypeId) {
+    const today = DateUtil.today();
+    const official = new Set(officialDates().map((o) => `${o.examTypeId}|${o.date}`));
+    const registered = new Set(listTargets().map((t) => `${t.examTypeId}|${t.date}`));
+    const out = [];
+    examTypes().forEach((t) => {
+      if (examTypeId && t.id !== examTypeId) return;
+      (Array.isArray(t.expectedDates) ? t.expectedDates : []).forEach((o) => {
+        if (!o || typeof o !== `object` || !DateUtil.isValid(o.date) || o.date <= today) return;
+        const k = `${t.id}|${o.date}`;
+        if (official.has(k) || registered.has(k)) return;
+        out.push({
+          date: o.date,
+          label: typeof o.label === `string` && o.label ? o.label : `${t.shortName}試験`,
+          note: typeof o.note === `string` ? o.note : `見込み・未発表`,
+          examTypeId: t.id,
+          tentative: true,
+        });
+      });
+    });
+    return out.sort((a, b) => (a.date < b.date ? -1 : 1));
+  }
+
+  // 試験の合格発表の案内(試験の後に出す)。{ url, org, date?, time?, label?, src? }(案内のない試験は null)
+  // 発表日は data/exams.js の results に、その試験日と同じ日付があるときだけ付ける(ほかの年の日付を推測で出さない)
+  function examResults(target) {
+    const type = target ? examType(target.examTypeId) : null;
+    if (!type || typeof type.resultsUrl !== `string` || !/^https:\/\//.test(type.resultsUrl)) return null;
+    const out = { url: type.resultsUrl, org: typeof type.resultsOrg === `string` ? type.resultsOrg : `` };
+    const r = (Array.isArray(type.results) ? type.results : []).find((x) => x && x.examDate === target.date && DateUtil.isValid(x.date));
+    if (r) Object.assign(out, { date: r.date, time: typeof r.time === `string` ? r.time : ``, label: typeof r.label === `string` ? r.label : ``, src: typeof r.src === `string` ? r.src : `` });
+    return out;
   }
 
   // ---- 学ぶ目的(learnerProfile) ----
@@ -452,7 +527,7 @@ window.Stats = (function () {
     examTypes, examType, dueReviewCount, newCount, srsBuckets, termStatus, categoryOf, termsInCategory,
     byCategory, byTopic, overall, heatmap, levelOf, weakTerms, examHistory,
     listTargets, addTarget, updateTarget, removeTarget, setPrimary, primaryTarget, pace, newLimit, newAvailableToday,
-    officialDates,
+    officialDates, expectedDates, examResults, isTentative,
     getProfile, setProfile, normalizeProfile, interestTopicIds, goalExamTypeId,
     GOAL_OPTIONS, INTEREST_OPTIONS,
     // 存在するトピックだけに絞った {rent:[...], buy:[...], ...}(読むたびに作り直す)

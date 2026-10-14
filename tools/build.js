@@ -15,7 +15,7 @@
 // 5. sw.js をひな形から作る: CACHE_NAME = shojiki-gakushu-<ハッシュ>、BUILD_ID、PRECACHE_URLS(index.html・manifest・まとめたファイル・
 //    詳細の束・index.html のアイコン)
 // 6. index.html・manifest が参照するファイルと、プリキャッシュのファイルがすべて出力先にあることを確かめる
-// 7. 大きさの表を出す(初回の表示に要る JS と CSS の gzip 合計が 300KB、詳細を含めた合計が 800KB を超えたら警告)
+// 7. 大きさの表を出す(初回の表示に要る JS と CSS の gzip 合計が 300KB、詳細を含めた合計が 1,000KB を超えたら警告。下の BUDGET_*)
 // どこかで失敗したら終了コード1で終わり、出力先は作らない(途中までのサイトを残さない)。CI はそのとき元のファイルのまま公開する。
 'use strict';
 const fs = require('fs');
@@ -29,7 +29,9 @@ const { parseBlocks, localRefs, generateSw } = require('./lib/html.js');
 const split = require('./lib/split.js');
 
 const BUDGET_FIRST = 300 * 1024; // 初回の表示(ホーム)に要る JS+CSS
-const BUDGET_TOTAL = 800 * 1024; // 詳細を含めた JS+CSS
+// 詳細を含めた JS+CSS。v12 で4択を約520問から約800問(+54%)に増やし、詳細の束(解説・選択肢・記述ア〜エ)が大きくなったため
+// 800KB → 1,000KB に見直した(2026-10 時点で約900KB)。詳細はホームを描いたあとに読み込むので、ホームの速さは上の BUDGET_FIRST で見る
+const BUDGET_TOTAL = 1000 * 1024;
 const SKIP_DIRS = new Set(['js', 'css', 'data']); // まとめたので公開しない(古い Service Worker が新旧のファイルを混ぜて保存しないように)
 const JUNK = /^(desktop\.ini|thumbs\.db|\..*)$/i;
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
@@ -72,7 +74,8 @@ function readSrc(src, rel) {
 function inlineScripts(html) {
   return [...html.replace(/<!--[\s\S]*?-->/g, '').matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
     .filter((m) => !/\bsrc\s*=/i.test(m[1]) && !/\btype\s*=\s*["']?application\/(ld\+)?json/i.test(m[1]))
-    .map((m) => m[2]);
+    // ブラウザは HTML を読むときに改行 CRLF を LF にそろえてからハッシュを比べる(Windows で取り出したファイルでも CSP が合うように)
+    .map((m) => m[2].replace(/\r\n?/g, '\n'));
 }
 
 function wrap(rel, code) {

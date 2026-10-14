@@ -2,10 +2,11 @@
 window.Views = window.Views || {};
 window.Views.more = (function () {
   const ROWS = [
-    { nav: `#progress`, icon: `chart`, title: `学習の進捗`, desc: `分野別の達成度・弱点分析・学習の記録` },
+    { nav: `#progress`, icon: `chart`, title: `学習の進捗`, desc: `分野別の達成度・弱点分析・合格予測・学習時間・バッジ` },
+    { nav: `#plan`, icon: `calendar`, title: `学習計画`, desc: `試験日から逆算した時期と今週やること` },
     { nav: `#bookmarks`, icon: `bookmark`, title: `ブックマーク`, desc: `保存した用語・問題` },
     { nav: `#sources`, icon: `library`, title: `情報源`, desc: `解説の根拠にしている公的機関の一次情報` },
-    { nav: `#settings`, icon: `settings`, title: `設定`, desc: `学ぶ目的・試験日・今日の復習・バックアップ` },
+    { nav: `#settings`, icon: `settings`, title: `設定`, desc: `学ぶ目的・試験日・1日の目標・今日の復習・バックアップ` },
     { action: `guide`, icon: `help`, title: `使い方`, desc: `学び方と復習のしくみ` },
     { nav: `#about`, icon: `info`, title: `このアプリについて`, desc: `運営者・プライバシー・免責事項・更新履歴` },
     { report: true, icon: `flag`, title: `誤り・ご意見を送る`, desc: `報告フォームが開きます` },
