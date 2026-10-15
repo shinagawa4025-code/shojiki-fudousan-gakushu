@@ -3,7 +3,7 @@
 
 /* ---------- 共通 ---------- */
 /* タップしてすぐ反応するように(ダブルタップによる拡大の待ち時間をなくす) */
-.choice-btn, .grade-btn, .review-reveal, .ox-btn, .ox-next, .quiz-next, .quiz-filter-btn, .auto-cond-btn, .quiz-unsure-chip { touch-action: manipulation; }
+.choice-btn, .grade-btn, .review-reveal, .ox-btn, .ox-next, .quiz-next, .quiz-filter-btn, .auto-cond-btn, .quiz-unsure-chip, .quiz-step-btn, .quiz-step-tool, .quiz-explain-toggle { touch-action: manipulation; }
 
 /* 見出しの行: 見出し + ⓘ(画面の説明はシートで開く)。復習では右端に「n / 全体」 */
 :is(.quiz-view, .ox-view, .review-view) .view-head { display: flex; align-items: center; gap: var(--sp-1); min-height: 40px; margin: 0 0 var(--sp-3); }
@@ -84,7 +84,7 @@
 /* ---------- 4択問題 ---------- */
 .quiz-mode { margin-bottom: var(--sp-3); }
 
-.quiz-keys { margin: calc(var(--sp-1) * -1) 0 var(--sp-3); font-size: var(--fs-xs); color: var(--color-text-muted); line-height: 2; }
+.quiz-keys { margin: calc(var(--sp-1) * -1) 0 var(--sp-2); font-size: var(--fs-xs); color: var(--color-text-muted); line-height: 2; }
 .quiz-keys kbd {
   font-family: var(--font-sans);
   font-size: var(--fs-2xs);
@@ -97,42 +97,149 @@
 }
 @media (hover: none), (pointer: coarse) { .quiz-keys { display: none; } }
 
-/* 絞り込み: 「絞り込み(件数)」ボタン + 選んでいる条件のチップ(× で外す) */
-.quiz-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-2); }
-.quiz-filter-btn { gap: var(--sp-1); }
+/* ===== 1問ずつの表示(#quiz・#quiz/due・#quiz/auto。js/views/quiz.js の .quiz-stepper) =====
+   上に貼り付くバー(前へ・太い進み具合・n/全体・次へ・絞り込み)、今の1問だけ(.is-current)を出し、
+   答えると画面の下(下部タブの上)に判定のバーが下から出る。終わったら結果(マスコット・紙吹雪) */
+.quiz-stepbar {
+  position: sticky;
+  /* スマホ・タブレットは固定ヘッダー(高さ+下の線 2px)のすぐ下 */
+  top: calc(var(--app-bar-h) + var(--safe-top) + 2px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 calc(var(--sp-4) * -1);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--color-bg);
+}
+.quiz-step-btn { flex-shrink: 0; width: 44px; height: 44px; min-height: 44px; margin-inline: -6px; color: var(--color-text-muted); }
+.quiz-step-btn .icon { stroke-width: 2.6; }
+.quiz-step-btn:disabled { opacity: .3; }
+/* 太く丸い進み具合のバー。上に白い細い筋(平らな光沢)。100%(全部答えた・最後の問題)は金色 */
+.quiz-step-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 48px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+  overflow: hidden;
+}
+.quiz-step-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--color-primary-fill);
+  transition: width var(--dur-3) var(--ease-out), background var(--dur-2);
+}
+.quiz-step-fill::after { content: ""; position: absolute; left: 7px; right: 7px; top: 4px; height: 4px; border-radius: var(--radius-pill); background: var(--sticker-fg); opacity: .3; }
+.quiz-step-fill.is-full { background: var(--gold); }
+.quiz-step-count {
+  flex-shrink: 0;
+  min-width: 3.4em;
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-display);
+  color: var(--color-text);
+  text-align: right;
+  line-height: 1;
+  white-space: nowrap;
+}
+.quiz-step-count small { margin-left: 1px; font-size: var(--fs-2xs); font-weight: 700; color: var(--color-text-muted); }
+.quiz-step-count:empty { display: none; }
+/* バーの右端のボタン(絞り込み・新しい問題): 44px の四角に薄いふち */
+.quiz-step-tool { --lip-h: 3px; position: relative; flex-shrink: 0; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: var(--radius-md); }
+.quiz-step-tool .icon { width: 22px; height: 22px; }
+/* 絞り込みの条件の数(ボタンの右上の小さな丸) */
 .quiz-filter-count {
+  position: absolute;
+  top: -7px;
+  right: -7px;
   min-width: 20px;
   height: 20px;
-  padding: 0 6px;
+  padding: 0 5px;
+  border: 2px solid var(--color-bg);
   border-radius: var(--radius-pill);
   background: var(--color-primary-fill);
   color: var(--color-on-primary);
   font-size: var(--fs-2xs);
-  font-weight: 700;
-  line-height: 20px;
+  font-weight: 800;
+  line-height: 16px;
   text-align: center;
 }
+/* バーの下の1行: 選んでいる条件のチップ(× で外す)と、全体の回答数・正答率(小さく) */
+.quiz-step-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin: var(--sp-1) 0 var(--sp-3); }
+.quiz-step-meta .quiz-progress { margin: 0; font-size: var(--fs-xs); line-height: var(--lh-snug); }
+.quiz-step-meta .quiz-progress:empty { display: none; }
 .quiz-filter-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); min-width: 0; }
 .quiz-filter-chips:empty { display: none; }
 .quiz-filter-chip { gap: var(--sp-1); padding: 0 var(--sp-2) 0 var(--sp-3); background: var(--color-primary-soft); border-color: transparent; color: var(--color-primary); }
 .quiz-filter-chip .icon { opacity: .8; }
-/* 指で押す端末では、絞り込みのボタン・条件のチップ・解説の下のチップを 44px の高さに(押し間違いを防ぐ) */
-@media (pointer: coarse) {
-  .quiz-filter-btn, .quiz-filter-chip, .quiz-after-links :is(.chip, .link-btn) { min-height: 44px; }
-}
 @media (hover: hover) { .quiz-filter-chip:hover { border-color: var(--color-primary); } }
-.quiz-progress { margin: 0 0 var(--sp-2); }
-/* 直リンクで途中から表示したときの「前の問題を表示」(一覧の上) */
-.load-more-btn.load-prev-btn { margin: 0 auto var(--sp-3); }
+/* 指で押す端末では、条件のチップ・解説の下のチップを 44px の高さに(押し間違いを防ぐ) */
+@media (pointer: coarse) {
+  .quiz-filter-chip, .quiz-after-links :is(.chip, .link-btn) { min-height: 44px; }
+}
+
+/* 今の1問だけを見せる(ほかのカードは DOM に残す: 戻る・再読み込みの再現とキー操作のため)。カードの枠はなくし、背景の上に直接置く */
+.quiz-steps > .quiz-card:not(.is-current) { display: none; }
+.quiz-stepper .quiz-steps > .quiz-card { padding: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+/* 問題が入れ替わるときは右から少しだけ入る */
+.quiz-steps > .quiz-card.is-current { animation: quiz-step-in 220ms var(--ease-out); }
+@keyframes quiz-step-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+/* 「つづける」で次の問題の先頭を貼り付いたバーのすぐ下へ(スマホの固定ヘッダーの分は html の scroll-padding-top) */
+.quiz-stepper .quiz-steps > .quiz-card { scroll-margin-top: calc(60px + var(--sp-2)); }
+/* 短い問題でも先頭をバーの下へ合わせられるよう、一覧に画面1枚分の高さを持たせる(下は空き) */
+.quiz-stepper .quiz-steps { min-height: calc(100vh - var(--app-bar-h) - var(--safe-top) - 60px - var(--bottom-nav-h) - var(--safe-bottom) - var(--sp-5)); }
+@supports (height: 100svh) {
+  .quiz-stepper .quiz-steps { min-height: calc(100svh - var(--app-bar-h) - var(--safe-top) - 60px - var(--bottom-nav-h) - var(--safe-bottom) - var(--sp-5)); }
+}
+/* 「もっと見る」「前の問題を表示」は、前へ・次へ・「つづける」が代わりに押す */
+.quiz-stepper .load-more-btn { display: none; }
+/* 結果(終わりの画面)は終わったときだけ。終わったら問題は隠す */
+.quiz-stepper:not(.is-finished) .quiz-summary { display: none; }
+.quiz-stepper.is-finished .quiz-steps { display: none; }
+/* 判定のバー(画面の下に固定)の分、画面の下に余白(最後の解説が隠れないように。高さは JS が --qfb-h に入れる) */
+.quiz-stepper.has-fb { padding-bottom: calc(var(--qfb-h, 168px) + var(--sp-4)); }
+@media (max-width: 1023px) {
+  html:has(.quiz-stepper.has-fb) { scroll-padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--qfb-h, 168px) + var(--sp-2)); }
+}
+@media (min-width: 1024px) {
+  html:has(.quiz-stepper.has-fb) { scroll-padding-bottom: calc(var(--qfb-h, 168px) + var(--sp-2)); }
+}
+
+/* ---- カード(1問ずつの表示・トピック詳細・ブックマーク・初回ガイドで共通) ---- */
 .quiz-view .view-head { margin-bottom: var(--sp-2); }
 /* 回答バーの1行の補足(折り返さない文)で、一覧の列がカードより広がらないように */
 .quiz-card { min-width: 0; }
-
-/* 「次の問題」で上端に合わせたときの余白(スマホの固定ヘッダーの分は style.css の html の scroll-padding-top で確保済み) */
 .quiz-card, .quiz-summary { scroll-margin-top: var(--sp-2); }
-.quiz-question:focus, .quiz-summary:focus { outline: none; }
+.quiz-question:focus, .quiz-summary:focus, .quiz-finish-title:focus { outline: none; }
+/* 見出しは1行: レベルの札・形式・前回の結果・ブックマーク。札は形式から後ろは文字だけ(点で区切る) */
+.quiz-card-head { gap: 2px var(--sp-2); min-height: 32px; }
+.quiz-card-head > :is(.source-tag, .review-status, .drill-tag, .stale-tag) {
+  gap: 3px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+.quiz-card-head > :is(.source-tag, .review-status, .drill-tag, .stale-tag)::before { content: ""; flex-shrink: 0; width: 4px; height: 4px; margin-right: 3px; border-radius: 50%; background: var(--color-border-control); }
+.quiz-card-head > .source-tag-style { color: var(--color-primary); }
+.quiz-card-head > .review-status-ng { color: var(--color-danger); }
+.quiz-card-head > .review-status-ok { color: var(--color-success); }
+.quiz-card-head > .drill-tag { color: var(--color-primary); }
 .quiz-card-tools { margin-left: auto; }
-.quiz-question { font-size: var(--fs-base); line-height: var(--lh-body); }
+.quiz-card-tools .btn-icon { margin-block: -6px; margin-right: -8px; }
+/* 問題文: 大きめ・行間広め・落ち着いた太さ */
+.quiz-question { margin: var(--sp-2) 0 0; font-size: var(--fs-read); line-height: var(--lh-read); letter-spacing: .02em; color: var(--color-heading); }
+.quiz-question > strong:first-child { font-family: var(--font-display); font-weight: var(--fw-display); color: var(--color-primary); }
+.quiz-stepper .quiz-steps .quiz-question { font-size: var(--fs-lg); line-height: 1.8; }
 
 /* 絞り込み条件から外れた回答済みのカード(薄くせずに印だけ付ける) */
 .stale-tag {
@@ -147,7 +254,7 @@
   line-height: 1.5;
 }
 
-/* 選択肢: 番号は回答の前後で同じ位置(上端)。本文の太さは 400、行間は読みやすく */
+/* 選択肢: 番号は回答の前後で同じ位置(上端)。本文の太さは 400、行間は読みやすく(模擬試験の選択肢とも共通) */
 .choice-btn { align-items: flex-start; font-weight: var(--fw-regular, 400); line-height: 1.7; }
 .choice-key { margin-top: 2px; }
 .choice-body { display: flex; flex-direction: column; gap: var(--sp-1); flex: 1 1 auto; min-width: 0; }
@@ -180,12 +287,60 @@
   color: var(--color-text);
 }
 
+/* 4択のタイル(確認問題・自動生成クイズのカード): 大きな札に丸い番号、下に厚み。押すと沈む(style.css の .btn) */
+.quiz-card .choice-list { gap: var(--sp-3); margin-top: var(--sp-5); }
+.quiz-card .choice-btn {
+  gap: var(--sp-3);
+  min-height: 60px;
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-3);
+  border-radius: 18px;
+  font-size: .9375rem;
+  line-height: 1.65;
+}
+.quiz-card .choice-key {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  margin-top: -4px;
+  border: 2px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--fs-base);
+  box-shadow: 0 2px 0 var(--lip-neutral);
+}
+@media (hover: hover) {
+  .quiz-card .choice-btn:not(:disabled):hover { background: var(--color-primary-soft); border-color: var(--color-primary); }
+  .quiz-card .choice-btn:not(:disabled):hover .choice-key { border-color: var(--color-primary); color: var(--color-primary); }
+}
+/* 答えたあと: 正解は緑の札で番号が ✓ に(ぽん)、選んだ誤りは赤みのある札で番号が × に(揺れる)。ほかの2つは控えめに */
+.quiz-card .choice-btn.is-done:not(.correct):not(.incorrect) { --btn-lip: var(--color-border); border-color: var(--color-border); }
+.quiz-card .choice-btn.is-done:not(.correct):not(.incorrect) .choice-key { border-color: var(--color-border); box-shadow: none; }
+.quiz-card .choice-btn.correct .choice-text { font-weight: 700; }
+.quiz-card .choice-key.has-mark { border-color: transparent; box-shadow: none; }
+.quiz-card .choice-btn.correct .choice-key.has-mark { background: var(--color-success-fill); color: var(--color-on-primary); }
+.quiz-card .choice-btn.incorrect .choice-key.has-mark { background: var(--color-danger-fill); color: var(--color-on-primary); }
+/* 番号の文字は読み上げ用に残し(「1 …」と読む)、見た目は印だけ */
+.choice-key.has-mark .choice-key-num { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.choice-key-mark { display: grid; place-items: center; }
+.choice-key-mark .icon { width: 20px; height: 20px; stroke-width: 3.2; }
+/* 動きは答えた直後だけ(.is-fresh。戻るで再現・前の問題へ戻ったときは動かさない) */
+.quiz-card .choice-btn.correct .choice-key, .quiz-card .choice-btn.incorrect { animation: none; }
+.quiz-card.is-fresh .choice-btn.correct .choice-key { animation: pop-check 250ms var(--ease-out); }
+.quiz-card.is-fresh .choice-btn.incorrect { animation: shake-x 300ms var(--ease-std); }
+
+/* 解説を閉じているあいだ(「解説を見る」の前): 選択肢・記述の注、解説の欄を隠す。「正解」「あなたの回答」の札は読み上げだけ残す。
+   解き直しの「次は n日後」(.drill-result)は閉じていても見せる。初回ガイドの「まず1問」はいつも開いた形 */
+.quiz-card.is-answered:not(.is-explained, .onb-question > *) :is(.choice-note:not(.stmt-note), .stmt-note-text) { display: none; }
+.quiz-card.is-answered:not(.is-explained, .onb-question > *) .quiz-after > :not(.drill-result) { display: none; }
+.quiz-card.is-answered:not(.is-explained, .onb-question > *) .choice-tags { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.onb-question .quiz-explain-toggle { display: none; }
+
 /* ---------- 個数・組合せの問題(v12) ---------- */
-/* 見出しの「4択」の横の「個数」「組合せ」 */
+/* 見出しの「個数」「組合せ」 */
 .source-tag-style { border-color: var(--color-primary); color: var(--color-primary); }
 
 /* 記述ア〜エ(問題文の下・選択肢の上)。選択肢と同じ文字の大きさ・行間で、記号は四角(選択肢の丸い番号と区別する)。
-   模擬試験(exam.css)からも同じ部品を使える(.stmt-list / .stmt-item / .stmt-label / .stmt-body / .stmt-text / .stmt-note) */
+   模擬試験(exam.css)・○×(ox.css)からも同じ部品を使える(.stmt-list / .stmt-item / .stmt-label / .stmt-body / .stmt-text / .stmt-note) */
 .stmt-list {
   display: flex;
   flex-direction: column;
@@ -221,10 +376,37 @@
 .stmt-item.is-false .stmt-label { border-color: var(--color-danger); color: var(--color-danger); }
 .stmt-item.is-true .stmt-truth { color: var(--color-success); }
 .stmt-item.is-false .stmt-truth { color: var(--color-danger); }
+/* 4択のカードでは記述を1つずつの白い札に。記号は角の丸い四角の札(答えると ○ は緑・× は赤みのある色の塗り) */
+.quiz-card .stmt-list { gap: var(--sp-2); margin-top: var(--sp-4); padding: 0; background: none; border-radius: 0; }
+.quiz-card .stmt-item {
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 2px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 0 var(--color-border);
+}
+.quiz-card .stmt-label {
+  width: 30px;
+  height: 30px;
+  margin-top: -2px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--color-surface-muted);
+  color: var(--color-heading);
+  font-family: var(--font-display);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-display);
+}
+.quiz-card .stmt-text { font-size: .9375rem; line-height: 1.7; }
+.quiz-card .stmt-item.is-true .stmt-label { background: var(--color-success-fill); color: var(--color-on-primary); }
+.quiz-card .stmt-item.is-false .stmt-label { background: var(--color-danger-fill); color: var(--color-on-primary); }
 /* 狭いスマホでは枠の内側の余白を詰めて、記述の1行の文字数を確保する */
 @media (max-width: 359px) {
   .stmt-list { padding: var(--sp-2); margin-inline: calc(var(--sp-1) * -1); }
   .stmt-item { gap: 6px; }
+  .quiz-card .stmt-list { padding: 0; margin-inline: 0; }
+  .quiz-card .stmt-item { gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-2); }
 }
 /* 記述を読み込めなかったとき */
 .quiz-stmt-missing {
@@ -240,17 +422,26 @@
   line-height: var(--lh-snug);
 }
 .quiz-stmt-missing > .icon { flex-shrink: 0; margin-top: 2px; color: var(--color-warning); }
-/* 選択肢(一つ〜四つ・「ア、イ」)は短いので2列。回答後の「正解」「あなたの回答」は文字の下に */
+/* 選択肢(一つ〜四つ・「ア、イ」)は短いので2列の大きなタイル。文字は見出し用の太字 */
 .choice-list.choice-list-styled { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .choice-list-styled .choice-btn { min-height: 52px; padding: var(--sp-3); align-items: center; }
 .choice-list-styled .choice-key { margin-top: 0; }
 .choice-list-styled .choice-text { font-weight: 600; letter-spacing: .04em; }
 .choice-list-styled .choice-btn.is-done { align-items: flex-start; }
 .choice-list-styled .choice-btn.is-done .choice-key { margin-top: 2px; }
+.quiz-card .choice-list-styled .choice-btn { min-height: 64px; padding: var(--sp-3); align-items: center; }
+.quiz-card .choice-list-styled .choice-key { margin-top: 0; }
+.quiz-card .choice-list-styled .choice-text { font-family: var(--font-display); font-size: var(--fs-lg); font-weight: var(--fw-display); line-height: 1.4; }
+.quiz-card .choice-list-styled .choice-btn.is-done { align-items: center; }
+.quiz-card .choice-list-styled .choice-btn.is-done .choice-key { margin-top: 0; }
+.quiz-card.is-explained .choice-list-styled .choice-btn.is-done { align-items: flex-start; }
 /* 320px などの狭い画面では、「あなたの回答」が2行に割れないよう、印を番号の下から始めて1行で出す */
 @media (max-width: 359px) {
   .choice-list-styled .choice-btn.is-done .choice-tags { margin-left: calc(-24px - var(--sp-2)); }
+  .quiz-card .choice-list-styled .choice-btn.is-done .choice-tags { margin-left: calc(-34px - var(--sp-3)); }
   .choice-list-styled .choice-tag { white-space: nowrap; }
+  .quiz-card .choice-list-styled .choice-btn { gap: var(--sp-2); }
+  .quiz-card .choice-list-styled .choice-text { font-size: var(--fs-base); }
 }
 
 /* 「勘で当たった」(正解したあとだけ。押すと3日後の解き直しに入れる) */
@@ -269,68 +460,136 @@
 .filter-sheet .filter-sheet-format .segmented-item { flex-direction: column; gap: 0; min-height: 48px; padding: var(--sp-1) var(--sp-2); line-height: 1.25; white-space: normal; text-align: center; }
 .filter-sheet-format .segmented-count { margin-left: 0; }
 
-/* 動きは1つだけ: 選んだ誤りの選択肢を小さく揺らす(カードの点滅・正解の拡大はしない) */
+/* カードの点滅・カード全体の動きはなし(動きは選択肢の印と判定のバーだけ) */
 .quiz-card { transition: none; }
 .quiz-card.flash-ok, .quiz-card.flash-ng { animation: none; }
-.choice-btn.correct, .choice-btn.correct:disabled:hover { animation: none; }
-.choice-btn.incorrect, .choice-btn.incorrect:disabled:hover { animation: shake-x 240ms var(--ease-std); }
 /* 戻るで再表示したカードは、正解・不正解の動きを付けない */
 .quiz-card.is-restored .choice-btn { animation: none; }
 
-/* 回答バー: カードの最後に置き、カードが画面にあるあいだは画面の下(スマホは下部タブの上)に固定。
-   判定(正解!/不正解・正解は n)と「次の問題」を親指の届く位置に出す */
-.quiz-answer-bar {
-  position: sticky;
-  bottom: calc(var(--bottom-nav-h) + var(--safe-bottom));
-  z-index: 3;
-  display: flex;
-  align-items: center;
+/* ---------- 判定のバー(答えると出る) ----------
+   「正解!」(緑の丸に ✓)/「おしい!」(赤みのある丸に ×)+「正解は 3」+補足、その下に「解説を見る」と大きな「つづける」。
+   1問ずつの表示では画面の下(スマホは下部タブの上)に固定して下から出し、トピック詳細などの一覧ではカードの下に置く */
+.quiz-feedback.is-shown {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
-  margin: var(--sp-4) calc(var(--sp-4) * -1) calc(var(--sp-4) * -1);
-  padding: var(--sp-3) var(--sp-4);
-  border-radius: 0 0 calc(var(--radius-card) - 1px) calc(var(--radius-card) - 1px);
   background: var(--color-danger-bg);
-  border-top: 2px solid var(--color-danger);
+  border-top: 2px solid var(--color-danger-fill);
 }
-.quiz-answer-bar.is-ok { background: var(--color-success-bg); border-top-color: var(--color-success); }
-.quiz-answer-bar .quiz-verdict { flex: 1; min-width: 0; margin: 0; }
-.quiz-answer-bar .btn { flex-shrink: 0; min-height: 46px; padding: 0 var(--sp-4); gap: var(--sp-1); }
-.quiz-verdict { display: flex; align-items: center; gap: var(--sp-2); margin: 0; line-height: var(--lh-tight); }
-.quiz-verdict > .icon { flex-shrink: 0; width: 28px; height: 28px; }
-.quiz-verdict.is-ok > .icon, .quiz-verdict.is-ok strong { color: var(--color-success); }
-.quiz-verdict.is-ng > .icon, .quiz-verdict.is-ng strong { color: var(--color-danger); }
-.quiz-verdict-text { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; contain: inline-size; }
-.quiz-verdict strong { font-size: var(--fs-lg); font-weight: 700; line-height: 1.25; }
-.quiz-answer-bar .quiz-verdict small { display: block; font-size: var(--fs-sm); line-height: 1.4; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* 狭い画面では、記号を外して文字とボタンの幅を確保する */
+.quiz-feedback.is-shown.is-ok { background: var(--color-success-bg); border-top-color: var(--color-success-fill); }
+/* 一覧(トピック詳細・ブックマーク・初回ガイド): カードの下の端いっぱいに */
+.quiz-card > .quiz-feedback.is-shown {
+  margin: var(--sp-4) calc(var(--sp-4) * -1) calc(var(--sp-4) * -1);
+  padding: var(--sp-4);
+  border-radius: 0 0 calc(var(--radius-card) - 1px) calc(var(--radius-card) - 1px);
+}
+/* 1問ずつの表示: 画面の下に固定(中身は本文の列にそろえる。PC はサイドバーの右・760px の列) */
+.quiz-stepper .quiz-steps > .quiz-card > .quiz-feedback.is-shown {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--bottom-nav-h) + var(--safe-bottom));
+  z-index: 30;
+  margin: 0;
+  padding: var(--sp-4) calc((100% - min(100%, 900px)) / 2 + var(--sp-4));
+  border-radius: 0;
+}
+.quiz-fb-actions { display: flex; gap: var(--sp-2); }
+.quiz-fb-actions:empty { display: none; }
+.quiz-verdict { display: flex; align-items: center; gap: var(--sp-3); margin: 0; line-height: var(--lh-tight); }
+/* 丸いステッカー(白い印) */
+.quiz-fb-sticker {
+  --sticker-bg: var(--sticker-warn);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--sticker-bg);
+  color: var(--sticker-fg);
+}
+.quiz-verdict.is-ok .quiz-fb-sticker { --sticker-bg: var(--sticker-primary); }
+.quiz-fb-sticker .icon { width: 28px; height: 28px; stroke-width: 3.2; }
+.quiz-verdict-text { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.quiz-verdict strong { font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: var(--fw-display); line-height: 1.2; letter-spacing: .02em; }
+.quiz-verdict.is-ok strong { color: var(--color-success); }
+.quiz-verdict.is-ng strong { color: var(--color-danger); }
+.quiz-fb-answer { font-family: var(--font-display); font-size: var(--fs-base); font-weight: var(--fw-display); line-height: 1.35; color: var(--color-text); overflow-wrap: anywhere; }
+.quiz-fb-answer b { font-size: var(--fs-xl); color: var(--color-danger); }
+.quiz-verdict small { display: block; font-size: var(--fs-sm); line-height: 1.4; color: var(--color-text); overflow-wrap: anywhere; }
+/* ボタン: 「解説を見る」(白い札)と「つづける」(大きな塗り。誤りのときは赤みのある色) */
+.quiz-fb-actions .btn { min-height: 52px; white-space: nowrap; }
+.quiz-explain-toggle { flex: 0 1 auto; gap: var(--sp-1); padding-inline: var(--sp-4); }
+.quiz-explain-toggle .icon { transition: transform var(--dur-2) var(--ease-std); }
+.quiz-explain-toggle[aria-expanded="true"] .icon { transform: rotate(180deg); }
+.quiz-fb-actions .quiz-next { flex: 1 1 auto; gap: var(--sp-2); font-size: var(--fs-base); letter-spacing: .08em; }
+.quiz-fb-actions > :only-child { flex: 1 1 auto; }
+.quiz-feedback.is-ng .quiz-next { --btn-lip: var(--lip-danger); background: var(--color-danger-fill); }
+@media (hover: hover) { .quiz-feedback.is-ng .quiz-next:hover { background: var(--color-danger-fill-hover); } }
+/* 下から出る(答えた直後だけ)。一覧の中ではふわっと出る */
+.quiz-stepper .quiz-steps > .quiz-card.is-fresh > .quiz-feedback.is-shown { animation: quiz-fb-up 260ms var(--ease-out); }
+.quiz-card.is-fresh > .quiz-feedback.is-shown { animation: quiz-fb-in 220ms var(--ease-out); }
+.quiz-card.is-fresh .quiz-fb-sticker { animation: pop-check 300ms var(--ease-out); }
+@keyframes quiz-fb-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes quiz-fb-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* 狭い画面(320px)では印と文字を少し小さく */
 @media (max-width: 359px) {
-  .quiz-answer-bar { gap: var(--sp-2); padding-inline: var(--sp-3); }
-  .quiz-verdict > .icon { display: none; }
-  .quiz-answer-bar .btn { padding: 0 var(--sp-3); }
+  .quiz-fb-sticker { width: 40px; height: 40px; }
+  .quiz-fb-sticker .icon { width: 24px; height: 24px; }
+  .quiz-verdict { gap: var(--sp-2); }
+  .quiz-verdict strong { font-size: var(--fs-xl); }
+  .quiz-explain-toggle { padding-inline: var(--sp-3); letter-spacing: 0; }
+  .quiz-fb-actions .quiz-next { gap: var(--sp-1); padding-inline: var(--sp-3); letter-spacing: .02em; }
+}
+/* 広い画面: 判定とボタンを横に並べる */
+@media (min-width: 600px) {
+  .quiz-feedback.is-shown { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3) var(--sp-4); }
+  .quiz-fb-actions .quiz-next { min-width: 180px; }
+}
+@media (min-width: 768px) {
+  .quiz-stepper .quiz-steps > .quiz-card > .quiz-feedback.is-shown { padding-inline: calc((100% - min(100%, 900px)) / 2 + var(--sp-6)); }
 }
 @media (min-width: 1024px) {
-  .quiz-answer-bar { bottom: 0; }
+  /* PC: サイドバーの右・本文の列(左端 40px・幅 760px)にそろえる */
+  .quiz-stepper .quiz-steps > .quiz-card > .quiz-feedback.is-shown {
+    left: var(--sidebar-w);
+    bottom: 0;
+    padding: var(--sp-5) max(var(--sp-8), calc(100% - var(--sidebar-w) - 760px - var(--sp-8))) calc(var(--sp-5) + var(--safe-bottom)) var(--sp-8);
+  }
 }
-/* 下部タブのない場所(初回ガイドの「まず1問」・シートの中)では、スクロール領域の下端に固定 */
-:is(.onb-overlay, .sheet) .quiz-answer-bar { bottom: 0; }
+/* 横向きのスマホ: ヘッダーは貼り付かない(style.css)ので、上のバーは画面の上端に */
+@media (max-height: 500px) and (max-width: 1023px) and (orientation: landscape) {
+  .quiz-stepbar { top: 0; }
+}
+/* 横向きのスマホ(高さが低い): 1行にまとめ、補足は1行で切る */
+@media (max-height: 500px) and (orientation: landscape) {
+  .quiz-stepper .quiz-steps > .quiz-card > .quiz-feedback.is-shown { grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding-block: var(--sp-2); }
+  .quiz-fb-sticker { width: 36px; height: 36px; }
+  .quiz-fb-sticker .icon { width: 22px; height: 22px; }
+  .quiz-verdict strong { font-size: var(--fs-lg); }
+  .quiz-verdict small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .quiz-fb-actions .btn { min-height: 44px; }
+}
 /* 「保存できません」のお知らせ(shell.css。下部タブの上に固定)が出ているあいだは、その上に出す(お知らせに隠れないように) */
-body.has-storage-banner .quiz-answer-bar { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--storage-banner-h, 96px) + var(--sp-3)); }
+body.has-storage-banner .quiz-stepper .quiz-steps > .quiz-card > .quiz-feedback.is-shown { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--storage-banner-h, 96px) + var(--sp-3)); }
 @media (min-width: 1024px) {
-  body.has-storage-banner .quiz-answer-bar { bottom: calc(var(--storage-banner-h, 96px) + var(--sp-4) + var(--sp-2)); }
+  body.has-storage-banner .quiz-stepper .quiz-steps > .quiz-card > .quiz-feedback.is-shown { bottom: calc(var(--storage-banner-h, 96px) + var(--sp-4) + var(--sp-2)); }
 }
-/* 回答バーのある一覧(ブックマークの問題の「元に戻す」など)では、下に出る通知を回答バーの上に出す
-   (通知が判定と「次の問題」を隠さないように。回答バーの高さは約72px) */
-body:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 72px + var(--sp-3)); }
-body.has-storage-banner:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--storage-banner-h, 96px) + var(--sp-3) + 72px + var(--sp-3)); }
+/* 判定のバーが出ているあいだは、下に出る通知をその上に出す(「つづける」を隠さないように) */
+body:has(.quiz-stepper.has-fb) .toast:not(.toast-top) { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--qfb-h, 168px) + var(--sp-3)); }
+body.has-storage-banner:has(.quiz-stepper.has-fb) .toast:not(.toast-top) { bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + var(--storage-banner-h, 96px) + var(--sp-3) + var(--qfb-h, 168px) + var(--sp-3)); }
 @media (min-width: 1024px) {
-  body:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) { bottom: calc(72px + var(--sp-4)); }
-  body.has-storage-banner:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) { bottom: calc(var(--storage-banner-h, 96px) + var(--sp-4) + var(--sp-2) + 72px + var(--sp-3)); }
+  body:has(.quiz-stepper.has-fb) .toast:not(.toast-top) { bottom: calc(var(--qfb-h, 168px) + var(--sp-4)); }
+  body.has-storage-banner:has(.quiz-stepper.has-fb) .toast:not(.toast-top) { bottom: calc(var(--storage-banner-h, 96px) + var(--sp-4) + var(--sp-2) + var(--qfb-h, 168px) + var(--sp-3)); }
 }
 
-/* 全体の解説・用語・誤りの報告 */
-.quiz-explain { margin-top: var(--sp-3); padding: var(--sp-3); border-radius: var(--radius-md); background: var(--color-surface-muted); }
+/* 全体の解説・用語・誤りの報告(「解説を見る」で開く) */
+.quiz-after > :first-child { margin-top: var(--sp-4); }
+.quiz-explain { margin-top: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: 16px; background: var(--color-surface-muted); }
+.quiz-stepper .quiz-steps .quiz-explain { background: var(--color-surface); border: 2px solid var(--color-border); }
 .quiz-explain-title { margin: 0 0 var(--sp-1); font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); letter-spacing: .04em; }
-.quiz-explain-text { margin: 0; font-size: var(--fs-md); line-height: var(--lh-body); }
+.quiz-explain-text { margin: 0; font-size: .9375rem; line-height: var(--lh-body); }
 .quiz-meaning { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); }
 .quiz-meaning strong { color: var(--color-text); }
 .quiz-after-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin-top: var(--sp-3); }
@@ -340,7 +599,7 @@ body.has-storage-banner:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) 
 .quiz-self-ask { margin: var(--sp-2) 0 var(--sp-1); font-size: var(--fs-sm); color: var(--color-text-muted); }
 
 /* 自動生成クイズ: 条件は1行(タップでシート) */
-.auto-top { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.auto-top { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .auto-cond-btn {
   display: flex;
   align-items: center;
@@ -348,7 +607,7 @@ body.has-storage-banner:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) 
   width: 100%;
   min-height: 44px;
   padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--color-border);
+  border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
@@ -387,16 +646,37 @@ body.has-storage-banner:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) 
 .weak-terms-rest { display: contents; }
 .weak-terms-rest[hidden] { display: none; }
 
-.auto-score-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
-.auto-score-row .progress-text { margin: 0; }
-.auto-score-row .btn { flex-shrink: 0; }
-
 /* 結果 */
 .quiz-summary .card-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0; }
 .quiz-summary-bar { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
 .quiz-summary-pct { flex-shrink: 0; font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); }
 .quiz-summary-label { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text); line-height: var(--lh-snug); }
 .quiz-summary-note { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
+/* 1問ずつの表示の終わり: マスコット・大きな数字・横いっぱいのボタン(中央そろえ) */
+.quiz-stepper .quiz-summary { padding: var(--sp-6) var(--sp-4) var(--sp-5); text-align: center; scroll-margin-top: calc(60px + var(--sp-2)); }
+.quiz-finish-hero { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.quiz-finish-mascot { width: 104px; height: 104px; }
+.quiz-finish-title { margin: 0; font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: var(--fw-display); line-height: var(--lh-tight); color: var(--color-heading); text-wrap: balance; }
+.quiz-stepper .quiz-summary .recommend-head { justify-content: center; margin-bottom: 0; }
+.quiz-stepper .quiz-summary .stat-value { font-size: var(--fs-display); line-height: 1.1; }
+.quiz-stepper .quiz-summary .stat-value small { font-family: var(--font-display); font-size: var(--fs-md); font-weight: 700; }
+.quiz-finish-score { display: flex; align-items: baseline; justify-content: center; gap: var(--sp-1); margin: 0; color: var(--color-text-muted); }
+.quiz-finish-score .big-num { font-size: var(--fs-display); color: var(--color-primary); }
+.quiz-finish-of { font-family: var(--font-display); font-size: var(--fs-md); font-weight: 700; }
+.quiz-stepper .quiz-summary .quiz-summary-bar { max-width: 420px; margin-inline: auto; }
+.quiz-stepper .quiz-summary :is(.chip-row, .drill-summary-list) { justify-content: center; }
+.quiz-stepper .quiz-summary .card-actions { flex-direction: column; align-items: stretch; max-width: 420px; margin: var(--sp-4) auto 0; }
+.quiz-stepper .quiz-summary .card-actions .btn { min-height: 52px; }
+
+/* 動きを減らす設定: 位置の動き(入れ替わり・下から出る・揺れ・ぽん)はなし、色だけ変わる */
+@media (prefers-reduced-motion: reduce) {
+  .quiz-steps > .quiz-card.is-current,
+  .quiz-card.is-fresh > .quiz-feedback.is-shown,
+  .quiz-stepper .quiz-steps > .quiz-card.is-fresh > .quiz-feedback.is-shown,
+  .quiz-card.is-fresh .quiz-fb-sticker,
+  .quiz-card.is-fresh .choice-btn.correct .choice-key,
+  .quiz-card.is-fresh .choice-btn.incorrect { animation: none; }
+}
 
 /* 用語のシート(クイズ・○×から開く) */
 .term-sheet-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); margin-bottom: var(--sp-3); }
@@ -409,10 +689,19 @@ body.has-storage-banner:has(#view-root .quiz-answer-bar) .toast:not(.toast-top) 
 }
 .term-sheet-links { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--color-border); }
 
-/* PC: 問題は読みやすい幅の1列 */
+/* タブレット: 本文の左右の余白(24px)に合わせて、貼り付くバーを端まで */
+@media (min-width: 768px) {
+  .quiz-stepbar { margin-inline: calc(var(--sp-6) * -1); padding-inline: var(--sp-6); }
+}
+/* PC: 4択の画面は読みやすい幅の1列(760px)。貼り付くバーは画面の上端 */
 @media (min-width: 1024px) {
   .quiz-view .quiz-list { grid-template-columns: minmax(0, 760px); }
+  .quiz-stepper { max-width: 760px; }
+  .quiz-stepper .quiz-list { grid-template-columns: minmax(0, 1fr); }
+  .quiz-stepbar { top: 0; margin-inline: 0; padding-inline: 0; }
+  .quiz-stepper .quiz-steps { min-height: calc(100vh - 60px - var(--sp-9)); }
   .quiz-card, .quiz-summary { scroll-margin-top: var(--sp-4); }
+  .quiz-stepper .quiz-steps > .quiz-card { scroll-margin-top: calc(60px + var(--sp-3)); }
 }
 
 /* ---------- 解き直し(間違えた4択を 1→3→7→21日後に出し直す) ---------- */

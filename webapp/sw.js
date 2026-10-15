@@ -64,6 +64,7 @@ const PRECACHE_URLS = [
   `./js/storage.js`,
   `./js/dates.js`,
   `./js/icons.js`,
+  `./js/mascot.js`,
   `./js/ui.js`,
   `./js/errorScreen.js`,
   `./js/report.js`,

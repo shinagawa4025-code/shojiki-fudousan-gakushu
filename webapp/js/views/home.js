@@ -7,6 +7,9 @@
 // v12: 今日の学習リングは1日の目標(Goals: 回数か分)、宅建士のヒーローに合格予測の1行(Predict)、「今週やること」(Plan)、
 //      試験日が過ぎて次の目標がないときは残り日数の代わりに「お疲れさまでした」と合格発表の案内(Plan の state 'after')
 //      見込みの試験日(tentative)の目標は、日付を出すところに必ず「見込み」と添える
+// v3 デザイン(ゲーム感のある学習アプリ): 上に記録のカウンター(連続日数・今日の目標・バッジ)、マスコットのあいさつと
+//      大きな「つづける」ボタン、今日のメニューは丸い節を太い線でつないだ「道」。全部終わったら金色のゴールと紙吹雪(1日1回)
+//      アイコンは丸いステッカーで、分野の色(.cat-*)をステッカーと習熟度のバーにそろえる。説明の小さい灰色の文は必要なものだけ
 window.Views = window.Views || {};
 window.Views.home = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 20 });
@@ -193,6 +196,7 @@ window.Views.home = (function () {
       }
     }
     const activeDays = Streak.totalActiveDays();
+    const allCards = Srs.getAllCards();
     const ctx = {
       profile,
       target,
@@ -208,7 +212,7 @@ window.Views.home = (function () {
       newAvail: Stats.newAvailableToday(),
       limit: Stats.newLimit(),
       newLeft: Stats.newCount(),
-      cards: Object.keys(Srs.getAllCards()).length,
+      cards: Object.keys(allCards).length,
       activeDays,
       newcomer: activeDays === 0,
       streak: Streak.getCurrentStreak(),
@@ -220,6 +224,14 @@ window.Views.home = (function () {
     ctx.goal = window.Goals && Goals.today ? safe(() => Goals.today(), null) : null;
     ctx.plan = window.Plan && Plan.current ? safe(() => Plan.current({ snap, cardsPerDay: ctx.due + ctx.newAvail }), null) : null;
     ctx.predict = ctx.variant === `exam` && ctx.typeId === `takken` && window.Predict && Predict.estimate ? safe(() => Predict.estimate(), null) : null;
+    // v3: 記録のカウンター(バッジは保存済みの数だけ数える。Badges.list は判定・お知らせまでするのでホームでは呼ばない)と、
+    //     マスコットのひとこと用の「期限を過ぎた復習カード」(昨日までに復習するはずだった枚数)
+    ctx.badges = window.Badges && Badges.earnedCount ? safe(() => Badges.earnedCount(), 0) : 0;
+    const today = DateUtil.today();
+    ctx.overdue = Object.keys(allCards).filter((id) => {
+      const c = allCards[id];
+      return c && typeof c.dueDate === `string` && c.dueDate < today && AppIndex.termsById[id];
+    }).length;
     return ctx;
   }
 
@@ -385,23 +397,39 @@ window.Views.home = (function () {
     return e;
   }
 
-  function quickHtml(nav, icon, label, scope) {
-    return `<a class="quick" href="${esc(nav)}">${ic(icon || `lightbulb`, 22)}<span><b>${esc(label)}</b>${scope ? `<small>${esc(scope)}</small>` : ``}</span></a>`;
+  // 分野の色(ステッカー・バー)。税理士の「不動産税務」は税の色。分からない分野は既定の緑
+  const CAT_IDS = [`gyoho`, `kenri`, `horei`, `zei`, `menjo`, `shohi`];
+  function catCls(id) {
+    if (id === `shisan`) return `cat-zei`;
+    return CAT_IDS.includes(id) ? `cat-${id}` : ``;
   }
 
-  function ctaHtml(p) {
+  // 丸いステッカー(色の面+白いアイコン)。cls: sticker-sm / sticker-gold / cat-* など
+  function sticker(icon, cls, size) {
+    return `<span class="sticker${cls ? ` ${cls}` : ``}" aria-hidden="true">${ic(icon || `lightbulb`, size || 22)}</span>`;
+  }
+
+  // 押せるタイル(ステッカー+ラベル+範囲)。cat: 分野の色
+  function quickHtml(nav, icon, label, scope, cat) {
+    return `<a class="quick${cat ? ` ${cat}` : ``}" href="${esc(nav)}">${sticker(icon, `sticker-sm`, 18)}<span><b>${esc(label)}</b>${scope ? `<small>${esc(scope)}</small>` : ``}</span></a>`;
+  }
+
+  // 大きな主ボタン(マスコットの下)。title が大きな文字、sub がその下の小さな文字
+  function goHtml(p) {
     return `
-      <a class="btn btn-lg hero2-cta" href="${esc(p.nav)}">
-        <span class="cta-text"><span class="cta-title">${esc(p.title)}</span>${p.sub ? `<small>${esc(p.sub)}</small>` : ``}</span>
-        ${ic(`arrow-right`, 22)}
+      <a class="btn btn-lg home-go${p.dup ? ` is-dup` : ``}" href="${esc(p.nav)}">
+        <span class="home-go-text"><span class="home-go-title">${esc(p.title)}</span>${p.sub ? `<small>${esc(p.sub)}</small>` : ``}</span>
+        <span class="home-go-arrow" aria-hidden="true">${ic(`arrow-right`, 22)}</span>
       </a>`;
   }
 
+  // 1行の行(ステッカー+見出し+右の短い補足)。it.cat で分野の色、it.warn で要注意の色。it.sub は it.keepSub のときだけ出す
   function listRowHtml(it) {
     return `
-      <a class="list-row" href="${esc(it.nav)}">
+      <a class="list-row${it.cat ? ` ${it.cat}` : ``}" href="${esc(it.nav)}">
         <span class="list-row-icon${it.warn ? ` is-warn` : ``}">${ic(it.icon || `lightbulb`)}</span>
-        <span class="list-row-main"><span class="list-row-title">${esc(it.title)}</span>${it.sub ? `<span class="list-row-sub">${esc(it.sub)}</span>` : ``}</span>
+        <span class="list-row-main"><span class="list-row-title">${esc(it.title)}</span>${it.sub && it.keepSub ? `<span class="list-row-sub">${esc(it.sub)}</span>` : ``}</span>
+        ${it.meta ? `<span class="list-row-meta num">${esc(it.meta)}</span>` : ``}
         ${ic(`chevron-right`, 18)}
       </a>`;
   }
@@ -412,88 +440,149 @@ window.Views.home = (function () {
       ${inner}`);
   }
 
-  // 今日の学習リング: 1日の目標(Goals.today() = { kind: 回数|分, value, done, met })。目標の仕組みがなければ今日の学習回数 / 10
+  // 今日の目標: 1日の目標(Goals.today() = { kind: 回数|分, value, done, met })。目標の仕組みがなければ今日の学習回数 / 10
   function ringGoal(ctx) {
     if (ctx.goal && Number.isFinite(Number(ctx.goal.value)) && ctx.goal.value > 0) return ctx.goal;
     return { kind: `actions`, value: DAILY_GOAL, done: ctx.todayCount, met: ctx.todayCount >= DAILY_GOAL };
   }
 
-  function ringHtml(g) {
+  // ---- 記録のカウンター(連続日数・今日の目標・バッジ)。押すとそれぞれの記録・設定へ ----
+  function statusEl(ctx) {
+    const n = Math.max(0, Math.floor(num(ctx.streak)));
+    // 今日まだ学習していない間は炎を消しておく(昨日までの連続はそのまま数える)
+    const lit = ctx.todayCount > 0;
+    const streakLabel = `連続学習 ${n}日${n && !lit ? `(今日はまだ)` : ``}`;
+    const g = ringGoal(ctx);
     const goal = Math.max(1, Math.floor(num(g.value)));
-    const count = Math.max(0, Math.floor(num(g.done)));
+    const done = Math.max(0, Math.floor(num(g.done)));
     const minutes = g.kind === `minutes`;
-    const C = 2 * Math.PI * 36;
-    const shown = Math.min(count, goal);
-    const reached = !!g.met;
-    const fill = shown ? `<circle class="ring-fill" cx="42" cy="42" r="36" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - shown / goal)).toFixed(1)}"/>` : ``;
-    // 分の目標は「12/30分」。数字が長くなる(3桁)ときは小さくする
-    const unit = minutes ? `分` : ``;
-    const long = String(shown).length + String(goal).length >= 5;
-    return `
-      <div class="ring${reached ? ` is-done` : ``}${long ? ` is-long` : ``}" role="img" aria-label="今日の学習 ${minutes ? `${count}分/目標${goal}分` : `${count}/${goal}`}${reached ? `(目標達成)` : ``}">
-        <svg viewBox="0 0 84 84" aria-hidden="true"><circle class="ring-track" cx="42" cy="42" r="36"/>${fill}</svg>
-        <div class="ring-label" aria-hidden="true"><div>${reached ? `<strong>達成</strong>` : `<strong>${shown}<small>/${goal}${unit}</small></strong>`}<small>今日</small></div></div>
-      </div>`;
+    const met = !!g.met;
+    const R = 15;
+    const C = 2 * Math.PI * R;
+    const shown = Math.min(done, goal);
+    const fill = shown ? `<circle class="ring-fill" cx="20" cy="20" r="${R}" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - shown / goal)).toFixed(1)}"/>` : ``;
+    const goalLabel = `今日の目標 ${minutes ? `${done}分/${goal}分` : `${done}/${goal}回`}${met ? `(達成)` : ``}`;
+    const badges = Math.max(0, Math.floor(num(ctx.badges)));
+    const sec = el(`section`, `home-stats`);
+    sec.setAttribute(`aria-label`, `学習の記録`);
+    sec.innerHTML = `
+      <a class="stat stat-streak${lit ? `` : ` is-off`}" href="#progress" aria-label="${streakLabel}">
+        ${sticker(`flame-fill`, `sticker-sm sticker-gold`, 20)}
+        <span class="stat-text" aria-hidden="true"><span class="stat-num"><b>${n}</b><small>日</small></span><span class="stat-label">連続</span></span>
+      </a>
+      <a class="stat stat-goal${met ? ` is-met` : ``}" href="#settings/goal" aria-label="${goalLabel}">
+        <span class="stat-ring" aria-hidden="true"><svg class="ring-svg" viewBox="0 0 40 40"><circle class="ring-track" cx="20" cy="20" r="${R}"/>${fill}</svg>${ic(met ? `check` : `bolt`, 16)}</span>
+        <span class="stat-text" aria-hidden="true"><span class="stat-num"><b>${done}</b><small><span class="stat-of">/${goal}</span>${minutes ? `分` : `回`}</small></span><span class="stat-label">今日の目標</span></span>
+      </a>
+      <a class="stat stat-badge" href="#progress/badges" aria-label="バッジ ${badges}個">
+        ${sticker(`medal`, `sticker-sm sticker-gold`, 20)}
+        <span class="stat-text" aria-hidden="true"><span class="stat-num"><b>${badges}</b><small>個</small></span><span class="stat-label">バッジ</span></span>
+      </a>`;
+    return sec;
   }
 
-  function topHtml(ctx) {
-    const today = DateUtil.today();
-    let pill = ``;
-    if (!ctx.newcomer) {
-      const n = ctx.streak;
-      const text = n >= 2 ? `${n}日連続` : n === 1 ? (ctx.todayCount ? `1日目` : `1日連続`) : `今日から`;
-      pill = `<span class="streak-pill" aria-label="連続学習 ${n}日">${ic(`flame`, 18)}<span>${text}</span></span>`;
-    }
-    return `
-      <div class="home-top">
-        <div class="home-top-text"><p class="home-date">${shortDate(today, true)}</p><h2 class="home-title">${greeting()}</h2></div>
-        ${pill}
-      </div>`;
+  // ---- マスコットのあいさつ(表情とひとことは、いまの記録から1つだけ選ぶ)と大きな主ボタン ----
+  function moodOf(ctx, st) {
+    const plan = ctx.plan;
+    const p = ctx.target ? safe(() => Stats.pace(ctx.target), null) : null;
+    if (plan && plan.state === `after`) return { face: `happy`, text: `試験、おつかれさまでした!` };
+    if (p && p.daysLeft === 0) return { face: `cheer`, text: `今日は試験日。落ち着いていこう!` };
+    if (st && st.allDone) return { face: `cheer`, text: `今日のメニュー達成!よくがんばったね` };
+    const g = ringGoal(ctx);
+    if (g.met) return { face: `cheer`, text: `今日の目標を達成!この調子でいこう` };
+    if (ctx.overdue > 0 && ctx.due > 0) return { face: `think`, text: `復習カードが${ctx.due}枚たまっています。先に片づけよう` };
+    if (p && p.daysLeft > 0 && p.daysLeft <= 14) return { face: `normal`, text: `試験まであと${p.daysLeft}日。解き直しを優先しよう` };
+    const left = Math.floor(num(g.value)) - Math.floor(num(g.done));
+    if (g.done > 0 && left > 0 && left <= 5) return { face: `normal`, text: `あと${left}${g.kind === `minutes` ? `分` : `回`}で今日の目標!` };
+    if (ctx.newcomer) return { face: `happy`, text: st && st.minutes ? `はじめまして!まずは約${st.minutes}分、いっしょにやろう` : `はじめまして!いっしょに学んでいこう` };
+    if (ctx.streak >= 2 && !ctx.todayCount) return { face: `normal`, text: `今日も学ぶと${ctx.streak + 1}日連続!` };
+    if (st && st.next) return { face: `normal`, text: st.done ? `残り約${st.minutes}分。この調子!` : `今日は約${st.minutes}分。いっしょにやろう!` };
+    return { face: `normal`, text: `今日も少しずつ進めよう` };
+  }
+
+  function greetEl(ctx, st, go) {
+    const m = moodOf(ctx, st);
+    const art = window.Mascot && Mascot.svg ? Mascot.svg(m.face, 84, { className: `home-mascot` }) : ``;
+    const sec = el(`section`, `home-greet${art ? `` : ` no-mascot`}`);
+    sec.setAttribute(`aria-labelledby`, `home-hello`);
+    sec.innerHTML = `
+      <div class="home-greet-row">
+        ${art}
+        <div class="home-bubble">
+          <h2 class="home-hello" id="home-hello">${greeting()}</h2>
+          <p class="home-say">${esc(m.text)}</p>
+        </div>
+      </div>
+      ${go ? goHtml(go) : ``}`;
+    return sec;
   }
 
   // ---- 試験向けのヒーロー ----
-  function examHero(ctx, used) {
-    const card = el(`section`, `card hero2 home-hero2`);
-    card.setAttribute(`aria-label`, `今日の学習`);
+  // 残り日数の大きな色のカード(合格予測の1行つき)+ ○×・次の学習の2つのタイル。
+  // 主ボタン(メニューが終わった後の「次の学習」)はここには出さず out.primary で返し、マスコットの下の大きなボタンにする
+  function examHero(ctx, used, out) {
+    const sec = el(`section`, `home-hero2 is-exam`);
+    sec.setAttribute(`aria-label`, `試験の目標`);
     const target = ctx.target;
     const notes = [];
     let p = null;
-    let meta;
-    let afterMeta = ``;
-    let predict = ``;
+    let card;
     if (target) {
       p = Stats.pace(target);
       const date = shortDate(target.date, true);
       // 見込み(公式発表前)の試験日は、日付のそばに必ず「見込み」と出す
       const tent = target.tentative === true ? tentativeTag() : ``;
+      const eyebrow = (suffix) => `<p class="hero2-eyebrow">${ic(`target`, 16)}<span>${esc(target.name)}${suffix}</span>${tent}</p>`;
       if (p.daysLeft > 0) {
-        // paceLine はアプリが作る数値と定型文だけ(利用者の入力を含まない)なので、句切りで折り返すよう HTML で組む
+        // 補足はアプリが作る数値と定型文だけ(利用者の入力を含まない)なので、句切りで折り返すよう HTML で組む
         let paceLine = ``;
-        if (p.remaining > 0) paceLine = `<span class="nowrap">残り${p.remaining}項目</span>・<span class="nowrap">1日${p.perDay}項目ペース</span>${p.buffer ? `<span class="nowrap">(直前${p.buffer}日は総復習用)</span>` : ``}`;
-        else if (p.total > 0) paceLine = `範囲はすべて学習済み。復習と解き直しで仕上げましょう`;
-        meta = `
-          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}まで</span>${tent}</p>
-          <p class="hero2-days"><strong class="num">${p.daysLeft}</strong>日</p>
-          <p class="hero2-sub"><span class="nowrap">${date}${target.tentative === true ? `(見込み)` : ``}</span>${paceLine ? `・${paceLine}` : ``}</p>`;
-        predict = predictLine(ctx);
+        if (p.remaining > 0) paceLine = `<span class="nowrap">1日${p.perDay}項目ペース</span>`;
+        else if (p.total > 0) paceLine = `<span class="nowrap">範囲はすべて学習済み</span>`;
+        const phase = ctx.plan && ctx.plan.state === `before` && ctx.plan.phase ? ctx.plan.phase : null;
+        card = `
+          <div class="home-count is-count">
+            <div class="count-top">
+              ${eyebrow(`まで`)}
+              ${phase ? `<span class="count-phase">${ic(phase.icon || `flag`, 14)}${esc(phase.name)}</span>` : ``}
+            </div>
+            <p class="hero2-days count-days"><strong class="num">${p.daysLeft}</strong><span>日</span></p>
+            <p class="count-sub"><span class="nowrap">${date}${target.tentative === true ? `(見込み)` : ``}</span>${paceLine ? `・${paceLine}` : ``}</p>
+            ${predictLine(ctx)}
+          </div>`;
       } else if (p.daysLeft === 0) {
-        meta = `
-          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}</span>${tent}</p>
-          <p class="hero2-days"><strong>今日</strong></p>
-          <p class="hero2-sub">今日が試験日です。落ち着いて、がんばってください</p>`;
+        card = `
+          <div class="home-count is-today">
+            ${eyebrow(``)}
+            <p class="hero2-days count-days"><strong>今日が試験日</strong></p>
+            <p class="count-sub">落ち着いて、がんばってください</p>
+          </div>`;
       } else if (ctx.plan && ctx.plan.state === `after`) {
         // 試験の後(次の目標なし): 残り日数の代わりに、お疲れさまでした・合格発表の案内・次の目標の登録
-        meta = `
-          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}</span>${tent}</p>
-          <p class="hero2-days is-after"><strong>お疲れさまでした</strong></p>
-          <p class="hero2-sub">${date}の試験から${-p.daysLeft}日</p>`;
-        afterMeta = afterHtml(ctx.plan);
+        card = `
+          <div class="home-count is-after">
+            <div class="count-head">
+              ${sticker(`trophy-fill`, `sticker-lg sticker-gold`, 28)}
+              <div class="count-head-text">
+                ${eyebrow(``)}
+                <p class="hero2-days is-after"><strong>お疲れさまでした</strong></p>
+                <p class="count-sub">${date}の試験から${-p.daysLeft}日</p>
+              </div>
+            </div>
+            ${afterHtml(ctx.plan)}
+          </div>`;
       } else {
-        meta = `
-          <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(target.name)}</span>${tent}</p>
-          <p class="hero2-days is-ended"><strong>終了</strong></p>
-          <p class="hero2-sub">${date}・${-p.daysLeft}日前に終了</p>`;
-        afterMeta = `<button type="button" class="link-btn hero2-link" data-role="add-target">${ic(`calendar`, 16)}次の目標を登録</button>`;
+        card = `
+          <div class="home-count is-ended">
+            <div class="count-head">
+              ${sticker(`flag`, `sticker-lg`, 26)}
+              <div class="count-head-text">
+                ${eyebrow(``)}
+                <p class="hero2-days is-ended"><strong>終了</strong></p>
+                <p class="count-sub">${date}・${-p.daysLeft}日前に終了</p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-block" data-role="add-target">${ic(`calendar`, 18)}次の目標を登録</button>
+          </div>`;
       }
       if (p.daysLeft > 0) {
         if (p.overLimit && p.remaining > 0) {
@@ -514,16 +603,22 @@ window.Views.home = (function () {
       const expected = !officials.length && Stats.expectedDates ? Stats.expectedDates(ctx.typeId) : [];
       const o = officials[0] || expected[0] || null;
       const oLabel = o ? `${esc(o.label)}${o.tentative ? `(見込み・未発表)` : ``} ${o.tentative ? DateUtil.toJapanese(o.date, true) : shortDate(o.date, true)}で登録` : ``;
-      meta = `
-        <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(t ? `${t.shortName}試験` : `試験`)}の対策</span></p>
-        <p class="hero2-sub hero2-sub-lead">試験日を登録すると、残り日数と1日の学習量の目安を表示します</p>`;
-      afterMeta = `
-        <div class="hero2-target-actions">
-          ${o ? `<button type="button" class="chip chip-small${o.tentative ? ` chip-tentative` : ``}" data-role="official" data-date="${o.date}"${o.tentative ? ` data-tentative="1"` : ``}>${ic(`calendar`, 14)}${oLabel}</button>` : ``}
-          <button type="button" class="link-btn hero2-link" data-role="add-target">${ic(`calendar`, 16)}${o ? `別の日付で登録` : `試験日を登録`}</button>
-        </div>
-        ${o && o.tentative ? `<p class="calc-note hero2-tent-note">${esc(o.note || `見込み・未発表`)}。公式の試験日が発表されたら、設定で日付を確かめてください。</p>` : ``}`;
-      predict = predictLine(ctx);
+      card = `
+        <div class="home-count is-setup">
+          <div class="count-head">
+            ${sticker(`calendar`, `sticker-lg`, 26)}
+            <div class="count-head-text">
+              <p class="hero2-eyebrow"><span>${esc(t ? `${t.shortName}試験` : `試験`)}の対策</span></p>
+              <p class="count-lead">試験日を登録すると、残り日数と1日の学習量の目安を表示します</p>
+            </div>
+          </div>
+          <div class="hero2-target-actions">
+            ${o ? `<button type="button" class="chip chip-small${o.tentative ? ` chip-tentative` : ``}" data-role="official" data-date="${o.date}"${o.tentative ? ` data-tentative="1"` : ``}>${ic(`calendar`, 14)}${oLabel}</button>` : ``}
+            <button type="button" class="link-btn hero2-link" data-role="add-target">${ic(`calendar`, 16)}${o ? `別の日付で登録` : `試験日を登録`}</button>
+          </div>
+          ${o && o.tentative ? `<p class="calc-note hero2-tent-note">${esc(o.note || `見込み・未発表`)}。公式の試験日が発表されたら、設定で日付を確かめてください。</p>` : ``}
+          ${predictLine(ctx)}
+        </div>`;
     }
 
     // 主ボタンは今日の復習(はじめての人は最初の用語)、残っていなければ弱点分析の最優先。小さいタイルは○×と次の学習
@@ -547,9 +642,10 @@ window.Views.home = (function () {
     }
     if (primary && (used.has(primary.nav) || used.has(`menu-open`))) primary = null;
     if (primary) used.add(primary.nav);
+    if (out) out.primary = primary;
     const tiles = [];
     if ((!primary || primary.nav !== ox.nav) && !used.has(ox.nav)) {
-      tiles.push(quickHtml(ox.nav, `o-x`, ox.label, ox.scope));
+      tiles.push(quickHtml(ox.nav, `o-x`, ox.label, ox.scope, catCls(oxCatOf(ox.nav))));
       used.add(ox.nav);
       // ○×のタイルを出したら、次にやることの「○×で腕試し」は重ねない
       used.add(`kind:ox`);
@@ -567,7 +663,7 @@ window.Views.home = (function () {
       const pick = (urgent && pool.find(isWeakKind)) || pool.find((a) => a.kind !== `ox`) || pool[0] || null;
       if (pick) {
         const s = shortAction(ctx, pick);
-        tiles.push(quickHtml(pick.nav, pick.icon, s.label, s.scope));
+        tiles.push(quickHtml(pick.nav, pick.icon, s.label, s.scope, isWeakKind(pick) ? `is-warn` : catCls(pick.categoryId)));
         used.add(pick.nav);
         if (pick.kind === `exam`) used.add(`kind:exam`);
       }
@@ -575,25 +671,19 @@ window.Views.home = (function () {
 
     const today = DateUtil.today();
     const others = Stats.listTargets().filter((t) => !target || t.id !== target.id);
-    card.innerHTML = `
-      <div class="hero2-head">
-        ${ringHtml(ringGoal(ctx))}
-        <div class="hero2-meta">${meta}</div>
-      </div>
-      ${predict}
-      ${afterMeta}
+    sec.innerHTML = `
+      ${card}
       ${doneLine}
-      ${primary ? ctaHtml(primary) : ``}
-      ${tiles.length ? `<div class="hero2-quick${tiles.length === 1 ? ` is-single` : ``}">${tiles.join(``)}</div>` : ``}
       ${notes.length ? `<div class="hero2-notes">${notes.join(``)}</div>` : ``}
+      ${tiles.length ? `<div class="hero2-quick${tiles.length === 1 ? ` is-single` : ``}">${tiles.join(``)}</div>` : ``}
       ${others.length ? `<div class="chip-row hero-others">${others.map((t) => {
         const d = DateUtil.diffDays(today, t.date);
         const left = Number.isFinite(d) && d >= 0 ? `あと${d}日` : `終了`;
         const name = `${t.name}${t.tentative === true ? `(見込み)` : ``}`;
         return `<a class="chip chip-small chip-muted" href="#settings/targets" aria-label="${esc(name)} ${left}(設定でホームに表示する試験を切り替え)">${esc(name)} ${left}</a>`;
       }).join(``)}</div>` : ``}`;
-    card.querySelectorAll(`[data-role="add-target"]`).forEach((b) => b.addEventListener(`click`, () => openTargetForm(rerender, null, { examTypeId: ctx.typeId })));
-    const official = card.querySelector(`[data-role="official"]`);
+    sec.querySelectorAll(`[data-role="add-target"]`).forEach((b) => b.addEventListener(`click`, () => openTargetForm(rerender, null, { examTypeId: ctx.typeId })));
+    const official = sec.querySelector(`[data-role="official"]`);
     if (official) {
       official.addEventListener(`click`, () => {
         const typeId = ctx.typeId || `takken`;
@@ -603,8 +693,8 @@ window.Views.home = (function () {
         rerender();
       });
     }
-    if (ctx.plan && ctx.plan.state === `after`) wireAfter(card, ctx.plan, rerender);
-    return card;
+    if (ctx.plan && ctx.plan.state === `after`) wireAfter(sec, ctx.plan, rerender);
+    return sec;
   }
 
   // 「見込み」の小さな札(公式発表前の試験日)
@@ -701,56 +791,59 @@ window.Views.home = (function () {
     return { nav: `#ox/topic/${topic.id}/10`, label, scope: `${topic.name}・1問数秒`, name: topic.name };
   }
 
-  function generalHero(ctx, plan, used) {
-    const card = el(`section`, `card hero2 home-hero2`);
-    card.setAttribute(`aria-label`, `今日の1テーマ`);
+  function generalHero(ctx, plan, used, out) {
+    const sec = el(`section`, `home-hero2 is-general`);
+    sec.setAttribute(`aria-label`, `今日の1テーマ`);
     const theme = plan.theme;
     const labels = interestLabels(ctx);
     let body = ``;
     let primary = null;
     if (theme && used.has(`#topics/${theme.topic.id}/${theme.basicId}`)) {
       // 今日の1テーマは今日のメニューの「新しい基礎知識」で案内しているので、ここでは○×・計算機のタイルだけにする
-      card.setAttribute(`aria-label`, `すぐに使える機能`);
-      card.classList.add(`is-compact`);
+      sec.setAttribute(`aria-label`, `すぐに使える機能`);
+      sec.classList.add(`is-compact`);
     } else if (theme) {
       const topic = theme.topic;
+      const nav = `#topics/${topic.id}/${theme.basicId}`;
+      // カードそのものがテーマへのリンク(主ボタンはマスコットの下に出す)
       body = `
-        <div class="theme-card">
-          <div class="theme-art" aria-hidden="true">${ic(topic.icon || `book-open`, 34)}</div>
-          <div class="theme-main">
-            <p class="theme-eyebrow">今日の1テーマ・約3分</p>
-            <p class="theme-title">${esc(theme.basic ? theme.basic.name : topic.name)}</p>
-            <p class="theme-sub">${esc(topic.name)}・学習済み ${theme.done}/${theme.total}</p>
-          </div>
-        </div>`;
-      primary = { nav: `#topics/${topic.id}/${theme.basicId}`, title: `読んでみる`, sub: `読んだら「学習済み」にチェック` };
+        <a class="theme-card" href="${esc(nav)}">
+          ${sticker(topic.icon || `book-open`, `sticker-lg`, 28)}
+          <span class="theme-main">
+            <span class="theme-eyebrow">今日の1テーマ・約3分</span>
+            <span class="theme-title">${esc(theme.basic ? theme.basic.name : topic.name)}</span>
+            <span class="theme-sub">${esc(topic.name)}・<span class="num">${theme.done}/${theme.total}</span></span>
+          </span>
+          ${ic(`chevron-right`, 18)}
+        </a>`;
+      primary = { nav, title: `読んでみる`, sub: `読んだら「学習済み」にチェック` };
     } else {
       body = `
-        <div class="theme-card">
-          <div class="theme-art" aria-hidden="true">${ic(`trophy`, 34)}</div>
-          <div class="theme-main">
-            <p class="theme-eyebrow">今日の1テーマ</p>
-            <p class="theme-title">暮らしの基礎知識はすべて学習済みです</p>
-            <p class="theme-sub">○×や4択で、覚えたことを確かめましょう</p>
-          </div>
+        <div class="theme-card is-static">
+          ${sticker(`trophy-fill`, `sticker-lg sticker-gold`, 28)}
+          <span class="theme-main">
+            <span class="theme-eyebrow">今日の1テーマ</span>
+            <span class="theme-title">暮らしの基礎知識はすべて学習済みです</span>
+            <span class="theme-sub">○×や4択で、覚えたことを確かめましょう</span>
+          </span>
         </div>`;
       primary = { nav: `#quiz`, title: `4択問題で確かめる`, sub: `選択肢ごとの解説つき` };
     }
     // 今日のメニューで案内しているリンク・メニューが終わっていない間の主ボタンは重ねない
     if (primary && (used.has(primary.nav) || (used.has(`menu-open`) && !theme))) primary = null;
     if (primary) used.add(primary.nav);
+    if (out) out.primary = primary;
     const ox = generalOx(ctx, theme);
     const tiles = [];
     if (!used.has(ox.nav)) { tiles.push(quickHtml(ox.nav, `o-x`, ox.label, ox.scope)); used.add(ox.nav); }
     const firstInterest = ctx.profile && ctx.profile.interests[0];
-    tiles.push(quickHtml(`#calculators`, `calculator`, `費用を計算`, CALC_SUB[firstInterest] || `初期費用・ローン`));
+    tiles.push(quickHtml(`#calculators`, `calculator`, `費用を計算`, CALC_SUB[firstInterest] || `初期費用・ローン`, `cat-kenri`));
     used.add(`#calculators`);
-    card.innerHTML = `
+    sec.innerHTML = `
       ${labels.length ? `<p class="hero2-interests"><span>気になるテーマ: <strong>${esc(labels.join(`・`))}</strong></span><a class="link-btn" href="#settings/profile">変更${ic(`chevron-right`, 14)}</a></p>` : ``}
       ${body}
-      ${primary ? ctaHtml(primary) : ``}
       <div class="hero2-quick${tiles.length === 1 ? ` is-single` : ``}">${tiles.join(``)}</div>`;
-    return card;
+    return sec;
   }
 
   // ---- 目的から選ぶ(暮らし・仕事向け) ----
@@ -775,18 +868,29 @@ window.Views.home = (function () {
     const nav = b.nextId ? `#topics/${b.topic.id}/${b.nextId}` : `#topics/${b.topic.id}`;
     if (used.has(nav)) return null;
     used.add(nav);
-    const sub = b.next ? `${b.done}/${b.total}項目・次は「${b.next.name}」` : `${b.total}項目すべて学習済み`;
-    return sectionEl(`続きから`, null, `<div class="list-group">${listRowHtml({ nav, icon: b.topic.icon || `book-open`, title: b.topic.name, sub })}</div>`, `home-continue`);
+    const sub = b.next ? `次は「${b.next.name}」` : `${b.total}項目すべて学習済み`;
+    const pct = b.total > 0 ? Math.max(0, Math.min(100, Math.round((num(b.done) / b.total) * 100))) : 0;
+    // 大きな押せるカード: トピックのステッカー・名前・次の項目と、学習済みの割合のバー
+    return sectionEl(`続きから`, null, `
+      <a class="continue-card" href="${esc(nav)}" aria-label="${esc(`${b.topic.name}(学習済み ${b.done}/${b.total})・${sub}`)}">
+        ${sticker(b.topic.icon || `book-open`, `sticker-lg`, 28)}
+        <span class="continue-main" aria-hidden="true">
+          <span class="continue-title">${esc(b.topic.name)}</span>
+          <span class="continue-sub">${esc(sub)}</span>
+          <span class="continue-bar"><span class="progress-bar"><span class="progress-bar-fill" style="width:${pct}%"></span></span><span class="num">${b.done}/${b.total}</span></span>
+        </span>
+        ${ic(`chevron-right`, 18)}
+      </a>`, `home-continue`);
   }
 
   // ---- 次にやること ----
   function reviewRow(ctx) {
     if (ctx.cards === 0 && ctx.newAvail > 0) {
       const n = Math.min(ctx.newAvail, 10);
-      return { nav: `#review`, icon: `layers`, title: `最初の${n}語を覚える`, sub: `カードをめくって意味を確認・約${minutesFor(n)}分` };
+      return { nav: `#review`, icon: `layers`, title: `最初の${n}語を覚える`, meta: `約${minutesFor(n)}分` };
     }
-    if (ctx.due > 0) return { nav: `#review`, icon: `repeat`, warn: true, title: `今日の復習(${ctx.due}枚)`, sub: `忘れかけた用語をカードで確認・約${minutesFor(ctx.due + ctx.newAvail)}分` };
-    if (ctx.newAvail > 0) return { nav: `#review`, icon: `sparkles`, title: `新しい用語を覚える(${ctx.newAvail}語)`, sub: `今日の復習で、まだ学んでいない用語をカードで` };
+    if (ctx.due > 0) return { nav: `#review`, icon: `repeat`, warn: true, title: `今日の復習(${ctx.due}枚)`, meta: `約${minutesFor(ctx.due + ctx.newAvail)}分` };
+    if (ctx.newAvail > 0) return { nav: `#review`, icon: `sparkles`, title: `新しい用語を覚える(${ctx.newAvail}語)`, meta: `約${minutesFor(ctx.newAvail)}分` };
     return null;
   }
 
@@ -796,7 +900,8 @@ window.Views.home = (function () {
     const rows = studyActions(ctx).filter((a) => !used.has(a.nav) && !sameOxCatUsed(used, a) && !inPlan(a) && !(a.kind === `ox-try` && used.has(`kind:ox`)) && !(a.kind === `exam` && used.has(`kind:exam`))).slice(0, 3).map((a) => {
       used.add(a.nav);
       if (a.kind === `exam`) used.add(`kind:exam`);
-      return { nav: a.nav, icon: a.icon, warn: isWeakKind(a), title: verbTitle(ctx, a), sub: a.detail || `` };
+      // 行は見出しだけ(理由の補足は弱点分析の画面で見られる)。アイコンは分野の色、解き直しは要注意の色
+      return { nav: a.nav, icon: a.icon, warn: isWeakKind(a), cat: catCls(a.categoryId), title: verbTitle(ctx, a) };
     });
     if (!rows.length) return null;
     return sectionEl(`次にやること`, withLink ? { nav: `#progress/weak`, label: `弱点分析` } : null, `<div class="list-group">${rows.map(listRowHtml).join(``)}</div>`, `home-next`);
@@ -816,19 +921,26 @@ window.Views.home = (function () {
     const shown = (it) => (PLAN_HABIT[it.kind] || []).some((nav) => used.has(nav) || used.has(it.href));
     let list = all.filter((it) => !shown(it));
     if (!list.length) list = all;
+    // 試験日まで7日を切ったら、学習計画の画面と同じく「今週」ではなく試験日までの日数の目安
+    const span = plan.budget && plan.budget.days < 7 ? `${plan.budget.days}日で` : `今週`;
     return list.slice(0, 3).map((it) => (
-      { nav: it.href, icon: PLAN_ICONS[it.kind] || `lightbulb`, title: it.label, sub: `${it.sub ? `${it.sub}・` : ``}今週 約${hoursText(it.minutes)}` }
+      { nav: it.href, icon: PLAN_ICONS[it.kind] || `lightbulb`, cat: catCls(it.cat), warn: it.kind === `drill` || it.kind === `ox-weak`, title: it.label, sub: it.sub || ``, time: `${span} 約${hoursText(it.minutes)}` }
     ));
   }
 
   function planSection(ctx, rows) {
     const plan = ctx.plan;
     if (!rows || !rows.length) return null;
-    // 試験日まで7日を切ったら、学習計画の画面と同じく「試験日までのn日の目安」
-    const span = plan.budget && plan.budget.days < 7 ? `試験日までの${plan.budget.days}日の目安` : `1週間の目安`;
-    const sec = sectionEl(`今週やること`, { nav: `#plan`, label: `学習計画を見る` }, `
-      <p class="home-plan-phase">${ic(plan.phase.icon || `flag`, 16)}<span>いまは<strong>${esc(plan.phase.name)}</strong>の時期・${span} 約${esc(hoursText(plan.budget ? plan.budget.week : 0))}</span></p>
-      <div class="list-group">${rows.map(listRowHtml).join(``)}</div>`, `home-plan`);
+    // 分野の色のステッカーを付けたタイル(数が奇数なら最初のタイルを横いっぱいに)。いまの時期は残り日数のカードに出す
+    const tiles = rows.map((r) => `
+      <a class="plan-tile${r.cat ? ` ${r.cat}` : ``}" href="${esc(r.nav)}">
+        ${sticker(r.icon, `sticker-sm${r.warn ? ` sticker-warn` : ``}`, 18)}
+        <span class="plan-tile-title">${esc(r.title)}</span>
+        <span class="plan-tile-meta num">${r.sub ? `${esc(r.sub)}・` : ``}${esc(r.time)}</span>
+      </a>`).join(``);
+    const sec = sectionEl(`今週やること`, { nav: `#plan`, label: `学習計画` }, `
+      <div class="plan-tiles${rows.length % 2 ? ` is-odd` : ``}">${tiles}</div>`, `home-plan`);
+    if (plan.budget && plan.budget.days < 7) sec.querySelector(`.section-head`).insertAdjacentHTML(`afterend`, `<p class="home-plan-phase">試験日までの${plan.budget.days}日の目安です</p>`);
     return sec;
   }
 
@@ -852,7 +964,7 @@ window.Views.home = (function () {
       const nav = `#topics/${id}/${b.nextId}`;
       if (used.has(nav)) continue;
       used.add(nav);
-      rows.push({ nav, icon: b.topic.icon || `book-open`, title: `${b.topic.name}の基礎知識を読む`, sub: `学習済み ${b.done}/${b.total}` });
+      rows.push({ nav, icon: b.topic.icon || `book-open`, title: `${b.topic.name}の基礎知識を読む`, meta: `${b.done}/${b.total}` });
     }
     if (!rows.length) return null;
     return sectionEl(`次にやること`, { nav: `#progress`, label: `進捗` }, `<div class="list-group">${rows.map(listRowHtml).join(``)}</div>`, `home-next`);
@@ -864,11 +976,12 @@ window.Views.home = (function () {
     const week = Streak.getWeek();
     const n = ctx.streak;
     const longest = Streak.getLongestStreak();
+    const active = week.filter((d) => d.active).length;
+    // 連続日数は上のカウンターに出しているので、ここは今週の日数と最長記録(今日まだなら、続けるとどうなるか)
     let msg;
-    if (ctx.todayCount > 0) msg = `<strong>${n}日連続</strong>中・最長${Math.max(longest, n)}日`;
+    if (ctx.todayCount > 0) msg = `今週<strong>${active}日</strong>学習・最長${Math.max(longest, n)}日`;
     else if (n > 0) msg = `今日も1問解くと <strong>${n + 1}日連続</strong>`;
     else msg = `1問解くと、今日から記録がはじまります`;
-    const active = week.filter((d) => d.active).length;
     const card = el(`section`, `card week-card`);
     card.setAttribute(`aria-label`, `今週の学習`);
     card.innerHTML = `
@@ -905,15 +1018,14 @@ window.Views.home = (function () {
       const bars = pool.map((r) => {
         const m = Math.max(0, Math.min(100, Math.round(num(r.mastery))));
         return `
-          <div class="mini-bar${r.id === focusId ? ` is-focus` : ``}">
-            <div class="mini-bar-head"><b>${esc(r.name)}</b><span>${m}</span></div>
+          <div class="mini-bar ${catCls(r.id) || `cat-life`}${r.id === focusId ? ` is-focus` : ``}">
+            <div class="mini-bar-head"><b>${esc(r.name)}${r.id === focusId ? `<span class="mini-bar-tag">伸ばしたい</span>` : ``}</b><span class="num">${m}</span></div>
             <div class="progress-bar"><div class="progress-bar-fill" style="width:${m}%"></div></div>
           </div>`;
       }).join(``);
       return sectionEl(`分野別の習熟度`, { nav: `#progress/weak`, label: `すべて` }, `
         <div class="card home-mastery-card">
           <div class="home-mastery"><strong class="num">${Math.round(num(s.mastery))}</strong><span>/100</span><span class="home-mastery-label">${esc(s.examName || ``)}の総合</span></div>
-          ${s.focus ? `<p class="home-card-note">いま伸ばしたい分野: <strong>${esc(s.focus.name)}</strong></p>` : ``}
           ${bars ? `<div class="mini-bars">${bars}</div>` : ``}
         </div>`, `home-analysis`);
     }
@@ -925,10 +1037,10 @@ window.Views.home = (function () {
     if (!rows.length) return null;
     return sectionEl(`分野別の進捗`, { nav: `#progress`, label: `すべて` }, `
       <div class="card home-mastery-card">
-        <p class="home-card-note">${esc(type.shortName)}の範囲ごとの、学習済み・記憶済みの割合です。問題を解くと習熟度に切り替わります。</p>
+        <p class="home-card-note">${esc(type.shortName)}の学習済み・記憶済みの割合(問題を解くと習熟度に切り替わります)</p>
         <div class="mini-bars">
           ${rows.map((r) => `
-            <div class="mini-bar">
+            <div class="mini-bar ${catCls(r.id) || `cat-life`}">
               <div class="mini-bar-head"><b>${esc(r.name)}</b><span>${r.done}/${r.total}</span></div>
               <div class="progress-bar"><div class="progress-bar-fill" style="width:${Math.max(0, Math.min(100, num(r.pct)))}%"></div></div>
             </div>`).join(``)}
@@ -982,7 +1094,8 @@ window.Views.home = (function () {
     const best = history.reduce((m, e) => (!m || e.score / e.total > m.score / m.total ? e : m), null);
     card.innerHTML = `
       <div class="home-exam-head">
-        <h3 class="card-title">${ic(`timer`)}模擬試験</h3>
+        ${sticker(`timer`, `sticker-sm`, 18)}
+        <h3 class="card-title">模擬試験</h3>
         ${last ? `<p class="home-exam-scores"><span>前回 <strong class="num">${last.score}</strong>/${last.total}</span><span>最高 <strong class="num">${best.score}</strong>/${best.total}</span></p>` : ``}
       </div>
       ${last ? `` : `<p class="home-card-note">本番と同じ問題数・時間・分野配分で実力を確認できます(宅建士)。</p>`}
@@ -1029,14 +1142,19 @@ window.Views.home = (function () {
       mcCount >= 300 ? `4択問題を約${Math.round(mcCount / 50) * 50}問に増やしました` : ``,
       `デザインを新しくしました`,
     ].filter(Boolean);
+    // 小さく出す: 見出しと「新しくなった点」の開閉(中身はこれまでと同じ)
     const card = el(`section`, `card home-news`);
     card.innerHTML = `
       <div class="home-news-head">
-        <h3 class="card-title">${ic(`sparkles`)}アプリが新しくなりました</h3>
+        ${sticker(`sparkles`, `sticker-sm`, 18)}
+        <h3 class="card-title">アプリが新しくなりました</h3>
         <button type="button" class="btn btn-icon" data-role="dismiss" aria-label="お知らせを閉じる">${ic(`x`)}</button>
       </div>
-      <ul class="home-news-list">${items.map((t) => `<li>${t}</li>`).join(``)}</ul>
-      ${log ? `<a class="link-btn" href="#about/changelog">更新履歴を見る${ic(`chevron-right`, 16)}</a>` : ``}`;
+      <details class="home-news-more">
+        <summary>新しくなった点(${items.length}件)${ic(`chevron-down`, 16)}</summary>
+        <ul class="home-news-list">${items.map((t) => `<li>${t}</li>`).join(``)}</ul>
+        ${log ? `<a class="link-btn" href="#about/changelog">更新履歴を見る${ic(`chevron-right`, 16)}</a>` : ``}
+      </details>`;
     card.querySelector(`[data-role="dismiss"]`).addEventListener(`click`, () => {
       Storage.set(`seenWhatsNew`, version);
       card.remove();
@@ -1079,13 +1197,17 @@ window.Views.home = (function () {
     const card = el(`section`, `card card-compact home-note home-install`);
     card.dataset.kind = ios ? `ios` : `prompt`;
     if (ios) {
+      // 小さく出す: 見出し・手順・ボタン。理由と記録の引き継ぎの注意は開閉の中(文はこれまでと同じ)
       card.innerHTML = `
-        <span class="home-note-icon">${ic(`download`)}</span>
+        <span class="home-note-icon">${sticker(`download`, `sticker-sm`, 18)}</span>
         <div class="home-note-main">
           <strong>ホーム画面に追加すると、記録が消えにくくなります</strong>
-          <span>Safariでしばらく開かないと、このアプリの学習記録が消えることがあります。ホーム画面に追加すると、アプリのように全画面で開けて、記録も保たれやすくなります。</span>
           <span class="home-install-steps">① 共有ボタン(□↑)をタップ(見当たらないときは「…」の中) <span class="nowrap">② 「ホーム画面に追加」</span> <span class="nowrap">③ 「追加」</span></span>
-          <span class="home-install-sub">ホーム画面から開くと、Safariとは別に記録されることがあります。いまの記録を引き継ぐときは、先にバックアップを取り、アプリ側の設定で読み込んでください。</span>
+          <details class="home-note-more">
+            <summary>理由と記録の引き継ぎ${ic(`chevron-down`, 16)}</summary>
+            <span>Safariでしばらく開かないと、このアプリの学習記録が消えることがあります。ホーム画面に追加すると、アプリのように全画面で開けて、記録も保たれやすくなります。</span>
+            <span class="home-install-sub">ホーム画面から開くと、Safariとは別に記録されることがあります。いまの記録を引き継ぐときは、先にバックアップを取り、アプリ側の設定で読み込んでください。</span>
+          </details>
         </div>
         <div class="home-note-actions">
           <a class="btn btn-sm btn-secondary" href="#about/install">方法をくわしく</a>
@@ -1094,7 +1216,7 @@ window.Views.home = (function () {
         </div>`;
     } else {
       card.innerHTML = `
-        <span class="home-note-icon">${ic(`download`)}</span>
+        <span class="home-note-icon">${sticker(`download`, `sticker-sm`, 18)}</span>
         <div class="home-note-main">
           <strong>アプリとしてインストールできます</strong>
           <span>ホーム画面やデスクトップから、すぐに開けるようになります。</span>
@@ -1144,7 +1266,7 @@ window.Views.home = (function () {
     }
     const card = el(`section`, `card card-compact home-note home-backup`);
     card.innerHTML = `
-      <span class="home-note-icon">${ic(`shield`)}</span>
+      <span class="home-note-icon">${sticker(`shield`, `sticker-sm sticker-warn`, 18)}</span>
       <div class="home-note-main">
         <strong>${esc(text)}</strong>
         <span>記録はこの端末のブラウザにだけ保存されています。設定からバックアップ(JSON)を取っておきましょう。</span>
@@ -1190,20 +1312,30 @@ window.Views.home = (function () {
     return o;
   }
 
+  // 今日のメニューの1手順: 丸い節(終わった手順は金色のチェック、いまの手順は大きな緑の節と「スタート」、これからの手順は灰色)
+  // 節は太い線でつながる(線は li の ::before)。読み上げは手順ごとのリンクの aria-label で1回だけ
   function menuStepHtml(s, isNext) {
     const label = `${s.no}. ${s.title}(${s.done ? `完了` : `約${s.minutes}分`})`;
+    const state = s.done ? `is-done` : isNext ? `is-next` : `is-todo`;
+    const node = s.done ? ic(`check`, 26) : ic(s.icon || `book-open`, isNext ? 28 : 22);
+    const body = isNext ? `
+          <span class="path-card" aria-hidden="true">
+            <span class="menu-step-title">${esc(s.title)}</span>
+            ${s.sub ? `<span class="menu-step-sub">${esc(s.sub)}</span>` : ``}
+            <span class="path-go"><span class="path-go-time num">約${s.minutes}分</span><span class="path-go-btn">スタート</span></span>
+          </span>` : `
+          <span class="menu-step-main" aria-hidden="true"><span class="menu-step-title">${esc(s.title)}</span></span>
+          <span class="menu-step-meta" aria-hidden="true">${s.done ? `<span class="menu-step-tag">完了</span>` : `<span class="num">約${s.minutes}分</span>`}</span>`;
     return `
-      <li>
-        <a class="menu-step${s.done ? ` is-done` : ``}${isNext ? ` is-next` : ``}" href="${esc(s.nav)}" data-step="${esc(s.id)}"${isNext ? ` aria-current="step"` : ``} aria-label="${esc(`${label}・${s.sub || ``}`)}">
-          <span class="menu-step-mark" aria-hidden="true">${s.done ? ic(`check`, 16) : `<span class="num">${s.no}</span>`}</span>
-          <span class="menu-step-main" aria-hidden="true"><span class="menu-step-title">${esc(s.title)}</span>${s.sub ? `<span class="menu-step-sub">${esc(s.sub)}</span>` : ``}</span>
-          <span class="menu-step-meta" aria-hidden="true">${s.done ? `<span class="menu-step-tag">完了</span>` : `<span class="num">約${s.minutes}分</span>`}</span>
-          ${ic(`chevron-right`, 18)}
+      <li class="path-step ${state}">
+        <a class="menu-step ${state}" href="${esc(s.nav)}" data-step="${esc(s.id)}"${isNext ? ` aria-current="step"` : ``} aria-label="${esc(`${label}・${s.sub || ``}`)}">
+          <span class="path-node" aria-hidden="true">${node}</span>${body}
         </a>
       </li>`;
   }
 
-  function menuCard(ctx, plan, used) {
+  // info.st にメニューのまとめ(Recommend.menuStatus)を入れて返す(マスコットのひとこと・主ボタンに使う)
+  function menuCard(ctx, plan, used, info) {
     if (!window.Recommend || typeof Recommend.todayMenu !== `function`) return null;
     let steps;
     try { steps = Recommend.todayMenu(menuOptions(ctx, plan)); } catch (e) {
@@ -1212,6 +1344,7 @@ window.Views.home = (function () {
     }
     if (!Array.isArray(steps) || !steps.length) return null;
     const st = Recommend.menuStatus(steps);
+    if (info) info.st = st;
     used.add(`menu`);
     if (!st.allDone) used.add(`menu-open`);
     steps.forEach((s) => {
@@ -1224,24 +1357,42 @@ window.Views.home = (function () {
       const m = s.id === `basic` ? /^#topics\/([^/]+)\//.exec(s.nav) : null;
       if (m) used.add(`#topics/${m[1]}`);
     });
-    const pct = st.total ? Math.round((st.done / st.total) * 100) : 0;
-    const time = st.allDone ? `${ic(`check-circle`, 16)}<span>完了</span>` : `<span class="num">${st.done ? `残り約${st.minutes}分` : `約${st.minutes}分`}</span>`;
-    const card = el(`section`, `card home-menu${st.allDone ? ` is-done` : ``}`);
-    card.setAttribute(`aria-labelledby`, `home-menu-title`);
-    card.innerHTML = `
+    const time = st.allDone ? `${ic(`check-circle-fill`, 18)}<span>完了</span>` : `${ic(`timer`, 16)}<span class="num">${st.done ? `残り約${st.minutes}分` : `約${st.minutes}分`}</span>`;
+    const sec = el(`section`, `home-menu${st.allDone ? ` is-done` : ``}`);
+    sec.setAttribute(`aria-labelledby`, `home-menu-title`);
+    sec.innerHTML = `
       <div class="home-menu-head">
-        <h3 class="card-title" id="home-menu-title">${ic(`list`, 20)}<span>今日のメニュー</span></h3>
+        <h3 class="home-menu-title" id="home-menu-title">今日のメニュー</h3>
         <span class="home-menu-time">${time}</span>
       </div>
-      <div class="home-menu-progress">
-        <div class="progress-bar" role="progressbar" aria-label="今日のメニューの進み具合" aria-valuemin="0" aria-valuemax="${st.total}" aria-valuenow="${st.done}" aria-valuetext="${st.total}手順中${st.done}手順完了">
-          <div class="progress-bar-fill${st.allDone ? ` fill-success` : ``}" style="width:${pct}%"></div>
-        </div>
-        <span class="home-menu-count num" aria-hidden="true">${st.done}/${st.total}</span>
-      </div>
-      <ol class="home-menu-list">${steps.map((s) => menuStepHtml(s, s === st.next)).join(``)}</ol>
-      ${st.allDone ? `<p class="home-menu-done">${ic(`trophy`, 16)}<span>今日のメニューはすべて完了です。お疲れさまでした</span></p>` : ``}`;
-    return card;
+      <p class="sr-only">${st.total}手順中${st.done}手順完了</p>
+      <ol class="home-path">${steps.map((s) => menuStepHtml(s, s === st.next)).join(``)}</ol>
+      <div class="path-goal${st.allDone ? ` is-done` : ``}">
+        <span class="path-node" aria-hidden="true">${ic(`trophy-fill`, st.allDone ? 30 : 22)}</span>
+        <p class="path-goal-text">${st.allDone ? `今日のメニュー達成!` : `ゴール`}</p>
+      </div>`;
+    return sec;
+  }
+
+  // メニューを全部終えた日は、ゴールの節(画面の外ならマスコット)から紙吹雪を1回だけ(このタブの中で1日1回。動きを減らす設定では出ない)
+  const CONFETTI_KEY = `fudomana.menuConfetti`;
+  function celebrate(wrap) {
+    const today = DateUtil.today();
+    try {
+      if (window.sessionStorage.getItem(CONFETTI_KEY) === today) return;
+      window.sessionStorage.setItem(CONFETTI_KEY, today);
+    } catch (e) { return; }
+    if (!window.Mascot || typeof Mascot.confetti !== `function`) return;
+    setTimeout(() => {
+      if (!wrap.isConnected || document.visibilityState === `hidden`) return;
+      const node = wrap.querySelector(`.path-goal .path-node`);
+      const r = node ? node.getBoundingClientRect() : null;
+      const inView = r && r.top >= 0 && r.bottom <= (window.innerHeight || 0);
+      const from = inView ? node : wrap.querySelector(`.home-mascot`) || node;
+      if (!from) return;
+      if (node) node.classList.add(`anim-pop`);
+      Mascot.confetti(from);
+    }, 300);
   }
 
   function render(root) {
@@ -1249,13 +1400,15 @@ window.Views.home = (function () {
     wrap.className = `view home-view`;
     wrap.dataset.docTitle = `ホーム`;
     const ctx = buildContext();
+    // 上: 記録のカウンターとマスコットのあいさつ(PCでは横に並ぶ)。下: スマホは1列、PCは左右2列
     wrap.innerHTML = `
-      ${topHtml(ctx)}
+      <div class="home-head" data-role="head"></div>
       <div class="home-layout is-${ctx.variant}">
         <div class="home-col home-col-main" data-role="main"></div>
         <div class="home-col home-col-side" data-role="side"></div>
       </div>`;
     root.appendChild(wrap);
+    const head = wrap.querySelector(`[data-role="head"]`);
     const main = wrap.querySelector(`[data-role="main"]`);
     const side = wrap.querySelector(`[data-role="side"]`);
     // スマホ(1列)では order で並べ、PC(2列)では左右の列に分ける
@@ -1266,10 +1419,12 @@ window.Views.home = (function () {
     };
     const used = new Set();
     const news = notices(ctx);
+    const menu = {};
+    const hero = {};
     if (ctx.variant === `exam`) {
       const analysis = analysisSection(ctx);
-      place(main, menuCard(ctx, null, used), 0);
-      place(main, examHero(ctx, used), 1);
+      place(main, menuCard(ctx, null, used, menu), 0);
+      place(main, examHero(ctx, used, hero), 1);
       news.forEach((n) => place(main, n, 2));
       place(side, weekCard(ctx), 3);
       // 今週やること: 次にやることのあと。PCでは右の列。行き先は次にやることより先に決め、次にやることでは重ねない
@@ -1280,8 +1435,8 @@ window.Views.home = (function () {
       place(side, examCard(ctx, used), 6);
     } else {
       const plan = generalPlan(ctx);
-      place(main, menuCard(ctx, plan, used), 0);
-      place(main, generalHero(ctx, plan, used), 1);
+      place(main, menuCard(ctx, plan, used, menu), 0);
+      place(main, generalHero(ctx, plan, used, hero), 1);
       news.forEach((n) => place(main, n, 2));
       // 気になるテーマを選んだ人は「続きから・次にやること」を先に、まだの人は「目的から選ぶ」を先に
       const picked = ctx.interests.length > 0;
@@ -1293,10 +1448,38 @@ window.Views.home = (function () {
       // 暮らし・仕事向け(学ぶ目的が未設定の人も)でも、中断中の模擬試験があれば再開の入口を出す
       if (hasExamSession()) place(side, examCard(ctx, used), 8);
     }
+    // 大きな主ボタン: メニューのいまの手順(PCでは道の「スタート」と同じなので隠す)。メニューが終わったらヒーローの次の学習
+    const st = menu.st || null;
+    let go = null;
+    if (st && st.next) {
+      go = { nav: st.next.nav, title: st.done || !ctx.newcomer ? `つづける` : `はじめる`, sub: `${st.next.title}・約${st.next.minutes}分`, dup: true };
+    } else if (hero.primary) {
+      go = hero.primary;
+    }
+    head.appendChild(statusEl(ctx));
+    head.appendChild(greetEl(ctx, st, go));
     if (!side.children.length) wrap.querySelector(`.home-layout`).classList.add(`is-single`);
     live = { wrap, main, ctx, day: DateUtil.today() };
+    if (st && st.allDone) celebrate(wrap);
     watchInstallPrompt();
     watchDay();
+    watchBadges();
+  }
+
+  // バッジは起動の数秒後に判定される(js/badges.js)。判定でバッジが増えたら('badges:change')、表示中のカウンターの数だけ書き換える
+  let watchingBadges = false;
+  function watchBadges() {
+    if (watchingBadges) return;
+    watchingBadges = true;
+    window.addEventListener(`badges:change`, () => {
+      if (!live || !live.wrap.isConnected) return;
+      const a = live.wrap.querySelector(`.stat-badge`);
+      const b = a && a.querySelector(`.stat-num b`);
+      if (!b) return;
+      const n = Math.max(0, Math.floor(num(window.Badges && Badges.earnedCount ? safe(() => Badges.earnedCount(), 0) : 0)));
+      b.textContent = String(n);
+      a.setAttribute(`aria-label`, `バッジ ${n}個`);
+    });
   }
 
   // iPhone のホーム画面アプリなどは、翌日に開いても前の日のホームのまま戻ることがある。

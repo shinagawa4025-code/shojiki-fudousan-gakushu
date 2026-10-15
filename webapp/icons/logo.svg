@@ -1,9 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <title>ふどまな</title>
-  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d5ad6"/><stop offset="1" stop-color="#1f44ad"/></linearGradient></defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="#1e7a4c"/>
   <g transform="translate(256 260) scale(1.04) translate(-256 -274)"><g fill="#ffffff" stroke="#ffffff" stroke-width="12" stroke-linejoin="round">
     <path d="M244 150 120 248Q114 253 114 262V380Q176 364 244 390Z"/>
     <path d="M268 150 392 248Q398 253 398 262V380Q336 364 268 390Z"/>
-  </g><path d="M144 300Q182 291 214 301M144 330Q182 321 214 331M298 301Q330 291 368 300M298 331Q330 321 368 330" fill="none" stroke="#c9d6f7" stroke-width="10" stroke-linecap="round"/><path d="M228 346A28 28 0 0 1 284 346V398Q284 404 278 404H234Q228 404 228 398Z" fill="#f08a24"/></g>
+  </g><path d="M144 300Q182 291 214 301M144 330Q182 321 214 331M298 301Q330 291 368 300M298 331Q330 321 368 330" fill="none" stroke="#a6dcbc" stroke-width="10" stroke-linecap="round"/><path d="M228 346A28 28 0 0 1 284 346V398Q284 404 278 404H234Q228 404 228 398Z" fill="#f2b01e"/></g>
 </svg>

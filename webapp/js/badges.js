@@ -170,6 +170,8 @@ window.Badges = (function () {
     fresh.forEach((id) => { store.at[id] = t; });
     if (!fresh.length && wasSeeded) return { fresh: [], silent: true };
     Storage.set(KEY, { seeded: true, at: store.at });
+    // ホームのバッジ数をその場で更新する(初回の起動では、表示のあとにバッジを確かめるため)
+    try { window.dispatchEvent(new CustomEvent(`badges:change`)); } catch (e) { /* 知らせなくても次の表示で反映される */ }
     return { fresh, silent: !wasSeeded };
   }
 

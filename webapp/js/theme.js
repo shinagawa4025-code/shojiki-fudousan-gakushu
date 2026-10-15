@@ -3,7 +3,7 @@
 window.ThemeManager = (function () {
   // ブラウザのツールバー色はヘッダーの背景(--color-surface)に合わせる
   // index.html には media 付きの theme-color が2つある(JSの実行前でも端末の設定に合う色を出すため)
-  const THEME_COLORS = { light: `#ffffff`, dark: `#171e27` };
+  const THEME_COLORS = { light: `#ffffff`, dark: `#15201a` };
   const mql = window.matchMedia ? window.matchMedia(`(prefers-color-scheme: dark)`) : null;
   const listeners = [];
 

@@ -94,7 +94,18 @@ window.Icons = (function () {
     percent: `<path d="M5.5 18.5 18.5 5.5"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>`,
     // ○×一問一答: 札(カード)の左右に ○ と × 。○と×だけを並べると小さいサイズで英字の「ox」に見え、
     // サブナビの「○×」の文字と並ぶと「ox○×」と重複して見えるため、札の形で囲む
-    'o-x': `<circle cx="7.75" cy="7.75" r="4.25"/><path d="M13.75 13.75l6.5 6.5M20.25 13.75l-6.5 6.5"/>`
+    'o-x': `<circle cx="7.75" cy="7.75" r="4.25"/><path d="M13.75 13.75l6.5 6.5M20.25 13.75l-6.5 6.5"/>`,
+
+    // ---- 塗りの版(ステッカー・ごほうびの演出用。v3)----
+    // 塗りの中の白い線・面(icon-cut)は css/style.css の --icon-cut で色を変えられる
+    'flame-fill': `<path d="M12 21c-3.6 0-6.5-2.6-6.5-6.2 0-3.3 2.4-5.2 3.6-7.8.4 1.6 1.1 2.6 2.2 3.2C11.6 7.3 12.5 5 14.5 3c.2 3 1.6 4.6 2.8 6.2 1 1.3 1.7 2.8 1.7 4.7C19 17.9 16 21 12 21z" fill="currentColor"/><path class="icon-cut" d="M12 18.5c-1.4 0-2.5-1-2.5-2.4 0-1.4 1.2-2.3 2-3.6.9 1.3 3 2.2 3 3.8 0 1.2-1.1 2.2-2.5 2.2z" fill="#fff" fill-opacity=".55" stroke="none"/>`,
+    'check-circle-fill': `<circle cx="12" cy="12" r="9" fill="currentColor"/><path class="icon-cut" d="M8.3 12.3l2.6 2.6 5-5.2" stroke="#fff" stroke-width="2.2"/>`,
+    'x-circle-fill': `<circle cx="12" cy="12" r="9" fill="currentColor"/><path class="icon-cut" d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6" stroke="#fff" stroke-width="2.2"/>`,
+    'trophy-fill': `<path d="M7.5 4h9v5a4.5 4.5 0 0 1-9 0z" fill="currentColor"/><path d="M7.5 5.5h-3V7a3.5 3.5 0 0 0 3.6 3.5"/><path d="M16.5 5.5h3V7a3.5 3.5 0 0 1-3.6 3.5"/><path d="M12 13.5V17"/><path d="M8.5 20.5h7V19a2 2 0 0 0-2-2h-3a2 2 0 0 0-2 2z" fill="currentColor"/>`,
+    // バッジ(メダル)
+    medal: `<path d="M8.5 3.5 11 9.2M15.5 3.5 13 9.2"/><circle cx="12" cy="14.5" r="5.5"/><path d="M12 12l.85 1.7 1.85.27-1.35 1.3.32 1.85L12 16.25l-1.67.87.32-1.85-1.35-1.3 1.85-.27z"/>`,
+    // すばやく・集中(短い練習)
+    bolt: `<path d="M13.5 3.5 5.5 13.5H11l-1 7 8-10.5h-5.5z"/>`
   };
 
   const warned = {};

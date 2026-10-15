@@ -9,6 +9,11 @@
 // (画面の下に固定。スマホでは下部タブの上)に出す
 // v12: 個数・組合せの問題(style)は記述ア〜エを問題文の下に出し、答えると記述ごとの○×と注を出す。
 //      確認問題の解答は AnswerLog にも日付つきで記録し、正解したあとは「勘で当たった」(自信なしの正解)を付け外しできる
+// v13(デザイン刷新): #quiz・#quiz/due・#quiz/auto は「1問ずつ」の表示。カードは今までどおり一覧として DOM に置き
+//      (戻る・再読み込みの再現・キー操作・「もっと見る」の仕組みはそのまま)、今の1問(.is-current)だけを見せる。
+//      上に太い進み具合のバー(前へ・次へ)、答えると下から判定のバー(「正解!」「おしい!」+「つづける」+「解説を見る」)。
+//      解説(選択肢ごとの○×と注・全体の解説・「勘で当たった」・「AIに聞く」)は「解説を見る」で開く。
+//      トピック詳細・ブックマーク・初回ガイドで使うカード(buildFixedCard)は一覧のままで、判定のバーはカードの下に置く
 window.Views = window.Views || {};
 window.Views.quiz = (function () {
   const ALL = `全て`; // 「すべて」を表す内部ID(保存済みの履歴・QuizEngine と合わせるため値は変えない。表示は「すべて」)
@@ -25,6 +30,8 @@ window.Views.quiz = (function () {
   const DEFAULT_AUTO_COUNT = 10;
   const PASS_PCT = 70; // 合格の目安(○×一問一答と共通)
   const PREFS_KEY = `quizPrefs`;
+  // 答えたあとに「つづける」として押すボタン(キーの Enter・キーで答えたあとのフォーカス先)
+  const NEXT_SEL = `[data-role="next-q"], [data-role="due-next"], [data-role="step-finish"]`;
   const ic = (name, size) => UI.icon(name, { size: size || 18 });
   const esc = (s) => UI.escapeHtml(s);
 
@@ -119,8 +126,9 @@ window.Views.quiz = (function () {
     let dueNow = 0;
     try { dueNow = window.Drill ? Drill.dueCount() : 0; } catch (e) { dueNow = 0; }
 
+    okRun = 0;
     const wrap = document.createElement(`div`);
-    wrap.className = `view quiz-view`;
+    wrap.className = `view quiz-view quiz-stepper`;
     wrap.innerHTML = `
       <div class="view-head">
         <h2>4択問題</h2>
@@ -160,6 +168,7 @@ window.Views.quiz = (function () {
         const t = initialTopic !== ALL ? `/${initialTopic}` : ``;
         try { window.history.replaceState(historyState(), ``, mode === `auto` ? `#quiz/auto${t}` : `#quiz${t}`); } catch (e) { /* 無視 */ }
         ctx.lastAnswered = null;
+        if (ctx.stepper) ctx.stepper.destroy();
         if (mode === `fixed`) renderFixed(body, initialTopic, null, ctx);
         else renderAuto(body, initialTopic, false, ctx);
       });
@@ -170,6 +179,7 @@ window.Views.quiz = (function () {
   }
 
   // デスクトップのキーボード操作: 1〜4 で画面内の最初の未回答の問題に回答、Enter で次の問題へ
+  // (1問ずつの表示では、見えている1問に答える・Enter はその1問の「つづける」)
   function bindKeys(wrap, body, ctx) {
     function onKey(e) {
       if (!wrap.isConnected) { document.removeEventListener(`keydown`, onKey); return; }
@@ -185,7 +195,7 @@ window.Views.quiz = (function () {
         btn.click();
         // 続けて Enter で次の問題へ進めるよう、フォーカスを答えたカードの「次の問題」(なければ問題文)へ移す
         // (絞り込みのボタンなどにフォーカスが残っていると、Enter でそのボタンが押されてしまうため)
-        const nb = card.querySelector(`[data-role="next-q"], [data-role="due-next"]`);
+        const nb = card.querySelector(NEXT_SEL);
         const qEl = card.querySelector(`.quiz-question`);
         if (nb) nb.focus({ preventScroll: true });
         else if (qEl) {
@@ -197,8 +207,14 @@ window.Views.quiz = (function () {
       if (e.key === `Enter`) {
         // ボタンやリンクの上ではブラウザ標準の動作(クリック)に任せる
         if (e.target && e.target.closest && e.target.closest(`button, a, summary, input, select, textarea, [role="button"]`)) return;
-        const card = ctx.lastAnswered;
-        const next = card && card.isConnected ? card.querySelector(`[data-role="next-q"], [data-role="due-next"]`) : null;
+        // 1問ずつの表示では、見えている1問(答えたあと)の「つづける」。結果を出しているあいだは何もしない
+        const steps = body.querySelector(`.quiz-steps`);
+        let card = ctx.lastAnswered;
+        if (steps) {
+          const cur = wrap.classList.contains(`is-finished`) ? null : stepCurrent(steps);
+          card = cur && cur.classList.contains(`is-answered`) ? cur : null;
+        }
+        const next = card && card.isConnected ? card.querySelector(NEXT_SEL) : null;
         if (!next) return;
         e.preventDefault();
         next.click();
@@ -374,15 +390,17 @@ window.Views.quiz = (function () {
   const levelOptions = () => LEVELS.map((id) => ({ id, label: levelLabel(id) }));
   const topicOptions = () => [{ id: ALL, label: `全トピック` }].concat(window.APP_DATA.topics.map((t) => ({ id: t.id, label: t.name, icon: t.icon })));
 
+  // 選択肢のタイル。番号の丸(.choice-key)は、答えると正解は ✓・選んだ誤りは × の印に変わる(番号の文字は読み上げ用に残す)
   function choiceButton(i, text) {
     const btn = document.createElement(`button`);
     btn.type = `button`;
     btn.className = `btn choice-btn`;
-    btn.innerHTML = `<span class="choice-key">${i + 1}</span><span class="choice-body"><span class="choice-text">${esc(text)}</span></span>`;
+    btn.innerHTML = `<span class="choice-key"><span class="choice-key-num">${i + 1}</span></span><span class="choice-body"><span class="choice-text">${esc(text)}</span></span>`;
     return btn;
   }
 
   // 回答後の選択肢: 正解・あなたの回答の印と、選択肢ごとの解説をボタンの中に足す(ボタンは作り直さない)
+  // 「正解」「あなたの回答」の札と解説は「解説を見る」で見せる(閉じているあいだも札は読み上げる。css/practice.css)
   function paintChoices(choiceList, choices, picked) {
     Array.from(choiceList.querySelectorAll(`.choice-btn`)).forEach((btn, i) => {
       const c = choices[i];
@@ -392,6 +410,11 @@ window.Views.quiz = (function () {
       if (c.correct) btn.classList.add(`correct`);
       else if (i === picked) btn.classList.add(`incorrect`);
       if (i === picked) btn.classList.add(`is-picked`);
+      const key = btn.querySelector(`.choice-key`);
+      if (key && (c.correct || i === picked) && !key.querySelector(`.choice-key-mark`)) {
+        key.classList.add(`has-mark`);
+        key.insertAdjacentHTML(`beforeend`, `<span class="choice-key-mark" aria-hidden="true">${ic(c.correct ? `check` : `x`, 18)}</span>`);
+      }
       const tags = [];
       if (c.correct) tags.push(`<span class="choice-tag is-answer">正解</span>`);
       if (i === picked) tags.push(`<span class="choice-tag is-mine">あなたの回答</span>`);
@@ -411,6 +434,7 @@ window.Views.quiz = (function () {
   }
 
   // 回答後の記述ア〜エ: 記述ごとの○×(記号と「正しい」「誤り」の文字。色だけに頼らない)と注を、選択肢の解説と同じ形で足す
+  // ○×と「正しい」「誤り」はすぐ見せ、注(.stmt-note-text)は「解説を見る」で見せる
   function paintStatements(listEl, statements) {
     if (!listEl || !Array.isArray(statements)) return;
     Array.from(listEl.querySelectorAll(`.stmt-item`)).forEach((li, i) => {
@@ -419,7 +443,7 @@ window.Views.quiz = (function () {
       li.classList.add(`is-done`, s.truth ? `is-true` : `is-false`);
       const mark = s.truth ? `<span class="ox-mark ox-o" aria-hidden="true">○</span>` : `<span class="ox-mark ox-x" aria-hidden="true">×</span>`;
       li.querySelector(`.stmt-body`).insertAdjacentHTML(`beforeend`,
-        `<span class="choice-note stmt-note">${mark}<span><strong class="stmt-truth">${s.truth ? `正しい` : `誤り`}</strong>${s.note ? `<span class="sr-only">。</span>${esc(s.note)}` : ``}</span></span>`);
+        `<span class="choice-note stmt-note">${mark}<span><strong class="stmt-truth">${s.truth ? `正しい` : `誤り`}</strong>${s.note ? `<span class="stmt-note-text"><span class="sr-only">。</span>${esc(s.note)}</span>` : ``}</span></span>`);
     });
   }
 
@@ -474,33 +498,98 @@ window.Views.quiz = (function () {
     else container.remove();
   }
 
-  // 回答バー(カードの最後。画面の下・親指の届く位置に固定して出す)の判定。
-  // 1行目は「正解!」「不正解」、2行目は短い補足(長いときは … で切る。全文は解説の中の .review-added)
-  // ok: true / false、title: 1行目(省略時は 正解! / 不正解)、sub: 2行目
-  function verdictHtml(ok, sub, title) {
-    return `<p class="quiz-verdict ${ok ? `is-ok` : `is-ng`}">${ic(ok ? `check-circle` : `x-circle`, 28)}<span class="quiz-verdict-text"><strong>${esc(title || (ok ? `正解!` : `不正解`))}</strong>${sub ? `<small>${esc(sub)}</small>` : ``}</span></p>`;
+  // 判定のバー(カードの最後。1問ずつの表示では画面の下・下部タブの上に固定して下から出し、
+  // トピック詳細などの一覧ではカードの下に置く)。
+  // 1行目は「正解!」「おしい!」(大きな丸い印つき)、2行目は「正解は 3」、3行目は短い補足
+  // v: { ok, title(省略時は 正解! / おしい!), answer(「正解は n」の HTML), sub(補足の文字) }
+  function verdictHtml(v) {
+    const title = v.title || (v.ok ? `正解!` : `おしい!`);
+    // 「おしい!」だけでは正誤が伝わりにくいので、読み上げでは先に「不正解」と言う
+    const srNg = !v.ok && !v.title ? `<span class="sr-only">不正解。</span>` : ``;
+    return `<p class="quiz-verdict ${v.ok ? `is-ok` : `is-ng`}">`
+      + `<span class="quiz-fb-sticker" aria-hidden="true">${ic(v.ok ? `check` : `x`, 26)}</span>`
+      + `<span class="quiz-verdict-text"><strong>${srNg}${esc(title)}</strong>`
+      + `${v.answer ? `<span class="quiz-fb-answer">${v.answer}</span>` : ``}`
+      + `${v.sub ? `<small>${esc(v.sub)}</small>` : ``}</span></p>`;
   }
 
-  // 4択の判定の補足: 「正解は 3・「〇〇」を復習に追加」(個数・組合せは「正解は 3(三つ)」のように選択肢の文字も)
-  function mcVerdictSub(ok, correctIdx, term, okSub, answerText) {
-    if (ok) return okSub || ``;
-    return `正解は ${correctIdx + 1}${answerText ? `(${answerText})` : ``}${term ? `・「${term.name}」を復習に追加` : ``}`;
+  // 正解したときに、ときどき添えるひとこと(3問以上つづけて正解したときは回数)。戻るで再現したカードには付けない
+  const CHEERS = [`その調子!`, `いいですね!`, `よくできました!`, `ばっちりです!`, `さすがです!`];
+  let okRun = 0;
+  function cheerText(ok, restored) {
+    if (restored) return ``;
+    okRun = ok ? okRun + 1 : 0;
+    if (!ok) return ``;
+    if (okRun >= 3) return `${okRun}問つづけて正解!`;
+    return Math.random() < .4 ? CHEERS[Math.floor(Math.random() * CHEERS.length)] : ``;
   }
 
-  // 回答した直後の判定を回答バーとして出す(以前の回答バーの「次の問題」は消える)
-  function showVerdict(el, ok, sub, title) {
-    el.classList.add(`quiz-answer-bar`);
-    el.classList.toggle(`is-ok`, !!ok);
-    el.classList.toggle(`is-ng`, !ok);
-    el.innerHTML = verdictHtml(ok, sub, title);
+  // 4択の判定: 「正解!」+ひとこと / 「おしい!」+「正解は 3」(個数・組合せは「正解は 3(三つ)」のように選択肢の文字も)+「〇〇」を復習に追加
+  function mcVerdict(ok, correctIdx, term, okSub, answerText, restored) {
+    const cheer = cheerText(ok, restored);
+    if (ok) return { ok, sub: [cheer, okSub].filter(Boolean).join(` `) };
+    return {
+      ok,
+      answer: `正解は <b class="num">${correctIdx + 1}</b>${answerText ? `(${esc(answerText)})` : ``}`,
+      sub: term ? `「${term.name}」を復習に追加` : ``,
+    };
   }
 
+  // 判定のバーの中の操作の欄(「解説を見る」「つづける」を並べる)
+  function barActions(bar) {
+    return bar.querySelector(`[data-role="verdict-actions"]`) || bar;
+  }
+
+  // 回答した直後の判定を判定のバーとして出す(以前のバーの「つづける」は消える。呼んだ側が付け直す)
+  function showVerdict(el, v) {
+    el.classList.add(`quiz-answer-bar`, `is-shown`);
+    el.classList.toggle(`is-ok`, !!v.ok);
+    el.classList.toggle(`is-ng`, !v.ok);
+    const live = el.querySelector(`[data-role="verdict-live"]`);
+    if (live) live.innerHTML = verdictHtml(v);
+    const card = el.closest(`.quiz-card`);
+    const explain = card ? card.querySelector(`.quiz-after`) : null;
+    const actions = barActions(el);
+    if (actions === el) return;
+    actions.innerHTML = explainToggleHtml(explain && explain.id, !!(card && card.classList.contains(`is-explained`)));
+    actions.querySelector(`[data-role="explain-toggle"]`).addEventListener(`click`, () => {
+      setExplained(card, !card.classList.contains(`is-explained`));
+    });
+  }
+
+  // 「解説を見る」: 選択肢ごとの○×と注・記述の注・全体の解説・「勘で当たった」・「AIに聞く」などを開く(カードの .is-explained)
+  function explainToggleHtml(id, on) {
+    return `<button type="button" class="btn btn-secondary btn-lg quiz-explain-toggle" data-role="explain-toggle" aria-expanded="${!!on}"${id ? ` aria-controls="${id}"` : ``}>${explainToggleInner(on)}</button>`;
+  }
+
+  function explainToggleInner(on) {
+    return `<span>${on ? `解説を閉じる` : `解説を見る`}</span>${ic(`chevron-down`, 18)}`;
+  }
+
+  function setExplained(card, on) {
+    if (!card) return;
+    card.classList.toggle(`is-explained`, !!on);
+    const t = card.querySelector(`[data-role="explain-toggle"]`);
+    if (!t) return;
+    t.setAttribute(`aria-expanded`, String(!!on));
+    t.innerHTML = explainToggleInner(on);
+  }
+
+  // 「つづける」: data-label は以前の名前(次の問題 / 未回答の問題へ / 結果を見る)のまま(付け替えの判定に使う)。
+  // 見た目の文字だけ「次の問題」を「つづける」にする
   function nextBtnHtml(label) {
-    return `<button type="button" class="btn quiz-next" data-role="next-q" data-label="${label}">${nextBtnInner(label)}</button>`;
+    return `<button type="button" class="btn btn-lg quiz-next" data-role="next-q" data-label="${label}">${nextBtnInner(label)}</button>`;
   }
 
   function nextBtnInner(label) {
-    return `<span>${label}</span>${ic(label === `結果を見る` ? `flag` : `arrow-right`, 18)}`;
+    return `<span>${label === `次の問題` ? `つづける` : label}</span>${ic(label === `結果を見る` ? `flag` : `arrow-right`, 20)}`;
+  }
+
+  // キー(Enter・Space)で選択肢を押したときは、フォーカスを「つづける」(なければ「解説を見る」)へ移す
+  // (押した選択肢は押せなくなり、フォーカスが行き場をなくすため)。タップのときは動かさない
+  function focusAfterAnswer(card) {
+    const b = card.querySelector(NEXT_SEL) || card.querySelector(`[data-role="explain-toggle"]`);
+    if (b) b.focus({ preventScroll: true });
   }
 
   function followingCard(card) {
@@ -517,13 +606,177 @@ window.Views.quiz = (function () {
 
   // 次の問題を画面の上端へ(固定ヘッダーの分は html の scroll-padding-top、余白は CSS の scroll-margin-top)。フォーカスは問題文へ
   // (選択肢のボタンに移すと、続けて Enter を押したときに1番を選んでしまうため)
+  // 1問ずつの表示では、その問題を今の1問にして、問題の先頭を進み具合のバーのすぐ下へ(中身が入れ替わるので、なめらかに動かさずにすぐ移す)
   function focusCard(target) {
-    target.scrollIntoView({ behavior: UI.prefersReducedMotion() ? `auto` : `smooth`, block: `start` });
+    const steps = stepListOf(target);
+    if (steps) setCurrent(steps, target);
+    target.scrollIntoView({ behavior: (steps || UI.prefersReducedMotion()) ? `auto` : `smooth`, block: `start` });
     const qEl = target.querySelector(`.quiz-question`);
     if (qEl) {
       qEl.setAttribute(`tabindex`, `-1`);
       qEl.focus({ preventScroll: true });
     }
+  }
+
+  // ===== 1問ずつの表示(#quiz・#quiz/due・#quiz/auto) =====
+  // 一覧(.quiz-steps)の中のカードのうち、今の1問(.is-current)だけを見せる。終わったら画面(.quiz-view)に .is-finished を付けて結果を見せる
+
+  function stepListOf(card) {
+    const p = card && card.parentElement;
+    return p && p.classList.contains(`quiz-steps`) ? p : null;
+  }
+
+  function stepCurrent(list) {
+    return list ? list.querySelector(`:scope > .quiz-card.is-current`) : null;
+  }
+
+  function prevCardOf(card) {
+    let el = card ? card.previousElementSibling : null;
+    while (el && !el.classList.contains(`quiz-card`)) el = el.previousElementSibling;
+    return el;
+  }
+
+  // 今の1問を変える(前の1問の .is-fresh も外す: 戻ったときに正解・不正解の動きを繰り返さないように)。進み具合のバーは quiz:step で塗り直す
+  function setCurrent(list, card) {
+    list.querySelectorAll(`:scope > .quiz-card.is-current`).forEach((c) => { if (c !== card) c.classList.remove(`is-current`, `is-fresh`); });
+    if (card) card.classList.add(`is-current`);
+    const view = list.closest(`.quiz-view`);
+    if (view) view.classList.remove(`is-finished`);
+    list.dispatchEvent(new CustomEvent(`quiz:step`));
+  }
+
+  // 終わりの画面(結果)へ: 問題を隠して panel を見せ、マスコットの横から紙吹雪(動きを減らす設定では出さない)
+  function stepFinish(list, panel) {
+    const view = list.closest(`.quiz-view`);
+    if (view) view.classList.add(`is-finished`);
+    list.dispatchEvent(new CustomEvent(`quiz:step`));
+    if (!panel) return;
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: `auto`, block: `start` });
+    const head = panel.querySelector(`[data-role="finish-title"]`) || panel;
+    if (head !== panel) head.setAttribute(`tabindex`, `-1`);
+    head.focus({ preventScroll: true });
+    const hero = panel.querySelector(`.quiz-finish-hero`);
+    if (hero && window.Mascot && typeof Mascot.confetti === `function`) {
+      try { Mascot.confetti(hero); } catch (e) { /* 飾りなので失敗しても続ける */ }
+    }
+  }
+
+  // 終わりの画面の上の部分(マスコット+見出し)。マスコットは飾り(読み上げない)
+  function finishHeroHtml(title, cheer) {
+    const m = window.Mascot && typeof Mascot.svg === `function` ? Mascot.svg(cheer ? `cheer` : `happy`, 104, { className: `quiz-finish-mascot` }) : ``;
+    return `<div class="quiz-finish-hero">${m}<h3 class="quiz-finish-title" data-role="finish-title">${esc(title)}</h3></div>`;
+  }
+
+  // 一覧の絞り込みボタンのアイコン(アイコン集に filter / sliders があればそれを使う)
+  function filterIconHtml() {
+    if (window.Icons && typeof Icons.has === `function` && (Icons.has(`filter`) || Icons.has(`sliders`))) return icAny([`filter`, `sliders`], 22);
+    return `<svg class="icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>`;
+  }
+
+  // 1問ずつの表示の上のバー: 前へ・太い進み具合のバー・「n/全体」・次へ(+ tools: 絞り込みなどのボタン)。画面の上に貼り付く
+  function stepBarHtml(tools) {
+    return `<div class="quiz-stepbar" data-role="stepbar">
+      <button type="button" class="btn btn-icon quiz-step-btn" data-role="step-prev" aria-label="前の問題">${ic(`chevron-left`, 24)}</button>
+      <div class="quiz-step-track" data-role="step-track" role="progressbar" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><span class="quiz-step-fill" data-role="step-fill"></span></div>
+      <span class="quiz-step-count num" data-role="step-count" aria-hidden="true"></span>
+      <button type="button" class="btn btn-icon quiz-step-btn" data-role="step-next" aria-label="次の問題">${ic(`chevron-right`, 24)}</button>
+      ${tools || ``}
+    </div>`;
+  }
+
+  // 選んだ選択肢と正解のタイルが、画面の下に固定した判定のバーに隠れているときは、その分だけ下へ送る
+  // (問題文の先頭が上のバーの下に隠れるほどは送らない。判定のバーの位置は動きの途中でも変わらない値で求める)
+  function revealAnswer(card, fb, bar) {
+    if (!card.isConnected || !fb.isConnected || getComputedStyle(fb).position !== `fixed`) return;
+    const tiles = card.querySelectorAll(`.choice-btn.correct, .choice-btn.is-picked`);
+    if (!tiles.length) return;
+    let top = Infinity;
+    let bottom = -Infinity;
+    tiles.forEach((t) => { const r = t.getBoundingClientRect(); top = Math.min(top, r.top); bottom = Math.max(bottom, r.bottom); });
+    const fbTop = window.innerHeight - (parseFloat(getComputedStyle(fb).bottom) || 0) - fb.offsetHeight;
+    const over = bottom + 12 - fbTop;
+    if (over <= 0) return;
+    const room = top - bar.getBoundingClientRect().bottom - 8;
+    const by = Math.min(over, Math.max(0, room));
+    if (by > 0) window.scrollBy({ top: by, behavior: UI.prefersReducedMotion() ? `auto` : `smooth` });
+  }
+
+  // 上のバーをつなぐ。o: { bar, list, progress(cur, finished) → { now, max, label, text },
+  //   canPrev() / canNext(): まだ表示していない手前・後ろの問題があるか、
+  //   loadPrev() / loadNext(): それを足す(「前の問題を表示」「もっと見る」と同じ処理) }
+  // 戻り値: { paint(): 塗り直す(答えたあと・一覧を作り直したあと), destroy() }
+  function wireStepper(view, o) {
+    const { bar, list } = o;
+    const prevBtn = bar.querySelector(`[data-role="step-prev"]`);
+    const nextBtn = bar.querySelector(`[data-role="step-next"]`);
+    const track = bar.querySelector(`[data-role="step-track"]`);
+    const fill = bar.querySelector(`[data-role="step-fill"]`);
+    const count = bar.querySelector(`[data-role="step-count"]`);
+    const finished = () => view.classList.contains(`is-finished`);
+    // 判定のバー(画面の下に固定)の高さ: 画面の下の余白と通知の位置に使う
+    const ro = typeof ResizeObserver === `function` ? new ResizeObserver(() => measure()) : null;
+    let observed = null;
+    function measure() {
+      const fb = observed && observed.isConnected ? observed : null;
+      if (fb && fb.offsetHeight) document.documentElement.style.setProperty(`--qfb-h`, `${fb.offsetHeight}px`);
+    }
+    function paint() {
+      if (!list.isConnected) return;
+      const cur = stepCurrent(list);
+      const fin = finished();
+      prevBtn.disabled = !(fin ? cur : (prevCardOf(cur) || (o.canPrev && o.canPrev())));
+      nextBtn.disabled = fin || !cur || !(followingCard(cur) || (o.canNext && o.canNext()));
+      const p = o.progress(cur, fin);
+      const pct = p.max > 0 ? Math.max(0, Math.min(100, (p.now / p.max) * 100)) : 0;
+      // 0 でなければ、ごく小さい割合でも丸い点が見えるように
+      fill.style.width = pct > 0 ? `max(18px, ${pct}%)` : `0px`;
+      fill.classList.toggle(`is-full`, pct >= 100);
+      track.setAttribute(`aria-valuemax`, String(p.max));
+      track.setAttribute(`aria-valuenow`, String(Math.min(p.now, p.max)));
+      track.setAttribute(`aria-valuetext`, p.text);
+      track.setAttribute(`aria-label`, p.label || `進み具合`);
+      count.innerHTML = p.max ? `${p.now}<small>/${p.max}</small>` : ``;
+      const fb = !fin && cur ? cur.querySelector(`:scope > .quiz-feedback.is-shown`) : null;
+      view.classList.toggle(`has-fb`, !!fb);
+      // 答えた直後: 選んだ選択肢と正解が判定のバーに隠れていたら、見える所まで少しだけ送る
+      if (fb && fb !== observed && cur.classList.contains(`is-fresh`)) requestAnimationFrame(() => revealAnswer(cur, fb, bar));
+      if (ro && observed !== fb) {
+        if (observed) ro.unobserve(observed);
+        observed = fb;
+        if (fb) ro.observe(fb);
+      }
+      if (!ro) { observed = fb; measure(); }
+    }
+    function go(target) {
+      if (target) focusCard(target);
+    }
+    prevBtn.addEventListener(`click`, () => {
+      const cur = stepCurrent(list);
+      if (finished()) {
+        const cards = list.querySelectorAll(`:scope > .quiz-card`);
+        go(cur || cards[cards.length - 1]);
+        return;
+      }
+      if (!cur) return;
+      let target = prevCardOf(cur);
+      if (!target && o.loadPrev) { o.loadPrev(); target = prevCardOf(cur); }
+      go(target);
+    });
+    nextBtn.addEventListener(`click`, () => {
+      const cur = stepCurrent(list);
+      if (!cur || finished()) return;
+      let target = followingCard(cur);
+      if (!target && o.loadNext) { o.loadNext(); target = followingCard(cur); }
+      go(target);
+    });
+    list.addEventListener(`quiz:step`, paint);
+    const destroy = () => {
+      if (ro) ro.disconnect();
+      document.documentElement.style.removeProperty(`--qfb-h`);
+    };
+    UI.onLeave(view, destroy);
+    return { paint, destroy };
   }
 
   // ===== 確認問題 =====
@@ -533,8 +786,8 @@ window.Views.quiz = (function () {
     if (!Storage.isPlainObject(raw)) return null;
     const total = window.APP_DATA.quiz.length;
     const answered = {};
+    const ids = new Set(window.APP_DATA.quiz.map((q) => q.id));
     if (Storage.isPlainObject(raw.answered)) {
-      const ids = new Set(window.APP_DATA.quiz.map((q) => q.id));
       Object.keys(raw.answered).forEach((id) => {
         const v = raw.answered[id];
         if (ids.has(id) && ((Number.isInteger(v) && v >= 0 && v < 4) || v === `ok` || v === `ng`)) answered[id] = v;
@@ -551,6 +804,8 @@ window.Views.quiz = (function () {
       // 直リンクで途中から表示した一覧の先頭の位置(0 = 最初から)
       start: Number.isInteger(start) && start > 0 ? Math.min(start, total - 1) : 0,
       answered,
+      // 1問ずつの表示で見ていた問題(なければ null)
+      cur: typeof raw.cur === `string` && ids.has(raw.cur) ? raw.cur : null,
     };
   }
 
@@ -582,25 +837,31 @@ window.Views.quiz = (function () {
     let restoreStart = saved ? saved.start : 0;
     // この一覧で回答したカード(問題ID → 選んだ番号)。戻るで解説ごと再現するために state に保存する
     let answeredMap = saved ? saved.answered : {};
+    let restoreCur = saved ? saved.cur : null;
     const doFocus = !!focusQuizId && !saved;
 
-    // 絞り込みは1行(「絞り込み」ボタン + 選んでいる条件のチップ)にまとめ、条件はシートで選ぶ
+    // 上のバー: 前へ・進み具合(絞り込んだ一覧の何問目か)・次へ・絞り込み(アイコン+条件の数)。
+    // 選んでいる条件はバーの下のチップ(× で外す)、条件はシートで選ぶ。一覧の終わりまで解いたら結果(list-end)を出す
     body.innerHTML = `
-      <div class="quiz-filter-row" data-role="filter-row">
-        <button type="button" class="btn btn-secondary btn-sm quiz-filter-btn" data-role="filter-open" aria-haspopup="dialog">
-          ${icAny([`filter`, `sliders`, `list`], 16)}<span>絞り込み</span><span class="quiz-filter-count num" data-role="filter-count" hidden></span>
-        </button>
+      ${stepBarHtml(`<button type="button" class="btn btn-secondary quiz-step-tool quiz-filter-btn" data-role="filter-open" aria-haspopup="dialog" aria-label="絞り込み">
+          ${filterIconHtml()}<span class="quiz-filter-count num" data-role="filter-count" hidden></span>
+        </button>`)}
+      <div class="quiz-step-meta">
         <div class="quiz-filter-chips" data-role="filter-chips"></div>
+        <p class="progress-text quiz-progress" data-role="summary"></p>
       </div>
-      <p class="progress-text quiz-progress" data-role="summary"></p>
-      <div class="quiz-list" data-role="quiz-list"></div>
+      <div class="card quiz-summary quiz-list-end" data-role="list-end" tabindex="-1" hidden></div>
+      <div class="quiz-list quiz-steps" data-role="quiz-list"></div>
     `;
     const list = body.querySelector(`[data-role="quiz-list"]`);
     const summary = body.querySelector(`[data-role="summary"]`);
-    const filterRow = body.querySelector(`[data-role="filter-row"]`);
+    const stepBar = body.querySelector(`[data-role="stepbar"]`);
+    const endEl = body.querySelector(`[data-role="list-end"]`);
     const filterBtn = body.querySelector(`[data-role="filter-open"]`);
     const filterCount = body.querySelector(`[data-role="filter-count"]`);
     const filterChips = body.querySelector(`[data-role="filter-chips"]`);
+    const view = body.closest(`.quiz-view`) || body;
+    view.classList.remove(`is-finished`);
 
     // 一覧は絞り込みを変えるまで作り直さないので、PAGE と shownCount は先に用意しておく
     // 表示しているのは currentQuestions の startIdx 〜 shownCount の手前まで。直リンク(#quiz/q/<id>)で後ろのほうの問題を開いたときは
@@ -612,7 +873,8 @@ window.Views.quiz = (function () {
     let firstList = true;
 
     function saveState() {
-      patchHistoryState({ qState: { level: levelState.value, topic: topicState.value, status: statusFilter, format: formatFilter, shown: shownCount, start: startIdx, answered: answeredMap } });
+      const cur = stepCurrent(list);
+      patchHistoryState({ qState: { level: levelState.value, topic: topicState.value, status: statusFilter, format: formatFilter, shown: shownCount, start: startIdx, answered: answeredMap, cur: cur ? cur.dataset.quizId : null } });
     }
 
     const cond = () => ({ level: levelState.value, topic: topicState.value, status: statusFilter, format: formatFilter });
@@ -644,7 +906,7 @@ window.Views.quiz = (function () {
       filterChips.innerHTML = parts.map((p) => `<button type="button" class="chip chip-small quiz-filter-chip" data-clear="${p.key}" aria-label="「${esc(p.label)}」の条件を外す"><span>${esc(p.label)}</span>${ic(`x`, 14)}</button>`).join(``);
     }
 
-    // 条件を変える(保存して一覧を作り直す)。一覧の途中にいたら、新しい一覧の先頭が見える位置へ戻す
+    // 条件を変える(保存して一覧を作り直す)。新しい一覧の1問目を出し、画面の先頭へ戻す
     function applyFilter(next) {
       levelState.value = next.level;
       topicState.value = next.topic;
@@ -652,8 +914,7 @@ window.Views.quiz = (function () {
       formatFilter = validFormat(next.format);
       savePrefs({ level: next.level, topic: next.topic, status: next.status, format: formatFilter });
       renderList();
-      const top = filterRow.getBoundingClientRect().top + window.scrollY - 70;
-      if (window.scrollY > top) window.scrollTo(0, Math.max(0, top));
+      if (window.scrollY > 0) window.scrollTo(0, 0);
     }
 
     function setStatus(s) {
@@ -779,11 +1040,77 @@ window.Views.quiz = (function () {
       if (!restored) {
         answeredMap[card.dataset.quizId] = picked;
         updateSummary();
+        // 1問ずつの表示: 表示している最後の問題に答えたら続きを足す(「つづける」で次の問題へ進めるように)
+        if (!followingCard(card) && shownCount < currentQuestions.length) loadNext();
         saveState();
         ctx.lastAnswered = card;
       }
       setStale(card, isStale(card, result));
+      if (!restored) {
+        ensureFinishButton(card);
+        stepper.paint();
+      }
     }
+
+    // 一覧の最後の問題(条件に合う問題をすべて表示したあと)に答えたら「結果を見る」を付ける
+    function ensureFinishButton(card) {
+      const bar = card && card.querySelector(`.quiz-answer-bar[data-role="verdict"]`);
+      if (!bar || followingCard(card) || shownCount < currentQuestions.length || bar.querySelector(`[data-role="step-finish"]`)) return;
+      barActions(bar).insertAdjacentHTML(`beforeend`, `<button type="button" class="btn btn-lg quiz-next" data-role="step-finish">${nextBtnInner(`結果を見る`)}</button>`);
+    }
+
+    // 「もっと見る」「前の問題を表示」(1問ずつの表示ではボタンは隠し、前へ・次へ・「つづける」から呼ぶ)
+    function loadNext() {
+      const btn = list.nextElementSibling;
+      if (btn && btn.classList.contains(`load-more-btn`)) btn.click();
+    }
+    function loadPrev() {
+      const btn = list.previousElementSibling;
+      if (btn && btn.classList.contains(`load-prev-btn`)) btn.click();
+    }
+
+    // 一覧の終わりの結果: この一覧で答えた数と正解の数・連続記録・次の操作
+    function showEnd() {
+      const ids = Object.keys(answeredMap);
+      const byId = {};
+      currentQuestions.forEach((q) => { byId[q.id] = q; });
+      const okCount = ids.filter((id) => {
+        const v = answeredMap[id];
+        const q = byId[id] || window.APP_DATA.quiz.find((x) => x.id === id);
+        return v === `ok` || (q && Number.isInteger(v) && v === q.correctIndex);
+      }).length;
+      const pct = ids.length ? Math.round((okCount / ids.length) * 100) : 0;
+      endEl.innerHTML = `
+        ${finishHeroHtml(`この条件の問題は、ここまでです`, !ids.length || pct >= PASS_PCT)}
+        ${ids.length ? `<p class="quiz-finish-score"><span class="big-num">${okCount}</span><span class="quiz-finish-of">/ ${ids.length}問 正解</span></p>
+        <div class="quiz-summary-bar">
+          <div class="progress-bar progress-bar-lg" aria-hidden="true"><div class="progress-bar-fill ${pct >= PASS_PCT ? `fill-success` : ``}" style="width:${pct}%"></div></div>
+          <span class="quiz-summary-pct num">正答率 ${pct}%</span>
+        </div>` : ``}
+        ${streakLineHtml()}
+        <div class="card-actions quiz-finish-actions">
+          <button type="button" class="btn btn-lg" data-role="end-filter">${filterIconHtml()}条件を変えて解く</button>
+          <button type="button" class="btn btn-secondary btn-lg" data-role="end-first">${ic(`repeat`)}最初の問題へ</button>
+          <a class="btn btn-ghost" href="#home">${ic(`home`)}ホームへ</a>
+        </div>
+      `;
+      endEl.querySelector(`[data-role="end-filter"]`).addEventListener(`click`, () => filterBtn.click());
+      endEl.querySelector(`[data-role="end-first"]`).addEventListener(`click`, () => {
+        // 直リンクで途中から表示していたときは、手前の問題も足してから1問目へ
+        while (startIdx > 0) {
+          const before = startIdx;
+          loadPrev();
+          if (startIdx === before) break;
+        }
+        const first = list.querySelector(`:scope > .quiz-card`);
+        if (first) focusCard(first);
+      });
+      stepFinish(list, endEl);
+    }
+
+    list.addEventListener(`click`, (e) => {
+      if (e.target.closest && e.target.closest(`[data-role="step-finish"]`)) showEnd();
+    });
 
     function handleBookmark(on, card) {
       if (statusFilter === `bookmark`) setStale(card, !on);
@@ -803,6 +1130,8 @@ window.Views.quiz = (function () {
       list.appendChild(fragment);
       // 前のページの最後に回答済みのカードがあれば、追加した問題へ進むボタンを付ける
       list.querySelectorAll(`.quiz-card.is-answered`).forEach(ensureNextButton);
+      const cards = list.querySelectorAll(`:scope > .quiz-card`);
+      if (cards.length) ensureFinishButton(cards[cards.length - 1]);
     }
 
     function renderMore() {
@@ -858,7 +1187,9 @@ window.Views.quiz = (function () {
       if (!restoring) answeredMap = {};
       paintFilterRow();
       list.innerHTML = ``;
+      endEl.hidden = true;
       startIdx = 0;
+      posById = null;
       updateSummary();
       const questions = filterQuestions(cond(), restoring);
       if (!questions.length) {
@@ -872,6 +1203,7 @@ window.Views.quiz = (function () {
         shownCount = 0;
         renderMore();
         renderPrev();
+        setCurrent(list, null);
         saveState();
         return;
       }
@@ -892,22 +1224,39 @@ window.Views.quiz = (function () {
       appendCards(startIdx, shownCount);
       renderMore();
       renderPrev();
+      // 1問ずつの表示: 戻る・再読み込みでは見ていた問題、それ以外は一覧の1問目
+      const want = restoreCur ? list.querySelector(`:scope > [data-quiz-id="${CSS.escape(restoreCur)}"]`) : null;
+      restoreCur = null;
+      setCurrent(list, want || list.querySelector(`:scope > .quiz-card`));
       saveState();
     }
+
+    // 上のバー: 絞り込んだ一覧の何問目か(表示していない手前の問題も数える)
+    let posById = null;
+    const stepper = wireStepper(view, {
+      bar: stepBar,
+      list,
+      canPrev: () => startIdx > 0,
+      canNext: () => shownCount < currentQuestions.length,
+      loadPrev,
+      loadNext,
+      progress: (cur, fin) => {
+        const max = currentQuestions.length;
+        if (!posById) posById = new Map(currentQuestions.map((q, i) => [q.id, i]));
+        const now = fin ? max : cur && posById.has(cur.dataset.quizId) ? posById.get(cur.dataset.quizId) + 1 : 0;
+        return { now, max, label: `一覧の中の位置`, text: max ? `${now}問目 / ${max}問` : `問題がありません` };
+      },
+    });
+    ctx.stepper = stepper;
+    list.addEventListener(`quiz:step`, () => saveState());
 
     renderList(true);
 
     if (doFocus) {
       const target = list.querySelector(`[data-quiz-id="${CSS.escape(focusQuizId)}"]`);
       if (target) {
-        target.classList.add(`highlighted`);
-        // 遠いとき(画面2枚分より先)はすぐに移す(長い距離をなめらかに動かすと着くまで時間がかかるため)
-        requestAnimationFrame(() => {
-          if (Math.abs(target.getBoundingClientRect().top) > window.innerHeight * 2) target.scrollIntoView({ block: `center`, behavior: `auto` });
-          else UI.scrollIntoView(target);
-        });
-        // スクロールに時間がかかる端末でも目に入るよう、強調は長めに残す
-        setTimeout(() => target.classList.remove(`highlighted`), 5000);
+        // 1問ずつの表示なので、その問題を今の1問にする(強調・スクロールは要らない)
+        setCurrent(list, target);
       } else {
         UI.toast(`指定された問題が見つかりませんでした`, `default`);
       }
@@ -957,7 +1306,7 @@ window.Views.quiz = (function () {
   function ensureNextButton(card) {
     const bar = card.querySelector(`.quiz-answer-bar[data-role="verdict"]`);
     if (!bar || !card.isConnected || bar.querySelector(`[data-role="next-q"]`) || !followingCard(card)) return;
-    bar.insertAdjacentHTML(`beforeend`, nextBtnHtml(`次の問題`));
+    barActions(bar).insertAdjacentHTML(`beforeend`, nextBtnHtml(`次の問題`));
   }
 
   // 一覧に問題を書き足したあと(トピック詳細・ブックマークの「もっと見る」)、回答済みのカードに「次の問題」を付け直す
@@ -965,15 +1314,18 @@ window.Views.quiz = (function () {
     if (root) root.querySelectorAll(`.quiz-card.is-answered`).forEach(ensureNextButton);
   }
 
-  // 回答バー(判定)の要素。カードの最後の子にする(画面の下に固定して出すため)
+  // 判定のバーの要素。カードの最後の子にする(1問ずつの表示では画面の下に固定して出すため)。
+  // 読み上げるのは判定の文(verdict-live)だけ。ボタンの欄(verdict-actions)は読み上げの範囲の外に置く
+  // (「解説を見る」の文字の切り替えや「つづける」を足すたびに判定を読み直さないように)
   function verdictElement() {
     const el = document.createElement(`div`);
     el.className = `quiz-feedback`;
     el.dataset.role = `verdict`;
-    el.setAttribute(`role`, `status`);
-    el.setAttribute(`aria-live`, `polite`);
+    el.innerHTML = `<div class="quiz-fb-live" role="status" aria-live="polite" data-role="verdict-live"></div><div class="quiz-fb-actions" data-role="verdict-actions"></div>`;
     return el;
   }
+
+  let afterSeq = 0;
 
   // 確認問題のカード。topics.js(トピック詳細)・bookmarks.js からも使う
   // opts: { history, onResult(result, card, picked, restored, drill), onGotoNg, onBookmark(on, card), restoreChoice, onUnsure(card, on) }
@@ -1000,10 +1352,11 @@ window.Views.quiz = (function () {
       : statements ? stmtListHtml(statements)
       : `<p class="quiz-stmt-missing">${ic(`alert`, 16)}<span>この問題の記述ア〜エを表示できませんでした。時間をおいて開き直してください。</span></p>`;
 
+    // 見出しは1行: レベル・形式(記述 / 個数 / 組合せ。通常の4択は付けない)・前回の結果・ブックマーク
     card.innerHTML = `
       <div class="quiz-card-head">
         <span class="badge badge-${q.level}">${q.level}</span>
-        <span class="source-tag">${isMc ? `4択` : `記述`}</span>
+        ${isMc ? `` : `<span class="source-tag">記述</span>`}
         ${style ? `<span class="source-tag source-tag-style">${STYLE_LABELS[style]}</span>` : ``}
         ${priorTag}
         <span class="quiz-card-tools">${bookmarkBtnHtml(`quiz:${q.id}`)}</span>
@@ -1053,7 +1406,7 @@ window.Views.quiz = (function () {
       // 個数・組合せの選択肢(一つ〜四つ・「ア、イ」)は短いので、スマホでも2列に並べる
       bodyEl.innerHTML = `
         <div class="choice-list${style ? ` choice-list-styled` : ``}" role="group" aria-label="選択肢"></div>
-        <div class="quiz-after" data-role="explain"></div>
+        <div class="quiz-after" data-role="explain" id="quiz-after-${++afterSeq}"></div>
       `;
       const choiceList = bodyEl.querySelector(`.choice-list`);
       const explainEl = bodyEl.querySelector(`[data-role="explain"]`);
@@ -1066,14 +1419,14 @@ window.Views.quiz = (function () {
         const ok = picked === correctIdx;
         const result = ok ? `ok` : `ng`;
         card.classList.add(`is-answered`);
-        if (restored) card.classList.add(`is-restored`);
+        // .is-fresh: 答えた直後だけ正解のぽん・誤りの揺れ・判定のバーの出る動きを付ける(戻るで再現・前の問題へ戻ったときは動かさない)
+        card.classList.add(restored ? `is-restored` : `is-fresh`);
         paintChoices(choiceList, mq.choices, picked);
         paintStatements(stmtList, statements);
-        const hasExplain = !!mq.explanation || mq.choices.some((c) => c.note) || (statements || []).some((s) => s.note);
         // 個数・組合せは記述ごとの○×が選択肢の上(記述ア〜エの下)に出る
-        const okSub = statements ? `記述ごとの○×は上に` : hasExplain ? `解説はこの下にあります` : ``;
+        const okSub = statements ? `記述ごとの○×は上に` : ``;
         const answerText = style && mq.choices[correctIdx] ? mq.choices[correctIdx].text : ``;
-        showVerdict(verdictEl, ok, mcVerdictSub(ok, correctIdx, term, okSub, answerText));
+        showVerdict(verdictEl, mcVerdict(ok, correctIdx, term, okSub, answerText, restored));
         // 記録は「勘で当たった」の初めの状態を読む前に(自信ありの正解は前に付いた印を外すため)
         const drill = restored ? undefined : recordFixedResult(q, result, qHistory);
         // 「勘で当たった」は正解したときだけ(初めの状態は保存された印。戻るで再現したカードも同じ)
@@ -1096,7 +1449,11 @@ window.Views.quiz = (function () {
 
       mq.choices.forEach((choice, i) => {
         const btn = choiceButton(i, choice.text);
-        btn.addEventListener(`click`, () => showAnswer(i, false));
+        btn.addEventListener(`click`, (e) => {
+          if (done) return;
+          showAnswer(i, false);
+          if (e.detail === 0) focusAfterAnswer(card);
+        });
         choiceList.appendChild(btn);
       });
       const rc = opts.restoreChoice;
@@ -1112,7 +1469,7 @@ window.Views.quiz = (function () {
             <button type="button" class="btn btn-secondary" data-result="ng">${ic(`x`)}わからなかった</button>
           </div>
         </div>
-        <div class="quiz-after" data-role="explain"></div>
+        <div class="quiz-after" data-role="explain" id="quiz-after-${++afterSeq}"></div>
       `;
       const revealBtn = bodyEl.querySelector(`[data-role="reveal"]`);
       const answerArea = bodyEl.querySelector(`[data-role="answer-area"]`);
@@ -1131,7 +1488,8 @@ window.Views.quiz = (function () {
         card.classList.add(`is-answered`);
         bodyEl.querySelectorAll(`[data-result]`).forEach((b) => b.classList.toggle(`active`, b.dataset.result === result));
         const ok = result === `ok`;
-        showVerdict(verdictEl, ok, !ok && term ? `「${term.name}」を復習に追加` : ``, ok ? `わかった` : `わからなかった`);
+        if (!restored) card.classList.add(`is-fresh`);
+        showVerdict(verdictEl, { ok, title: ok ? `わかった` : `わからなかった`, sub: !ok && term ? `「${term.name}」を復習に追加` : `` });
         explainEl.innerHTML = `${!ok && term ? reviewAddedHtml(term.name) : ``}${afterLinksHtml(ok)}${metaHtml()}`;
         wireGotoNg(explainEl);
         if (!restored) recordFixedResult(q, result, qHistory);
@@ -1173,6 +1531,8 @@ window.Views.quiz = (function () {
       answered: pick(raw.answered, (v) => Number.isInteger(v) && v >= 0 && v < 4),
       outcome: pick(raw.outcome, (v) => typeof v === `string` && OUTCOME_RE.test(v)),
       rem: pick(raw.rem, (v) => Number.isInteger(v) && v >= 1 && v <= 4),
+      // 1問ずつの表示で見ていた問題
+      cur: typeof raw.cur === `string` && ids.includes(raw.cur) ? raw.cur : null,
     };
   }
 
@@ -1242,8 +1602,9 @@ window.Views.quiz = (function () {
       ids.forEach((id) => { const e = Drill.get(id); if (e) rem[id] = Drill.remaining(e); });
     }
 
+    okRun = 0;
     const wrap = document.createElement(`div`);
-    wrap.className = `view quiz-view quiz-due-view`;
+    wrap.className = `view quiz-view quiz-due-view quiz-stepper`;
     wrap.dataset.docTitle = `解き直し`;
     wrap.innerHTML = `
       <div class="view-head">
@@ -1276,19 +1637,23 @@ window.Views.quiz = (function () {
       return;
     }
 
+    // 1問ずつの表示: 上のバー(前へ・答えた数・次へ)、終わったら結果(due-summary)
     body.innerHTML = `
-      <p class="progress-text quiz-progress" data-role="due-progress"></p>
-      <div class="quiz-list" data-role="due-list"></div>
+      ${stepBarHtml(``)}
+      <div class="quiz-step-meta"><p class="progress-text quiz-progress" data-role="due-progress"></p></div>
+      <div class="quiz-list quiz-steps" data-role="due-list"></div>
       <div class="card quiz-summary drill-summary" data-role="due-summary" tabindex="-1" hidden></div>
     `;
     const list = body.querySelector(`[data-role="due-list"]`);
     const progressEl = body.querySelector(`[data-role="due-progress"]`);
     const summaryEl = body.querySelector(`[data-role="due-summary"]`);
     const ctx = { lastAnswered: null };
-    bindKeys(wrap, list, ctx);
+    bindKeys(wrap, body, ctx);
+    let restoreCur = saved ? saved.cur : null;
 
     function saveState() {
-      patchHistoryState({ dueState: { day, ids: ids.slice(), shown, answered, outcome, rem } });
+      const cur = stepCurrent(list);
+      patchHistoryState({ dueState: { day, ids: ids.slice(), shown, answered, outcome, rem, cur: cur ? cur.dataset.quizId : null } });
     }
 
     const isOk = (id) => !!byId[id] && answered[id] === byId[id].correctIndex;
@@ -1311,7 +1676,7 @@ window.Views.quiz = (function () {
       const label = cards.some((c) => !c.classList.contains(`is-answered`)) ? `未回答の問題へ` : `結果を見る`;
       let b = bar.querySelector(`[data-role="due-next"]`);
       if (!b) {
-        bar.insertAdjacentHTML(`beforeend`, `<button type="button" class="btn quiz-next" data-role="due-next" data-label=""></button>`);
+        barActions(bar).insertAdjacentHTML(`beforeend`, `<button type="button" class="btn btn-lg quiz-next" data-role="due-next" data-label=""></button>`);
         b = bar.querySelector(`[data-role="due-next"]`);
       }
       if (b.dataset.label !== label) {
@@ -1325,10 +1690,8 @@ window.Views.quiz = (function () {
       if (!b) return;
       const target = list.querySelector(`.quiz-card:not(.is-answered)`);
       if (target) { focusCard(target); return; }
-      if (!summaryEl.hidden) {
-        summaryEl.scrollIntoView({ behavior: UI.prefersReducedMotion() ? `auto` : `smooth`, block: `start` });
-        summaryEl.focus({ preventScroll: true });
-      }
+      // 全部答えたら結果へ(マスコットと紙吹雪)
+      if (!summaryEl.hidden) stepFinish(list, summaryEl);
     });
 
     function handleResult(result, card, picked, restored, drill) {
@@ -1345,6 +1708,7 @@ window.Views.quiz = (function () {
         paintProgress();
         paintTail();
         renderSummary();
+        stepper.paint();
       }
     }
 
@@ -1409,9 +1773,9 @@ window.Views.quiz = (function () {
       const menu = !rest || !retryStep || retryStep.done ? nextMenuStep(`retry`, steps) : null;
       summaryEl.hidden = false;
       summaryEl.innerHTML = `
+        ${finishHeroHtml(`解き直しの結果`, pct >= PASS_PCT)}
         <div class="recommend-head">
-          <h3 class="card-title">${ic(pct >= PASS_PCT ? `trophy` : `flag`, 20)} 解き直しの結果</h3>
-          <span class="stat-value">${ok}<small>/${total}問</small></span>
+          <span class="stat-value">${ok}<small>/${total}問 正解</small></span>
         </div>
         <div class="quiz-summary-bar">
           <div class="progress-bar progress-bar-lg" aria-hidden="true"><div class="progress-bar-fill ${pct >= PASS_PCT ? `fill-success` : ``}" style="width:${pct}%"></div></div>
@@ -1446,9 +1810,29 @@ window.Views.quiz = (function () {
       }
     }
 
+    const stepper = wireStepper(wrap, {
+      bar: body.querySelector(`[data-role="stepbar"]`),
+      list,
+      progress: (cur, fin) => {
+        const shownIds = ids.slice(0, shown);
+        const done = shownIds.filter((id) => answered[id] != null).length;
+        return { now: done, max: shownIds.length, label: `答えた数`, text: progressEl.textContent || `${done} / ${shownIds.length}問回答` };
+      },
+    });
+    list.addEventListener(`quiz:step`, () => saveState());
+
     appendCards(0, shown);
     paintProgress();
     renderSummary();
+    // 1問ずつの表示: 戻る・再読み込みでは見ていた問題、それ以外は最初の未回答の問題(全部答えていれば結果)
+    const cards = Array.from(list.querySelectorAll(`:scope > .quiz-card`));
+    const want = restoreCur ? cards.find((c) => c.dataset.quizId === restoreCur) : null;
+    const firstOpen = cards.find((c) => !c.classList.contains(`is-answered`));
+    if (want || firstOpen) setCurrent(list, want || firstOpen);
+    else {
+      setCurrent(list, cards[cards.length - 1] || null);
+      if (!summaryEl.hidden) { wrap.classList.add(`is-finished`); stepper.paint(); }
+    }
     saveState();
   }
 
@@ -1483,6 +1867,8 @@ window.Views.quiz = (function () {
       // 古い保存データ(weakIds なし)は null: 今の成績から作り直す
       weakIds: Array.isArray(raw.weakIds) ? raw.weakIds.filter((id) => typeof id === `string`).slice(0, 8) : null,
       items,
+      // 1問ずつの表示で見ていた問題の番号(0から)
+      cur: Number.isInteger(raw.cur) && raw.cur >= 0 && raw.cur < items.length ? raw.cur : null,
     };
   }
 
@@ -1496,6 +1882,7 @@ window.Views.quiz = (function () {
     if (saved) Object.assign(cond, saved.cond);
 
     // 条件は1行(タップでシート)。問題を画面の上の方から始めるため、チップの列は画面に並べない
+    // その下に1問ずつの表示の上のバー(前へ・答えた数・次へ・新しい問題)、終わったら結果(summary)
     body.innerHTML = `
       <div class="auto-top">
         <button type="button" class="auto-cond-btn" data-role="cond" aria-haspopup="dialog">
@@ -1504,12 +1891,10 @@ window.Views.quiz = (function () {
           ${ic(`chevron-right`, 16)}
         </button>
         <details class="weak-terms-panel" data-role="weak-terms" hidden></details>
-        <div class="auto-score-row">
-          <p class="progress-text" data-role="score"></p>
-          <button type="button" class="btn btn-secondary btn-sm" data-role="retry">${ic(`refresh`, 16)}新しい問題</button>
-        </div>
       </div>
-      <div class="quiz-list" data-role="auto-list"></div>
+      ${stepBarHtml(`<button type="button" class="btn btn-secondary quiz-step-tool" data-role="retry" aria-label="新しい問題">${ic(`refresh`, 22)}</button>`)}
+      <div class="quiz-step-meta"><p class="progress-text quiz-progress" data-role="score"></p></div>
+      <div class="quiz-list quiz-steps" data-role="auto-list"></div>
       <div class="card quiz-summary" data-role="summary" tabindex="-1" hidden></div>
     `;
     const condBtn = body.querySelector(`[data-role="cond"]`);
@@ -1518,6 +1903,9 @@ window.Views.quiz = (function () {
     const scoreText = body.querySelector(`[data-role="score"]`);
     const weakPanel = body.querySelector(`[data-role="weak-terms"]`);
     const summaryEl = body.querySelector(`[data-role="summary"]`);
+    const view = body.closest(`.quiz-view`) || body;
+    view.classList.remove(`is-finished`);
+    let restoreCur = saved ? saved.cur : null;
 
     weakPanel.open = saved ? saved.weakOpen : false;
     weakPanel.addEventListener(`toggle`, saveAuto);
@@ -1641,10 +2029,12 @@ window.Views.quiz = (function () {
     }
 
     function saveAuto() {
+      const cur = stepCurrent(list);
+      const curIdx = cur ? Array.from(list.querySelectorAll(`:scope > .quiz-card`)).indexOf(cur) : -1;
       patchHistoryState({
         autoState: {
           level: cond.level, topic: cond.topic, weak: cond.weak, count: cond.count, lawOnly: cond.lawOnly,
-          weakOpen: weakPanel.open, weakIds: weakShownIds.slice(),
+          weakOpen: weakPanel.open, weakIds: weakShownIds.slice(), cur: curIdx >= 0 ? curIdx : null,
           questions: items.map((it) => ({
             termId: it.q.term.id, type: it.q.type, stem: it.q.stem,
             choices: it.q.choices.map((c) => ({ text: c.text, correct: !!c.correct })), picked: it.picked,
@@ -1688,6 +2078,7 @@ window.Views.quiz = (function () {
         list.appendChild(UI.emptyState(cond.lawOnly
           ? { icon: `library`, title: `根拠法令の問題を出せる用語がありません`, body: `レベルやトピックを変えるか、「根拠法令だけ」を外してみてください。` }
           : { icon: `search`, title: `出題できる用語がありません`, body: `レベルやトピックの絞り込みを変えてみてください。` }));
+        setCurrent(list, null);
         return;
       }
       const fragment = document.createDocumentFragment();
@@ -1695,6 +2086,16 @@ window.Views.quiz = (function () {
       list.appendChild(fragment);
       refreshNextButtons();
       if (answeredCount() === items.length) renderSummary();
+      // 1問ずつの表示: 戻る・再読み込みでは見ていた問題、それ以外は最初の未回答の問題(全部答えていれば結果)
+      const cards = Array.from(list.querySelectorAll(`:scope > .quiz-card`));
+      const want = restoreCur != null ? cards[restoreCur] : null;
+      restoreCur = null;
+      const firstOpen = cards.find((c) => !c.classList.contains(`is-answered`));
+      if (want || firstOpen) setCurrent(list, want || firstOpen);
+      else {
+        setCurrent(list, cards[cards.length - 1] || null);
+        if (!summaryEl.hidden) { view.classList.add(`is-finished`); stepper.paint(); }
+      }
     }
 
     // 回答済みのカードの「次の問題」の表示を、今の回答状況に合わせる(後ろに未回答がなければ「未回答の問題へ」「結果を見る」)
@@ -1718,10 +2119,8 @@ window.Views.quiz = (function () {
       const card = b.closest(`.quiz-card`);
       const target = nextUnansweredAfter(card) || list.querySelector(`.quiz-card:not(.is-answered)`);
       if (target) { focusCard(target); return; }
-      if (!summaryEl.hidden) {
-        summaryEl.scrollIntoView({ behavior: UI.prefersReducedMotion() ? `auto` : `smooth`, block: `start` });
-        summaryEl.focus({ preventScroll: true });
-      }
+      // 全部答えたら結果へ(マスコットと紙吹雪)
+      if (!summaryEl.hidden) stepFinish(list, summaryEl);
     });
 
     function renderSummary() {
@@ -1732,9 +2131,9 @@ window.Views.quiz = (function () {
       const missed = missedTerms();
       summaryEl.hidden = false;
       summaryEl.innerHTML = `
+        ${finishHeroHtml(`今回の結果`, passed)}
         <div class="recommend-head">
-          <h3 class="card-title">${ic(passed ? `trophy` : `flag`, 20)} 今回の結果</h3>
-          <span class="stat-value">${score}<small>/${total}問</small></span>
+          <span class="stat-value">${score}<small>/${total}問 正解</small></span>
         </div>
         <div class="quiz-summary-bar">
           <div class="progress-bar progress-bar-lg" aria-hidden="true"><div class="progress-bar-fill ${passed ? `fill-success` : ``}" style="width:${pct}%"></div></div>
@@ -1783,21 +2182,20 @@ window.Views.quiz = (function () {
         </div>
         <p class="quiz-question">${esc(q.stem)}</p>
         <div class="choice-list" role="group" aria-label="選択肢" data-role="choices"></div>
-        <div class="quiz-after" data-role="after"></div>
+        <div class="quiz-after" data-role="after" id="quiz-after-${++afterSeq}"></div>
       `;
       const choiceList = card.querySelector(`[data-role="choices"]`);
       const afterEl = card.querySelector(`[data-role="after"]`);
-      // 判定は回答バーとしてカードの最後に置く
+      // 判定は判定のバーとしてカードの最後に置く
       const verdictEl = verdictElement();
       card.appendChild(verdictEl);
 
       function paint(restored) {
         const ok = it.picked === correctIdx;
-        card.classList.add(`is-answered`);
-        if (restored) card.classList.add(`is-restored`);
+        card.classList.add(`is-answered`, restored ? `is-restored` : `is-fresh`);
         paintChoices(choiceList, q.choices, it.picked);
-        showVerdict(verdictEl, ok, mcVerdictSub(ok, correctIdx, q.term, `用語の説明はこの下から開けます`));
-        verdictEl.insertAdjacentHTML(`beforeend`, nextBtnHtml(`次の問題`));
+        showVerdict(verdictEl, mcVerdict(ok, correctIdx, q.term, ``, ``, restored));
+        barActions(verdictEl).insertAdjacentHTML(`beforeend`, nextBtnHtml(`次の問題`));
         // 根拠法令・意味を選ぶ問題は、用語の意味も1行で確認できるように
         const meaning = q.type === `law-ref` || q.type === `def-from-name`
           ? `<p class="quiz-meaning"><strong>${esc(q.term.name)}</strong>: ${esc(QuizEngine.truncate(String(q.term.simpleExplanation || ``), 60))}</p>` : ``;
@@ -1808,7 +2206,7 @@ window.Views.quiz = (function () {
 
       q.choices.forEach((choice, i) => {
         const btn = choiceButton(i, choice.text);
-        btn.addEventListener(`click`, () => {
+        btn.addEventListener(`click`, (e) => {
           if (it.picked != null) return;
           it.picked = i;
           const ok = i === correctIdx;
@@ -1820,12 +2218,22 @@ window.Views.quiz = (function () {
           saveAuto();
           // 結果は「結果を見る」で見に行く(最後の問題の解説を読み終える前に画面が動かないように)
           if (answeredCount() === items.length) renderSummary();
+          stepper.paint();
+          if (e.detail === 0) focusAfterAnswer(card);
         });
         choiceList.appendChild(btn);
       });
       if (it.picked != null) paint(true);
       return card;
     }
+
+    const stepper = wireStepper(view, {
+      bar: body.querySelector(`[data-role="stepbar"]`),
+      list,
+      progress: () => ({ now: answeredCount(), max: items.length, label: `答えた数`, text: scoreText.textContent || `${answeredCount()} / ${items.length}問回答` }),
+    });
+    ctx.stepper = stepper;
+    list.addEventListener(`quiz:step`, () => saveAuto());
 
     paintConds();
     if (saved) {
