@@ -12,6 +12,9 @@
 //       Storage `oxPrefs` = { scope, filter, count, autoNext, confidence }(最後に出題を始めた条件と「正解したら自動で次へ」・
 //       「自信度も答える」(もちろん○/たぶん○/たぶん×/もちろん× の4つで答える。初期値はオフ))
 // 「たぶん」で正解した文の元の4択は、解き直しの予定(Drill.noteUnsure)に3日後で入れる(○×は AnswerLog には記録しない)
+// v13(デザイン刷新): 見た目は4択(js/views/quiz.js・css/practice.css)と同じ部品。トップは分野のステッカーの札と大きな「開始」、
+//      出題中は上に貼り付く進み具合のバー・文の大きなカード・大きな ○ / × のボタン・画面の下の判定のバー(間違えたら解説を開く)、
+//      結果はマスコット・大きな得点・分野の色のバー(最後まで解き終えたら紙吹雪)
 window.Views = window.Views || {};
 window.Views.ox = (function () {
   const STATS_KEY = `oxStats`;
@@ -632,11 +635,66 @@ window.Views.ox = (function () {
     return `「${scopeLabel(route.scope)}」の○×問題がまだないため、出題を始められませんでした。`;
   }
 
+  // ===== 描画の部品(v13 デザイン刷新) =====
+
+  // 分野の色とアイコン(丸いステッカー・進捗バー。css/style.css の .cat-*)。分からない分野は緑
+  const CAT_IDS = [`gyoho`, `kenri`, `horei`, `zei`, `menjo`, `shohi`];
+  const CAT_ICONS = { gyoho: `scale`, kenri: `gavel`, horei: `ruler`, zei: `receipt`, menjo: `mountain`, shohi: `percent` };
+  function catCls(id) {
+    return CAT_IDS.includes(id) ? `cat-${id}` : `cat-life`;
+  }
+  function catSticker(id, cls, size) {
+    return `<span class="sticker ${cls} ${catCls(id)}" aria-hidden="true">${ic(CAT_ICONS[id] || `o-x`, size)}</span>`;
+  }
+  // 分野の札(小さなステッカー+分野名)
+  function catTagHtml(id) {
+    if (!id) return ``;
+    return `<span class="ox-cat ${catCls(id)}">${catSticker(id, `ox-cat-sticker`, 13)}<span>${esc(categoryName(id))}</span></span>`;
+  }
+
+  // 正解したときに、ときどき添えるひとこと(4択と同じ言葉。3問以上つづけて正解したときは回数)
+  const CHEERS = [`その調子!`, `いいですね!`, `よくできました!`, `ばっちりです!`, `さすがです!`];
+
+  // i 問目まで続けて正解した数(i 問目が未回答・不正解なら 0)
+  function okRunAt(sess, i) {
+    let k = i;
+    let count = 0;
+    while (k >= 0 && sess.answers[k] && sess.answers[k].ok) { count += 1; k -= 1; }
+    return count;
+  }
+
+  // このセッションでいちばん長く続けて正解した数
+  function bestRun(sess) {
+    let best = 0;
+    let cur = 0;
+    sess.items.forEach((_, i) => {
+      const a = sess.answers[i];
+      cur = a && a.ok ? cur + 1 : 0;
+      if (cur > best) best = cur;
+    });
+    return best;
+  }
+
+  // 判定のバー(画面の下に固定)の高さを測って、画面の下の余白・通知の位置(css/practice.css の --oxfb-h)に使う
+  let fbObserver = null;
+  function watchBanner(fb) {
+    if (fbObserver) { fbObserver.disconnect(); fbObserver = null; }
+    if (!fb) return;
+    const set = () => { if (fb.isConnected && fb.offsetHeight) document.documentElement.style.setProperty(`--oxfb-h`, `${fb.offsetHeight}px`); };
+    if (typeof ResizeObserver === `function`) {
+      fbObserver = new ResizeObserver(set);
+      fbObserver.observe(fb);
+    }
+    set();
+  }
+
   // ===== 描画: トップ(条件の選択) =====
 
   function renderLanding(wrap, ctx, opts) {
     opts = opts || {};
     ctx.run = null;
+    watchBanner(null);
+    wrap.classList.remove(`has-fb`, `is-run`);
     const statements = loadStatements();
     const stats = loadStats();
     const total = statements.length;
@@ -665,7 +723,7 @@ window.Views.ox = (function () {
       </div>
       ${resumable ? `
         <div class="card ox-resume">
-          <span class="ox-resume-icon">${ic(`o-x`, 22)}</span>
+          <span class="sticker ox-resume-icon" aria-hidden="true">${ic(`o-x`, 22)}</span>
           <div class="ox-resume-main">
             <p class="ox-resume-title">${allAnswered ? `解き終わったセッション` : `続きから`}</p>
             <p class="ox-resume-meta">${esc(session.label)}・${allAnswered
@@ -677,29 +735,33 @@ window.Views.ox = (function () {
             : `<a class="btn" href="#ox/run">${ic(`play`)}再開</a>`}
         </div>` : ``}
       ${total && last && lastPool && !resumable ? `
-        <button type="button" class="btn btn-lg btn-block ox-quick" data-role="quick" aria-label="前回の条件で開始(${esc(scopeLabel(last.scope))}・${esc(filterLabel(last.filter))}・${Math.min(lastPool, last.count)}問)">
-          ${ic(`play`)}<span class="ox-quick-text"><span>前回の条件で開始</span><span class="ox-quick-meta">${esc(scopeLabel(last.scope))}・${esc(filterLabel(last.filter))}・${Math.min(lastPool, last.count)}問</span></span>
+        <button type="button" class="btn btn-secondary btn-lg btn-block ox-quick" data-role="quick" aria-label="前回の条件で開始(${esc(scopeLabel(last.scope))}・${esc(filterLabel(last.filter))}・${Math.min(lastPool, last.count)}問)">
+          <span class="sticker sticker-sm ox-quick-sticker" aria-hidden="true">${ic(`play`, 18)}</span>
+          <span class="ox-quick-text"><span>前回の条件で開始</span><span class="ox-quick-meta">${esc(scopeLabel(last.scope))}・${esc(filterLabel(last.filter))}・${Math.min(lastPool, last.count)}問</span></span>
+          ${ic(`chevron-right`, 20)}
         </button>` : ``}
       ${opts.notice ? `<p class="ox-notice" role="status">${ic(`info`)}<span>${esc(opts.notice)}</span></p>` : ``}
       ${total ? `
-        <section class="card ox-setup" aria-labelledby="ox-setup-title">
-          <h3 class="ox-setup-title" id="ox-setup-title">出題の条件</h3>
+        <section class="ox-setup" aria-labelledby="ox-setup-title">
+          <h3 class="sr-only" id="ox-setup-title">出題の条件</h3>
           <p class="ox-label" id="ox-scope-label">分野</p>
-          <div class="chip-row ox-scope" role="group" aria-labelledby="ox-scope-label" data-role="scope"></div>
+          <div class="ox-scope" role="group" aria-labelledby="ox-scope-label" data-role="scope"></div>
           <p class="ox-label" id="ox-filter-label">出題する文</p>
           <div class="segmented ox-filter" role="group" aria-labelledby="ox-filter-label" data-role="filter"></div>
           <p class="ox-label" id="ox-count-label">問題数</p>
           <div class="segmented ox-count" role="group" aria-labelledby="ox-count-label" data-role="count"></div>
           <p class="ox-setup-note" data-role="note" aria-live="polite"></p>
-          <button type="button" class="btn btn-lg btn-block" data-role="start"></button>
-          <label class="check-inline ox-auto-next"><input type="checkbox" data-role="auto-next"${prefs.autoNext ? ` checked` : ``}>正解したら自動で次へ(約1秒後)</label>
-          <label class="check-inline ox-auto-next ox-confidence-toggle"><input type="checkbox" data-role="confidence" aria-describedby="ox-confidence-help"${prefs.confidence ? ` checked` : ``}>自信度も答える(もちろん/たぶん)</label>
-          <p class="ox-confidence-help" id="ox-confidence-help">「たぶん」で正解した文の元の4択は、3日後の解き直しに出します。</p>
+          <button type="button" class="btn btn-lg btn-block ox-start" data-role="start"></button>
+          <div class="ox-options">
+            <label class="check-inline ox-auto-next"><input type="checkbox" data-role="auto-next"${prefs.autoNext ? ` checked` : ``}>正解したら自動で次へ(約1秒後)</label>
+            <label class="check-inline ox-auto-next ox-confidence-toggle"><input type="checkbox" data-role="confidence" aria-describedby="ox-confidence-help"${prefs.confidence ? ` checked` : ``}>自信度も答える(もちろん/たぶん)</label>
+            <p class="ox-confidence-help" id="ox-confidence-help">「たぶん」で正解した文の元の4択は、3日後の解き直しに出します。</p>
+          </div>
         </section>
-        <div class="stat-grid ox-stats">
-          <div class="stat-tile"><span class="stat-value num">${total}<small>文</small></span><span class="stat-label">収録</span></div>
-          <div class="stat-tile"><span class="stat-value num">${answered}<small>文</small></span><span class="stat-label">回答済み</span></div>
-          <div class="stat-tile"><span class="stat-value num">${acc == null ? `—` : `${acc}<small>%</small>`}</span><span class="stat-label">正答率</span></div>
+        <div class="ox-stats">
+          <div class="ox-stat"><span class="ox-stat-value big-num">${total}<small>文</small></span><span class="ox-stat-label">収録</span></div>
+          <div class="ox-stat"><span class="ox-stat-value big-num">${answered}<small>文</small></span><span class="ox-stat-label">回答済み</span></div>
+          <div class="ox-stat"><span class="ox-stat-value big-num">${acc == null ? `—` : `${acc}<small>%</small>`}</span><span class="ox-stat-label">正答率</span></div>
         </div>
         <div data-role="keys">${keysHintHtml(prefs.confidence)}</div>` : ``}
     `;
@@ -710,6 +772,7 @@ window.Views.ox = (function () {
       content: `<div class="view-info">
         <p>4択問題の選択肢を1文ずつ、正しい(○)か誤り(×)かで判定します。個数問題・組合せ問題の記述ア〜エも出題します。</p>
         <p>間違えた文の用語は「<a href="#review">今日の復習</a>」に自動で追加されます。「間違えたことがある」を選ぶと、前回間違えた文から順に解き直せます。</p>
+        <p>答えると下に判定が出ます。間違えたときは解説を開いた状態で、正解したときは「解説を見る」で開けます。</p>
         <p>「自信度も答える」をオンにすると、もちろん○・たぶん○・たぶん×・もちろん× の4つで答えます。「たぶん」で正解した文の元の4択は、3日後の解き直しに出ます。</p>
         <p class="view-info-keys">キーボード: <kbd>O</kbd>・<kbd>1</kbd>・<kbd>←</kbd> で○ / <kbd>X</kbd>・<kbd>2</kbd>・<kbd>→</kbd> で× / <kbd>Enter</kbd> で次へ(自信度つきは <kbd>1</kbd>〜<kbd>4</kbd>)</p>
       </div>`,
@@ -734,12 +797,13 @@ window.Views.ox = (function () {
       return;
     }
 
-    // トピック指定で来た場合だけ、そのトピックのチップを追加する
+    // トピック指定で来た場合だけ、そのトピックの札を追加する
     const topicScope = prefs.scope.type === `topic` && AppIndex.topicsById[prefs.scope.id] ? prefs.scope.id : null;
     if (prefs.scope.type === `topic` && !topicScope) prefs.scope = { type: `all`, id: null };
-    const scopeOptions = [{ key: `all`, scope: { type: `all`, id: null }, label: `すべて` }]
-      .concat(scopeCategories().map((cat) => ({ key: `cat:${cat.id}`, scope: { type: `cat`, id: cat.id }, label: cat.name })))
-      .concat(topicScope ? [{ key: `topic:${topicScope}`, scope: { type: `topic`, id: topicScope }, label: `トピック: ${AppIndex.topicsById[topicScope].name}` }] : []);
+    // 分野の札: 分野の色の丸いステッカー+分野名+文の数(すべて・トピックは緑)
+    const scopeOptions = [{ key: `all`, scope: { type: `all`, id: null }, label: `すべて`, icon: `o-x`, cat: null }]
+      .concat(scopeCategories().map((cat) => ({ key: `cat:${cat.id}`, scope: { type: `cat`, id: cat.id }, label: cat.name, icon: CAT_ICONS[cat.id] || `o-x`, cat: cat.id })))
+      .concat(topicScope ? [{ key: `topic:${topicScope}`, scope: { type: `topic`, id: topicScope }, label: `トピック: ${AppIndex.topicsById[topicScope].name}`, icon: AppIndex.topicsById[topicScope].icon || `book-open`, cat: null, wide: true }] : []);
     scopeOptions.forEach((o) => { o.count = statements.filter((s) => inScope(s, o.scope)).length; });
     const keyOf = (scope) => (scope.type === `all` ? `all` : `${scope.type}:${scope.id}`);
 
@@ -750,8 +814,9 @@ window.Views.ox = (function () {
     const startBtn = wrap.querySelector(`[data-role="start"]`);
 
     scopeEl.innerHTML = scopeOptions.map((o) => `
-      <button type="button" class="chip ox-scope-chip" data-scope="${esc(o.key)}" aria-pressed="false">
-        <span>${esc(o.label)}</span><span class="ox-chip-count num">${o.count}<span class="sr-only">文</span></span>
+      <button type="button" class="ox-scope-chip ${o.cat ? catCls(o.cat) : `cat-life`}${o.wide ? ` is-wide` : ``}" data-scope="${esc(o.key)}" aria-pressed="false">
+        <span class="sticker ox-scope-sticker" aria-hidden="true">${ic(o.icon, 16)}</span>
+        <span class="ox-scope-text"><span class="ox-scope-name">${esc(o.label)}</span><span class="ox-chip-count num">${o.count}<span class="ox-chip-unit">文</span></span></span>
       </button>`).join(``);
     filterEl.innerHTML = FILTERS.map((f) => `
       <button type="button" class="segmented-item" data-filter="${f.id}" aria-pressed="false">
@@ -777,7 +842,7 @@ window.Views.ox = (function () {
       const poolSize = inScopeList.filter((s) => matchesFilter(s, prefs.filter, stats)).length;
       const n = Math.min(poolSize, prefs.count);
       startBtn.disabled = poolSize === 0;
-      startBtn.innerHTML = `${ic(`play`)}${poolSize ? `開始(${n}問)` : `開始`}`;
+      startBtn.innerHTML = `${ic(`play`, 22)}<span>${poolSize ? `開始(${n}問)` : `開始`}</span>`;
       noteEl.classList.toggle(`is-empty`, poolSize === 0);
       const where = prefs.scope.type === `all` ? `` : `この分野の`;
       if (!inScopeList.length) noteEl.textContent = `この分野の○×問題はまだありません。ほかの分野を選んでください。`;
@@ -837,6 +902,11 @@ window.Views.ox = (function () {
   }
 
   // ===== 描画: 出題中 =====
+  // 上に貼り付くバー(終了・太い進み具合・連続正解・n/全体)、文を大きなカードで、その下に大きな ○ / × のボタン。
+  // 答えると画面の下(下部タブの上)に判定のバー(「正解!」「おしい!」+「解説を見る」+「つづける」)が出る(4択と同じ部品)。
+  // 解説(注・用語・元の4択・AIに聞く)は文の下。間違えたときは開いた状態、正解のときは「解説を見る」で開く
+
+  let resultSeq = 0;
 
   function renderRun(wrap, ctx) {
     const sess = session;
@@ -845,40 +915,74 @@ window.Views.ox = (function () {
     const prior = sess.prior[s.id];
     const quiz = quizById(s.quizId);
     const context = contextFor(s);
-    const done = answeredCount(sess);
     const isLast = sess.index >= n - 1;
     // 回答済みの文に戻ってきたときは、答えたときの形(自信度つきか)で出す
     const prevAnswer = sess.answers[sess.index];
     const confidence = prevAnswer ? !!prevAnswer.level : prefs.confidence;
+    const resultId = `ox-result-${++resultSeq}`;
+    // この文の前まで続けて正解した数(上のバーの炎)
+    const runBefore = sess.index > 0 ? okRunAt(sess, sess.index - 1) : 0;
 
+    watchBanner(null);
+    wrap.classList.remove(`has-fb`);
+    wrap.classList.add(`is-run`);
     wrap.innerHTML = `
-      <h2>○×一問一答</h2>
+      <h2 class="sr-only">○×一問一答</h2>
+      <div class="quiz-stepbar ox-stepbar" data-role="stepbar">
+        <button type="button" class="btn btn-icon quiz-step-btn ox-quit" data-role="quit" aria-label="終了する">${ic(`x`, 24)}</button>
+        <div class="quiz-step-track" data-role="track" role="progressbar" aria-label="答えた数" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="0"><span class="quiz-step-fill" data-role="bar"></span></div>
+        <span class="ox-streak" data-role="streak" hidden></span>
+        <span class="quiz-step-count ox-run-count num"><span class="sr-only">${n}問中</span>${sess.index + 1}<small>/${n}</small><span class="sr-only">問目</span></span>
+      </div>
       <p class="ox-run-label">${esc(sess.label)}</p>
-      <div class="card ox-stage" data-role="stage">
-        <div class="ox-run-head">
-          <span class="ox-run-count num"><span class="sr-only">${n}問中</span>${sess.index + 1}<small> / ${n}</small><span class="sr-only">問目</span></span>
-          <div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill" data-role="bar" style="width:${Math.round((done / n) * 100)}%"></div></div>
-          <button type="button" class="btn btn-ghost btn-sm ox-quit" data-role="quit">${ic(`x`, 16)}終了</button>
-        </div>
+      <div class="ox-stage" data-role="stage">
         <div class="ox-q-meta">
-          ${s.cat ? `<span class="badge badge-soft">${esc(categoryName(s.cat))}</span>` : ``}
+          ${catTagHtml(s.cat)}
           ${s.level ? `<span class="badge badge-${esc(s.level)}">${esc(s.level)}</span>` : ``}
-          ${prior ? `<span class="review-status ${prior.lastOk ? `review-status-ok` : `review-status-ng`}">前回 ${prior.lastOk ? `正解` : `不正解`}</span>` : ``}
+          ${prior ? `<span class="ox-prior ${prior.lastOk ? `is-ok` : `is-ng`}">前回 ${prior.lastOk ? `正解` : `不正解`}</span>` : ``}
         </div>
-        ${context ? `<p class="ox-context">${esc(context)}</p>` : ``}
-        <p class="ox-statement${s.sub ? ` has-label` : ``}" tabindex="-1" data-role="statement">${stmtLabelHtml(s)}<span class="ox-statement-text">${esc(s.text)}</span></p>
+        <div class="ox-card">
+          ${context ? `<p class="ox-context">${esc(context)}</p>` : ``}
+          <p class="ox-statement${s.sub ? ` has-label` : ``}" tabindex="-1" data-role="statement">${stmtLabelHtml(s)}<span class="ox-statement-text">${esc(s.text)}</span></p>
+        </div>
         ${answerRowHtml(confidence)}
-        <div data-role="result" aria-live="polite"></div>
+      </div>
+      <div class="ox-result" id="${resultId}" data-role="result" hidden></div>
+      <div class="quiz-feedback ox-feedback" data-role="verdict">
+        <div class="quiz-fb-live" role="status" aria-live="polite" data-role="verdict-live"></div>
+        <div class="quiz-fb-actions" data-role="verdict-actions"></div>
       </div>
       ${keysHintHtml(confidence)}
     `;
 
     const stage = wrap.querySelector(`[data-role="stage"]`);
     const resultEl = wrap.querySelector(`[data-role="result"]`);
+    const fb = wrap.querySelector(`[data-role="verdict"]`);
+    const live = fb.querySelector(`[data-role="verdict-live"]`);
+    const actions = fb.querySelector(`[data-role="verdict-actions"]`);
+    const stepbar = wrap.querySelector(`[data-role="stepbar"]`);
+    const track = wrap.querySelector(`[data-role="track"]`);
+    const fill = wrap.querySelector(`[data-role="bar"]`);
+    const streakEl = wrap.querySelector(`[data-role="streak"]`);
     const btnO = wrap.querySelector(`[data-answer="o"]`);
     const btnX = wrap.querySelector(`[data-answer="x"]`);
     const confBtns = Array.from(wrap.querySelectorAll(`[data-level]`));
     const levelBtn = (lv) => confBtns.find((b) => Number(b.dataset.level) === lv) || null;
+
+    // 上のバー: 答えた数の太いバー(全部答えたら金色)と、続けて正解した数の炎(2問から)。fresh: 答えた直後(炎がぽんと出る)
+    function paintBar(fresh) {
+      const done = answeredCount(sess);
+      const pct = n ? Math.min(100, (done / n) * 100) : 0;
+      fill.style.width = pct > 0 ? `max(18px, ${pct}%)` : `0px`;
+      fill.classList.toggle(`is-full`, pct >= 100);
+      track.setAttribute(`aria-valuenow`, String(done));
+      track.setAttribute(`aria-valuetext`, `${done} / ${n}問回答`);
+      const a = sess.answers[sess.index];
+      const run = a ? okRunAt(sess, sess.index) : runBefore;
+      streakEl.hidden = run < 2;
+      streakEl.innerHTML = run >= 2 ? `${ic(`flame-fill`, 18)}<span class="num">${run}</span><span class="sr-only">問つづけて正解</span>` : ``;
+      streakEl.classList.toggle(`is-pop`, !!fresh && !!a && a.ok && run >= 2);
+    }
 
     // 答えのボタンの印: 正解のボタンに「正解」、間違えたら選んだボタンに「あなたの回答」
     // 自信度つき: 正解したら選んだボタンに「正解」。間違えたら正しい側の「もちろん」に「正解」
@@ -903,7 +1007,7 @@ window.Views.ox = (function () {
       }
     }
 
-    // 「たぶん」で正解したときの1行(元の4択を解き直しに入れたかどうか)
+    // 「たぶん」で正解したときの1行(元の4択を解き直しに入れたかどうか)。解説を閉じていても見せる
     function unsureLineHtml(a) {
       if (!a.ok || !a.unsure) return ``;
       return `<p class="review-added ox-unsure-line">${ic(`repeat`, 14)}<span>${a.drillAdded
@@ -911,44 +1015,106 @@ window.Views.ox = (function () {
         : `「たぶん」で正解しました`}</span></p>`;
     }
 
-    function paintAnswered(review, animate) {
-      const a = sess.answers[sess.index];
-      markButtons(a);
-      wrap.querySelector(`[data-role="bar"]`).style.width = `${Math.round((answeredCount(sess) / n) * 100)}%`;
-
+    // 解説(文の下): 復習に追加したこと・注(文ごとの注がなければ4択全体の解説)・元の4択と用語・AIに聞く・誤りの報告
+    function explainHtml(a, review) {
       const link = termLink(s.termId, s.topicIds);
       const note = s.note || (quiz ? (quiz.explanation || quiz.answer || ``) : ``);
-      resultEl.innerHTML = `
-        <div class="ox-result ${a.ok ? `is-ok` : `is-ng`}">
-          <p class="ox-result-head">
-            <span class="ox-verdict">${ic(a.ok ? `check-circle` : `x-circle`, 22)}${a.ok ? `正解` : `不正解`}</span>
-            <span class="ox-truth">この文は${truthHtml(s.truth)}</span>
-          </p>
-          ${unsureLineHtml(a)}
-          ${review && link ? `<p class="review-added ox-review">${ic(`repeat`, 14)}<span>「${esc(link.name)}」を<a href="#review">今日の復習</a>に追加しました</span></p>` : ``}
-          ${note ? `<p class="ox-note">${s.note ? `` : `<span class="ox-note-label">4択問題全体の解説: </span>`}${esc(note)}</p>` : ``}
-          <div class="ox-links">
-            <a class="chip chip-small chip-muted" href="#quiz/q/${encodeURIComponent(s.quizId)}">${ic(`list`, 14)}元の4択問題</a>
-            ${link ? `<a class="chip chip-small chip-muted" href="${link.href}" data-term-sheet="${link.id}">${ic(`layers`, 14)}用語を確認: ${esc(link.name)}</a>` : ``}
-          </div>
-          <div class="ox-ask-ai" data-role="ask-ai"></div>
-          ${reportMetaHtml(s, quiz)}
+      return `
+        ${unsureLineHtml(a)}
+        ${review && link ? `<p class="review-added ox-review">${ic(`repeat`, 14)}<span>「${esc(link.name)}」を<a href="#review">今日の復習</a>に追加しました</span></p>` : ``}
+        ${note ? `<div class="quiz-explain ox-explain"><p class="quiz-explain-title">${s.note ? `解説` : `4択問題全体の解説`}</p><p class="quiz-explain-text ox-note">${esc(note)}</p></div>` : ``}
+        <div class="ox-links">
+          <a class="chip chip-small chip-muted" href="#quiz/q/${encodeURIComponent(s.quizId)}">${ic(`list`, 14)}元の4択問題</a>
+          ${link ? `<a class="chip chip-small chip-muted" href="${link.href}" data-term-sheet="${link.id}">${ic(`layers`, 14)}用語を確認: ${esc(link.name)}</a>` : ``}
         </div>
-        <div class="ox-next-wrap">
-          <button type="button" class="btn btn-lg btn-block ox-next" data-role="next">${isLast ? `結果を見る` : `次へ`}${ic(`arrow-right`)}</button>
-        </div>
-      `;
-      resultEl.querySelector(`[data-role="next"]`).addEventListener(`click`, next);
+        <div class="ox-ask-ai" data-role="ask-ai"></div>
+        ${reportMetaHtml(s, quiz)}`;
+    }
+
+    // 判定のバーの文: 「正解!」+ひとこと(3問以上つづけて正解したら回数)/「おしい!」+「この文は ○正しい」+復習に追加した用語
+    // ひとことは答えた直後だけ(戻ってきたときは付けない)
+    function verdictHtml(a, review, fresh) {
+      let sub = ``;
+      if (!a.ok) {
+        const link = review ? termLink(s.termId, s.topicIds) : null;
+        sub = link ? `「${link.name}」を復習に追加` : ``;
+      } else if (fresh && !a.unsure) {
+        const run = okRunAt(sess, sess.index);
+        sub = run >= 3 ? `${run}問つづけて正解!` : Math.random() < .4 ? CHEERS[Math.floor(Math.random() * CHEERS.length)] : ``;
+      }
+      // 「おしい!」だけでは正誤が伝わりにくいので、読み上げでは先に「不正解」と言う
+      return `<p class="quiz-verdict ${a.ok ? `is-ok` : `is-ng`}">`
+        + `<span class="quiz-fb-sticker" aria-hidden="true">${ic(a.ok ? `check` : `x`, 26)}</span>`
+        + `<span class="quiz-verdict-text"><strong>${a.ok ? `正解!` : `<span class="sr-only">不正解。</span>おしい!`}</strong>`
+        + `<span class="quiz-fb-answer ox-fb-truth">この文は${truthHtml(s.truth)}</span>`
+        + `${sub ? `<small>${esc(sub)}</small>` : ``}</span></p>`;
+    }
+
+    function setExplained(on) {
+      resultEl.classList.toggle(`is-explained`, !!on);
+      const t = actions.querySelector(`[data-role="explain-toggle"]`);
+      if (!t) return;
+      t.setAttribute(`aria-expanded`, String(!!on));
+      t.innerHTML = `<span>${on ? `解説を閉じる` : `解説を見る`}</span>${ic(`chevron-down`, 18)}`;
+    }
+
+    // fresh: 答えた直後(判定のバーが下から出る・○×の印が弾む/揺れる・ひとこと)。戻ってきたときは動かさない
+    function paintAnswered(review, fresh) {
+      const a = sess.answers[sess.index];
+      markButtons(a);
+      paintBar(fresh);
+      resultEl.hidden = false;
+      resultEl.innerHTML = explainHtml(a, review);
       // 「AIに聞く」(js/askAi.js。使わない設定・読み込めないときは何も置かない)。picked: ○と答えたら true
       const aiBox = resultEl.querySelector(`[data-role="ask-ai"]`);
       let aiBtn = null;
       try { aiBtn = window.AskAi && typeof AskAi.button === `function` ? AskAi.button({ kind: `ox`, quizId: s.quizId, stmtKey: s.id, picked: a.said }) : null; } catch (e) { console.error(`[AIに聞く] ボタンを作れませんでした`, e); }
       if (aiBtn) aiBox.appendChild(aiBtn);
       else aiBox.remove();
-      if (animate && !UI.prefersReducedMotion()) {
+
+      live.innerHTML = verdictHtml(a, review, fresh);
+      actions.innerHTML = `
+        <button type="button" class="btn btn-secondary btn-lg quiz-explain-toggle" data-role="explain-toggle" aria-expanded="false" aria-controls="${resultId}"></button>
+        <button type="button" class="btn btn-lg quiz-next ox-next" data-role="next"><span>${isLast ? `結果を見る` : `つづける`}</span>${ic(isLast ? `flag` : `arrow-right`, 20)}</button>`;
+      actions.querySelector(`[data-role="explain-toggle"]`).addEventListener(`click`, () => setExplained(!resultEl.classList.contains(`is-explained`)));
+      actions.querySelector(`[data-role="next"]`).addEventListener(`click`, next);
+      // 間違えたときは解説を最初から開く(正解のときは閉じたまま)
+      setExplained(!a.ok);
+      fb.classList.add(`is-shown`);
+      fb.classList.toggle(`is-ok`, !!a.ok);
+      fb.classList.toggle(`is-ng`, !a.ok);
+      fb.classList.toggle(`is-fresh`, !!fresh);
+      wrap.classList.add(`has-fb`);
+      watchBanner(fb);
+      if (fresh && !UI.prefersReducedMotion()) {
         stage.classList.add(a.ok ? `ox-flash-ok` : `ox-flash-ng`);
         setTimeout(() => stage.classList.remove(`ox-flash-ok`, `ox-flash-ng`), 700);
       }
+    }
+
+    // 答えたあと: ○×のボタン(解説を開いたときは解説の先頭も)が下の判定のバーに隠れていたら、見える所まで送る。
+    // なるべく文のカードの先頭は上のバー(貼り付いたときの位置)の下に隠さない。収まらない小さな画面では、
+    // ○×のボタン(正解・あなたの回答の印)を優先して、ボタンの上の端が上のバーに隠れない所まで送る
+    function reveal() {
+      if (!wrap.isConnected || !fb.isConnected || getComputedStyle(fb).position !== `fixed`) return;
+      const row = wrap.querySelector(`.ox-answer-row`);
+      const card = wrap.querySelector(`.ox-card`);
+      if (!row || !card) return;
+      const rowRect = row.getBoundingClientRect();
+      let bottom = rowRect.bottom;
+      if (resultEl.classList.contains(`is-explained`)) {
+        const first = resultEl.querySelector(`.ox-explain`) || resultEl.firstElementChild;
+        if (first) { const r = first.getBoundingClientRect(); bottom = Math.max(bottom, Math.min(r.bottom, r.top + 96)); }
+      }
+      const fbTop = window.innerHeight - (parseFloat(getComputedStyle(fb).bottom) || 0) - fb.offsetHeight;
+      const over = bottom + 12 - fbTop;
+      if (over <= 0) return;
+      const barBottom = Math.min(stepbar.getBoundingClientRect().bottom, (parseFloat(getComputedStyle(stepbar).top) || 0) + stepbar.offsetHeight);
+      const room = card.getBoundingClientRect().top - barBottom - 8;
+      let by = Math.min(over, Math.max(0, room));
+      // ボタンがまだ隠れるときは、ボタンの下の端まで(ボタンの上の端が上のバーに隠れない範囲で)
+      if (rowRect.bottom + 12 - by > fbTop) by = Math.max(by, Math.min(rowRect.bottom + 12 - fbTop, rowRect.top - barBottom - 8));
+      if (by > 0) window.scrollBy({ top: by, behavior: UI.prefersReducedMotion() ? `auto` : `smooth` });
     }
 
     // level: 自信度つきの 1〜4(このときは saidTrue を使わない)
@@ -956,15 +1122,14 @@ window.Views.ox = (function () {
       const res = answerCurrent(sess, saidTrue, confidence ? level : undefined);
       if (!res) return;
       paintAnswered(res.review, true);
-      focusEl(resultEl.querySelector(`[data-role="next"]`));
-      // 解説が画面外(スマホの下部タブの裏)に出たら見える位置までスクロール(余白は CSS の scroll-margin)
+      focusEl(actions.querySelector(`[data-role="next"]`));
       // 記録を保存できなかったときのお知らせ(Storage が次のタスクで出す)の分も空けられるよう、そのあとで動かす
-      setTimeout(() => requestAnimationFrame(() => { if (resultEl.isConnected) UI.scrollIntoView(resultEl, `nearest`); }), 0);
+      setTimeout(() => requestAnimationFrame(reveal), 0);
       // 「正解したら自動で次へ」: 間違えたとき・「たぶん」で正解したときは解説を読めるよう止まる
       if (res.ok && !res.unsure && prefs.autoNext) startAutoNext();
     }
 
-    // 自動で次へ: 細いバーで残り時間を見せ、画面に触れる・キーを押すと取りやめる
+    // 自動で次へ: 判定のバーの上の端に細いバーで残り時間を見せ、画面に触れる・キーを押すと取りやめる
     // (動きを減らす設定ではバーを出さずに、同じ時間で進む)
     let autoTimer = null;
     function cancelAutoNext() {
@@ -974,14 +1139,12 @@ window.Views.ox = (function () {
       document.removeEventListener(`pointerdown`, cancelAutoNext, true);
       document.removeEventListener(`keydown`, cancelAutoNext, true);
       window.removeEventListener(`hashchange`, cancelAutoNext);
-      const bar = resultEl.querySelector(`[data-role="auto-bar"]`);
+      const bar = fb.querySelector(`[data-role="auto-bar"]`);
       if (bar) bar.remove();
     }
     function startAutoNext() {
-      const nextWrap = resultEl.querySelector(`.ox-next-wrap`);
-      if (!nextWrap) return;
       // バーの長さが縮む時間(CSS の ox-countdown)は AUTO_NEXT_MS と同じ 1.2秒
-      nextWrap.insertAdjacentHTML(`afterbegin`, `<div class="ox-auto-bar" data-role="auto-bar" aria-hidden="true"><span></span></div>`);
+      fb.insertAdjacentHTML(`afterbegin`, `<div class="ox-auto-bar" data-role="auto-bar" aria-hidden="true"><span></span></div>`);
       autoTimer = setTimeout(() => {
         cancelAutoNext();
         if (session !== sess || !wrap.isConnected || document.querySelector(`.modal-overlay, .sheet-backdrop, .onb-overlay`)) return;
@@ -997,14 +1160,15 @@ window.Views.ox = (function () {
       if (!sess.answers[sess.index] || session !== sess) return;
       if (sess.index >= n - 1) {
         sess.finished = true;
-        renderSummary(wrap, ctx);
-        window.scrollTo(0, 0);
-        focusEl(wrap.querySelector(`h2`));
+        renderSummary(wrap, ctx, { fresh: true });
         return;
       }
       sess.index += 1;
       renderRun(wrap, ctx);
-      window.scrollTo(0, 0);
+      // 4択と同じく、次の文は上のバーが画面の上に貼り付く位置から見せる(上の切り替えの分、○×のボタンが最初の画面に入りやすい)
+      const sb = wrap.querySelector(`[data-role="stepbar"]`);
+      const y = sb ? sb.getBoundingClientRect().top + window.scrollY - (parseFloat(getComputedStyle(sb).top) || 0) : 0;
+      window.scrollTo(0, Math.max(0, Math.round(y)));
       focusEl(wrap.querySelector(`[data-role="statement"]`));
     }
 
@@ -1019,9 +1183,7 @@ window.Views.ox = (function () {
       }
       sess.finished = true;
       sess.quit = true;
-      renderSummary(wrap, ctx);
-      window.scrollTo(0, 0);
-      focusEl(wrap.querySelector(`h2`));
+      renderSummary(wrap, ctx, { fresh: true });
     }
 
     if (confidence) {
@@ -1034,6 +1196,7 @@ window.Views.ox = (function () {
 
     ctx.run = { answered: () => !!sess.answers[sess.index], answer, next, confidence };
 
+    paintBar(false);
     // 再描画(戻る操作など)で回答済みの文に戻ってきた場合は結果を表示したままにする
     if (sess.answers[sess.index]) {
       const a = sess.answers[sess.index];
@@ -1042,30 +1205,41 @@ window.Views.ox = (function () {
   }
 
   // ===== 描画: 結果 =====
+  // マスコット(7割以上は元気な顔)・大きな得点・正答率のバー(7割以上は金色)・いちばん長く続けた正解・次の操作、
+  // 分野別(分野の色のバー)と間違えた文。最後まで解き終えた直後だけ紙吹雪(動きを減らす設定では出さない)
+  // opts.fresh: 解き終えた・終了した直後(見出しにフォーカスを移す)
 
-  function renderSummary(wrap, ctx) {
+  function renderSummary(wrap, ctx, opts) {
+    opts = opts || {};
     ctx.run = null;
+    watchBanner(null);
+    wrap.classList.remove(`has-fb`, `is-run`);
     const sess = session;
     const sum = summarize(sess);
     const pct = sum.answered ? Math.round((sum.correct / sum.answered) * 100) : 0;
+    const passed = sum.answered > 0 && pct >= PASS_PCT;
+    const complete = !sess.quit && sum.answered >= sum.total;
+    const best = bestRun(sess);
     const stats = loadStats();
     const nextPool = buildPool(loadStatements(), sess.scope, sess.filter, stats);
     const continueReason = nextPool.length ? ``
       : sess.filter === `unanswered` ? `この条件の未回答の文はもうありません。`
       : sess.filter === `wrong` ? `この条件で間違えた文はもうありません。`
       : `この条件の文がありません。`;
+    const mascot = window.Mascot && typeof Mascot.svg === `function`
+      ? Mascot.svg(!sum.answered ? `normal` : passed ? `cheer` : `happy`, 104, { className: `quiz-finish-mascot` }) : ``;
 
     wrap.innerHTML = `
-      <h2>○×一問一答</h2>
-      <p class="ox-run-label">${esc(sess.label)}</p>
+      <h2 class="sr-only">○×一問一答</h2>
       <section class="card ox-summary" aria-labelledby="ox-summary-title">
-        <h3 class="ox-summary-title" id="ox-summary-title">${ic(pct >= PASS_PCT ? `trophy` : `flag`, 20)}今回の結果</h3>
-        <p class="ox-score">
-          <span class="ox-score-value num">${sum.correct}</span>
-          <span class="ox-score-of num">/ ${sum.answered}問 正解</span>
-          <span class="ox-score-pct num">${pct}%</span>
-        </p>
-        <div class="progress-bar progress-bar-lg" aria-hidden="true"><div class="progress-bar-fill ${pct >= PASS_PCT ? `fill-success` : ``}" style="width:${pct}%"></div></div>
+        <div class="quiz-finish-hero ox-finish-hero" data-role="hero">${mascot}<h3 class="quiz-finish-title ox-summary-title" id="ox-summary-title" tabindex="-1">今回の結果</h3></div>
+        <p class="ox-summary-label">${esc(sess.label)}</p>
+        <p class="quiz-finish-score ox-score"><span class="big-num ox-score-value">${sum.correct}</span><span class="quiz-finish-of">/ ${sum.answered}問 正解</span></p>
+        <div class="quiz-summary-bar ox-summary-bar">
+          <div class="progress-bar progress-bar-lg" aria-hidden="true"><div class="progress-bar-fill ${passed ? `fill-success` : ``}" style="width:${pct}%"></div></div>
+          <span class="quiz-summary-pct num">正答率 ${pct}%</span>
+        </div>
+        ${best >= 3 ? `<p class="ox-best-run">${ic(`flame-fill`, 18)}<span>最高 <b class="num">${best}</b>問つづけて正解</span></p>` : ``}
         ${sess.quit && sum.answered < sum.total ? `<p class="ox-summary-note">${sum.total}問中${sum.answered}問で終了しました。</p>` : ``}
         ${sum.unsure ? `<p class="ox-summary-note">正解のうち <span class="num">${sum.unsure}</span>問は「たぶん」でした。${sum.unsureAdded ? `元の4択(<span class="num">${sum.unsureAdded}</span>問)を3日後の<a href="#quiz/due">解き直し</a>に入れました。` : ``}</p>` : ``}
         ${streakLineHtml()}
@@ -1079,12 +1253,16 @@ window.Views.ox = (function () {
       ${sum.cats.length ? `
         <section class="ox-section" aria-labelledby="ox-cat-title">
           <h3 id="ox-cat-title">分野別</h3>
-          <div class="card cat-bars ox-cat-bars">
+          <div class="card ox-cat-bars">
             ${sum.cats.map((c) => {
               const p = Math.round((c.correct / c.total) * 100);
-              return `<div>
-                <div class="cat-bar-head"><span class="cat-bar-name">${esc(c.name)}</span><span class="cat-bar-meta">${c.correct} / ${c.total}問(${p}%)</span></div>
-                <div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill ${p >= PASS_PCT ? `fill-success` : ``}" style="width:${p}%"></div></div>
+              const id = c.id === `other` ? null : c.id;
+              return `<div class="ox-cat-row ${catCls(id)}">
+                ${catSticker(id, `sticker-sm`, 16)}
+                <div class="ox-cat-main">
+                  <div class="cat-bar-head"><span class="cat-bar-name">${esc(c.name)}</span><span class="cat-bar-meta num">${c.correct} / ${c.total}問(${p}%)</span></div>
+                  <div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill" style="width:${p}%"></div></div>
+                </div>
               </div>`;
             }).join(``)}
           </div>
@@ -1096,8 +1274,8 @@ window.Views.ox = (function () {
             ${sum.wrong.map((s) => `
               <li class="card ox-wrong-item">
                 <div class="ox-wrong-head">
-                  ${s.cat ? `<span class="badge badge-soft">${esc(categoryName(s.cat))}</span>` : ``}
-                  <span class="ox-wrong-answer">正解は${truthHtml(s.truth)}</span>
+                  ${catTagHtml(s.cat)}
+                  <span class="ox-wrong-answer ${s.truth ? `is-true` : `is-false`}">正解は${truthHtml(s.truth)}</span>
                 </div>
                 ${contextFor(s) ? `<p class="ox-wrong-context">${esc(contextFor(s))}</p>` : ``}
                 <p class="ox-wrong-text${s.sub ? ` has-label` : ``}">${stmtLabelHtml(s)}<span>${esc(s.text)}</span></p>
@@ -1107,7 +1285,7 @@ window.Views.ox = (function () {
                   ${termLinkBtnHtml(s)}
                 </div>
               </li>`).join(``)}
-          </ol>` : `<p class="ox-all-correct">${ic(`check-circle`)}${sum.answered ? `全問正解です。` : `回答した文はありません。`}</p>`}
+          </ol>` : `<p class="ox-all-correct"><span class="sticker sticker-sm sticker-gold" aria-hidden="true">${ic(`trophy-fill`, 18)}</span>${sum.answered ? `全問正解です。` : `回答した文はありません。`}</p>`}
       </section>
     `;
 
@@ -1134,6 +1312,16 @@ window.Views.ox = (function () {
         Router.navigate(`#ox/run`);
       }
     });
+
+    if (opts.fresh) {
+      window.scrollTo(0, 0);
+      focusEl(wrap.querySelector(`#ox-summary-title`));
+      // 最後まで解き終えたときだけ、マスコットの横から紙吹雪(途中で終了したときは出さない)
+      const hero = wrap.querySelector(`[data-role="hero"]`);
+      if (complete && hero && window.Mascot && typeof Mascot.confetti === `function`) {
+        try { Mascot.confetti(hero); } catch (e) { /* 飾りなので失敗しても続ける */ }
+      }
+    }
   }
 
   return {

@@ -45,7 +45,7 @@ window.Views.works = (function () {
       <h2>作品で学ぶ <span class="badge badge-soft works-badge">任意</span></h2>
       <p class="view-desc">不動産業界を描いたマンガ『${esc(WORK_TITLE)}』の公式YouTubeチャンネル「${esc(CHANNEL_NAME)}」で公開されている動画(マンガを動画にしたものなど)を、このアプリのテーマ別に紹介するコーナーです。体系的に学ぶなら<a href="#topics">「学ぶ」タブのトピック</a>から始めるのがおすすめです。</p>
       <aside class="card card-compact works-notice" aria-label="このコーナーについて">
-        <p class="works-notice-title">${ic(`info`, 18)}<span>このコーナーについて</span></p>
+        <p class="works-notice-title"><span class="sticker" aria-hidden="true">${ic(`info`, 16)}</span><span>このコーナーについて</span></p>
         <ul class="works-notice-list">
           <li>このアプリは個人が運営する非公式の学習アプリで、作品の著作権者・出版社・制作会社・公式チャンネルとは関係ありません(提携・許諾・推薦を受けたものではありません)。作品名と各回のタイトルは、どの動画かを示すために記載しています。作品の画像やロゴは使っていません。</li>
           <li>各回の紹介文と用語の説明は、公式チャンネルの動画タイトルなどをもとに、このアプリが短くまとめたものです(セリフや内容を書き起こしたものではありません)。動画は公式チャンネル(YouTube)で視聴してください。</li>

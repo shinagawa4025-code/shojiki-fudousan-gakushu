@@ -44,13 +44,6 @@ window.Views.topics = (function () {
     renderList(root);
   }
 
-  function topicLevelBadgeClass(level) {
-    if (level.includes(`超入門`)) return `超入門`;
-    if (level.includes(`上`)) return `上級`;
-    if (level.includes(`中`)) return `中級`;
-    return `初級`;
-  }
-
   function obj(key) {
     const v = Storage.get(key, {});
     return v && typeof v === `object` && !Array.isArray(v) ? v : {};
@@ -85,24 +78,28 @@ window.Views.topics = (function () {
     return groups.filter((g) => g.topics.length);
   }
 
+  // トピックの分野({ id, name })。色はステッカーと進捗バーに使う(cardUi.js がなければ暮らしの緑)
+  function topicCat(topicId) {
+    return window.CardUi && typeof CardUi.topicCategory === `function` ? CardUi.topicCategory(topicId) : { id: `life`, name: null };
+  }
+
+  // トピックのカード: 分野の色のステッカー・題名・説明(2行まで)・進捗バー。レベルと項目数は札にせず1行の小さな文字で
   function topicCardHtml(topic, stat) {
     const basicsCount = topic.basicIds.filter((id) => AppIndex.termsById[id]).length;
     const quizCount = (AppIndex.topicQuizIndex[topic.id] || []).length;
+    const done = stat.total > 0 && stat.done >= stat.total;
+    const meta = [esc(topic.level), basicsCount ? `基礎知識 ${basicsCount}` : ``, quizCount ? `問題 ${quizCount}` : ``].filter(Boolean).join(`・`);
     return `
-      <a class="card card-interactive topic-card" href="#topics/${topic.id}">
+      <a class="card card-interactive topic-card cat-${topicCat(topic.id).id}${done ? ` is-done` : ``}" href="#topics/${topic.id}">
         <div class="topic-card-head">
-          <span class="topic-icon">${ic(topic.icon || `book-open`, 22)}</span>
+          <span class="topic-icon" aria-hidden="true">${ic(topic.icon || `book-open`, 24)}</span>
           <div class="topic-card-main">
             <div class="topic-card-title">${esc(topic.name)}</div>
             <p class="topic-card-desc">${esc(topic.description)}</p>
           </div>
         </div>
-        <div class="topic-progress-row"><span class="topic-progress-label">進捗<span class="sr-only">(記憶済み・学習済み)</span></span><div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill" style="width:${stat.pct}%"></div></div><span class="num">${stat.done}/${stat.total}</span></div>
-        <div class="topic-card-tags">
-          <span class="badge badge-${topicLevelBadgeClass(topic.level)}">${esc(topic.level)}</span>
-          ${basicsCount ? `<span class="source-tag">${ic(`check-circle`, 12)} 基礎知識${basicsCount}</span>` : ``}
-          ${quizCount ? `<span class="source-tag">${ic(`pencil-check`, 12)} 問題${quizCount}</span>` : ``}
-        </div>
+        <div class="topic-progress-row"><span class="sr-only">進捗(記憶済み・学習済み)</span><div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill${done ? ` fill-success` : ``}" style="width:${stat.pct}%"></div></div><span class="topic-progress-num num">${done ? ic(`check`, 16) : ``}${stat.done}/${stat.total}</span></div>
+        <p class="topic-card-meta">${meta}</p>
       </a>`;
   }
 
@@ -118,15 +115,24 @@ window.Views.topics = (function () {
 
     const wrap = document.createElement(`div`);
     wrap.className = `view topics-view`;
+    // 画面の説明は見出しの ⓘ から(一覧の上に説明文を置かない)
     wrap.innerHTML = `
-      <h2>学習トピック</h2>
-      <p class="view-desc">テーマごとに、基礎知識 → 用語カード → 問題の順で学べます。</p>
-      <div class="segmented topic-tracks" role="group" aria-label="表示するトピック">
+      <div class="learn-head">
+        <h2>学習トピック</h2>
+        <button type="button" class="btn btn-icon learn-info-btn" data-role="info" aria-label="学習トピックについて" aria-haspopup="dialog">${ic(`info`)}</button>
+      </div>
+      <div class="segmented seg-bold topic-tracks" role="group" aria-label="表示するトピック">
         ${TRACKS.map((t) => `<button type="button" class="segmented-item" data-track="${t.id}" aria-pressed="${t.id === track}">${t.label}</button>`).join(``)}
       </div>
       <div data-role="groups"></div>
     `;
     root.appendChild(wrap);
+    wrap.querySelector(`[data-role="info"]`).addEventListener(`click`, () => {
+      UI.sheet({
+        title: `学習トピックについて`,
+        content: `<p class="learn-info-text">テーマごとに、基礎知識 → 用語カード → 問題の順で学べます。</p><p class="learn-info-text">カードの進捗は、基礎知識の「学習済み」と用語カードの「記憶済み」を合わせた数です。全部そろうとバーが金色になります。</p>`,
+      });
+    });
     const groupsEl = wrap.querySelector(`[data-role="groups"]`);
 
     function paintGroups() {
@@ -219,27 +225,33 @@ window.Views.topics = (function () {
       [`sec-terms`, `用語カード`, `layers`],
       laws.length ? [`sec-laws`, `関連法律`, `library`] : null,
     ].filter(Boolean);
+    // 見出し: 分野の色の大きなステッカー・分野名とレベル・題名、その下に進捗のバー(全部そろうと金色)
+    const cat = topicCat(topic.id);
+    const heroDone = stat.total > 0 && stat.done >= stat.total;
     wrap.innerHTML = `
       <a class="btn back-btn" href="#topics">${ic(`chevron-left`, 18)}トピック一覧</a>
-      <div class="topic-hero">
-        <span class="topic-icon">${ic(topic.icon || `book-open`, 28)}</span>
+      <div class="topic-hero cat-${cat.id}">
+        <span class="topic-icon" aria-hidden="true">${ic(topic.icon || `book-open`, 32)}</span>
         <div class="topic-hero-main">
+          <p class="topic-hero-eyebrow">${cat.name && cat.name !== topic.name ? `<b>${esc(cat.name)}</b>・` : ``}${esc(topic.level)}</p>
           <h2>${esc(topic.name)}</h2>
-          <span class="badge badge-${topicLevelBadgeClass(topic.level)}">${esc(topic.level)}</span>
         </div>
       </div>
-      <p class="view-desc">${esc(topic.description)}</p>
+      <div class="topic-hero-progress cat-${cat.id}">
+        <div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill${heroDone ? ` fill-success` : ``}" data-role="hero-bar" style="width:${stat.pct}%"></div></div>
+        <span class="topic-hero-pct num" data-role="hero-pct"><span class="sr-only">このトピックの進捗(記憶済み・学習済み)</span>${stat.pct}%</span>
+      </div>
+      <p class="view-desc topic-desc">${esc(topic.description)}</p>
       <div class="topic-practice">
-        ${quizzes.length ? `<a class="btn" href="#quiz/${topic.id}">${ic(`pencil-check`, 18)}<span>${quizLabel}</span><span class="topic-practice-count">${quizzes.length}問</span></a>` : ``}
-        ${oxCount ? `<a class="btn btn-secondary" href="#ox/topic/${topic.id}">${ic(`o-x`, 18)}<span><span class="sr-only">○×</span>一問一答</span><span class="topic-practice-count">${oxCount}問</span></a>` : ``}
-        ${!quizzes.length ? `<a class="btn btn-secondary" href="#quiz/auto/${topic.id}">${ic(`sparkles`, 18)}自動生成クイズ</a>` : ``}
+        ${quizzes.length ? `<a class="btn btn-lg topic-practice-main" href="#quiz/${topic.id}">${ic(`pencil-check`, 24)}<span class="topic-practice-text"><span>${quizLabel}</span><span class="topic-practice-count">${quizzes.length}問</span></span>${ic(`arrow-right`, 20)}</a>` : ``}
+        ${oxCount ? `<a class="btn btn-secondary btn-lg" href="#ox/topic/${topic.id}">${ic(`o-x`, 24)}<span class="topic-practice-text"><span><span class="sr-only">○×</span>一問一答</span><span class="topic-practice-count">${oxCount}問</span></span></a>` : ``}
+        ${!quizzes.length ? `<a class="btn btn-secondary btn-lg" href="#quiz/auto/${topic.id}">${ic(`sparkles`, 24)}<span class="topic-practice-text"><span>自動生成クイズ</span></span></a>` : ``}
       </div>
       <div class="topic-detail-layout">
         <div class="topic-main">
           <section id="sec-basics" class="topic-sec">
             <div class="section-head"><h3>基礎知識</h3><span class="topic-group-meta" data-role="basics-count"></span></div>
             <div class="basics-progress" data-role="basics-progress" hidden>
-              <div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill fill-success" data-role="basics-bar"></div></div>
               <div class="basics-tools">
                 <button type="button" class="btn btn-secondary btn-sm basics-next" data-role="next-unlearned"></button>
                 <div class="segmented basics-filter" role="group" aria-label="表示する基礎知識" data-role="basics-filter">
@@ -251,13 +263,13 @@ window.Views.topics = (function () {
             <ul class="${sections ? `basics-sections` : `basics-checklist`}" data-role="basics-list"></ul>
           </section>
           <section id="sec-quiz" class="topic-sec">
-            <div class="section-head"><h3>このトピックの問題</h3>${quizzes.length ? `<a class="link-btn" href="#quiz/${topic.id}">${quizLabel}(${quizzes.length}問)を解く${ic(`chevron-right`, 16)}</a>` : ``}</div>
+            <div class="section-head"><h3>このトピックの問題</h3>${quizzes.length ? `<a class="btn btn-sm" href="#quiz/${topic.id}">${ic(`pencil-check`, 16)}1問ずつ解く<span class="sr-only">(${quizLabel}${quizzes.length}問)</span></a>` : ``}</div>
             <div class="quiz-list" data-role="quiz-list"></div>
-            <div class="card-actions"><a class="btn" href="#quiz/auto/${topic.id}">${ic(`sparkles`)}自動生成クイズに挑戦</a></div>
+            <div class="card-actions"><a class="btn btn-secondary" href="#quiz/auto/${topic.id}">${ic(`sparkles`)}自動生成クイズに挑戦</a></div>
           </section>
           <section id="sec-terms" class="topic-sec">
             <div class="section-head"><h3>用語カード</h3><a class="link-btn" href="#glossary/topic/${topic.id}">用語集で見る${ic(`chevron-right`, 16)}</a></div>
-            ${order.length ? `<a class="card card-interactive basics-card-hint" href="#glossary/topic/${topic.id}">${ic(`layers`, 18)}<span>基礎知識(${order.length}項目)もカードで暗記チェック</span>${ic(`chevron-right`, 16)}</a>` : ``}
+            ${order.length ? `<a class="card card-interactive basics-card-hint" href="#glossary/topic/${topic.id}"><span class="sticker sticker-sm" aria-hidden="true">${ic(`layers`, 18)}</span><span>基礎知識(${order.length}項目)もカードで暗記チェック</span>${ic(`chevron-right`, 18)}</a>` : ``}
             <div class="card-grid" data-role="term-grid"></div>
           </section>
           ${laws.length ? `
@@ -268,11 +280,11 @@ window.Views.topics = (function () {
           ${episodes.length ? `<a class="card card-interactive topic-works-link" href="#works/topic/${topic.id}">${ic(`play-square`, 18)}<span>作品で学ぶ: このテーマを扱った回(${episodes.length}件)</span>${ic(`chevron-right`, 16)}</a>` : ``}
         </div>
         <aside class="topic-rail" aria-label="このトピックの進捗">
-          <div class="card topic-rail-card">
+          <div class="card topic-rail-card cat-${cat.id}">
             <div class="stat-value" data-role="rail-pct">${stat.pct}<small>%</small></div>
             <div class="stat-label">このトピックの進捗(★記憶済み+✓学習済み)</div>
             <div class="stat-label num" data-role="rail-label">${stat.done}/${stat.total}項目</div>
-            <div class="progress-bar topic-rail-bar"><div class="progress-bar-fill" data-role="rail-bar" style="width:${stat.pct}%"></div></div>
+            <div class="progress-bar topic-rail-bar"><div class="progress-bar-fill${heroDone ? ` fill-success` : ``}" data-role="rail-bar" style="width:${stat.pct}%"></div></div>
           </div>
           <div class="card card-compact topic-rail-card">
             <div class="side-nav-heading topic-rail-heading">このページの内容</div>
@@ -326,7 +338,6 @@ window.Views.topics = (function () {
     const basicsList = wrap.querySelector(`[data-role="basics-list"]`);
     const basicsCount = wrap.querySelector(`[data-role="basics-count"]`);
     const progressBox = wrap.querySelector(`[data-role="basics-progress"]`);
-    const bar = wrap.querySelector(`[data-role="basics-bar"]`);
     const nextBtn = wrap.querySelector(`[data-role="next-unlearned"]`);
     const filterSeg = wrap.querySelector(`[data-role="basics-filter"]`);
     const itemEls = new Map();
@@ -335,15 +346,21 @@ window.Views.topics = (function () {
 
     function learned(id) { return isLearned(basicsProgress, id); }
 
+    // 進捗(見出しのバーと、広い画面の右側)を塗り直す。全部そろったらバーは金色
     function updateRail() {
       const st = Stats.byTopic().find((r) => r.topic.id === topic.id);
       if (!st) return;
+      const full = st.total > 0 && st.done >= st.total;
       const pctEl = wrap.querySelector(`[data-role="rail-pct"]`);
       const labelEl = wrap.querySelector(`[data-role="rail-label"]`);
       const barEl = wrap.querySelector(`[data-role="rail-bar"]`);
+      const heroBar = wrap.querySelector(`[data-role="hero-bar"]`);
+      const heroPct = wrap.querySelector(`[data-role="hero-pct"]`);
       if (pctEl) pctEl.innerHTML = `${st.pct}<small>%</small>`;
       if (labelEl) labelEl.textContent = `${st.done}/${st.total}項目`;
-      if (barEl) barEl.style.width = `${st.pct}%`;
+      if (barEl) { barEl.style.width = `${st.pct}%`; barEl.classList.toggle(`fill-success`, full); }
+      if (heroBar) { heroBar.style.width = `${st.pct}%`; heroBar.classList.toggle(`fill-success`, full); }
+      if (heroPct) heroPct.innerHTML = `<span class="sr-only">このトピックの進捗(記憶済み・学習済み)</span>${st.pct}%`;
     }
 
     function paintSection(sec) {
@@ -368,7 +385,7 @@ window.Views.topics = (function () {
       const done = order.filter(learned).length;
       basicsCount.textContent = `学習済み ${done}/${order.length}`;
       if (!order.length) return;
-      bar.style.width = `${Math.round((done / order.length) * 100)}%`;
+      // 基礎知識だけの進捗バーは置かない(見出しの進捗バーと、道の金色の印で示す)
       const next = firstUnlearned();
       nextBtn.disabled = !next;
       nextBtn.innerHTML = next
@@ -394,6 +411,11 @@ window.Views.topics = (function () {
         if (cb.checked !== value) cb.checked = value;
         // 「未学習のみ」の表示中にチェックした項目は、その場では消さない(一覧が詰まって位置が飛ぶため)
         if (filterUnlearned && value) li.classList.add(`keep-visible`);
+        // 学習済みにした瞬間だけ金色の印が「ぽん」と出る(描き直しのときは動かさない)
+        if (value) {
+          li.classList.add(`just-learned`);
+          setTimeout(() => li.classList.remove(`just-learned`), 400);
+        }
       }
       // 「学習済みにして次へ / 閉じる」は後ろの未学習の有無で変わるので、作ってある項目のボタンをまとめて塗り直す
       itemEls.forEach((x) => paintCloseBtn(x));
@@ -481,11 +503,11 @@ window.Views.topics = (function () {
       li.id = `basic-${id}`;
       li.dataset.id = id;
       li.innerHTML = `
-        <label class="basics-check-wrap" title="学習済みにする"><input type="checkbox" class="basics-check" data-role="learned-checkbox" aria-label="「${esc(concept.name)}」を学習済みにする" ${done ? `checked` : ``}></label>
+        <label class="basics-check-wrap" title="学習済みにする"><input type="checkbox" class="basics-check" data-role="learned-checkbox" aria-label="「${esc(concept.name)}」を学習済みにする" ${done ? `checked` : ``}><span class="basics-node" aria-hidden="true">${ic(`check`, 18)}</span></label>
         <details>
           <summary>
             <span class="basics-name">${concept.name}</span>
-            ${hasDiagram ? `<span class="source-tag">${ic(`diagram`, 12)} 図解</span>` : ``}
+            ${hasDiagram ? `<span class="basics-fig" title="図解あり">${ic(`diagram`, 18)}<span class="sr-only">図解あり</span></span>` : ``}
             <span class="chevron">${ic(`chevron-down`, 18)}</span>
           </summary>
           <div class="basics-body" data-lazy></div>

@@ -1,8 +1,9 @@
 // メニュー(スマホの下部タブ「メニュー」): 記録・設定・このアプリについて・コーナーへの一覧とテーマの切替
 window.Views = window.Views || {};
 window.Views.more = (function () {
+  // tone: 行のステッカーの色(既定は緑。記録・バッジの行はごほうびの金色)
   const ROWS = [
-    { nav: `#progress`, icon: `chart`, title: `学習の進捗`, desc: `分野別の達成度・弱点分析・合格予測・学習時間・バッジ` },
+    { nav: `#progress`, icon: `chart`, tone: `sticker-gold`, title: `学習の進捗`, desc: `分野別の達成度・弱点分析・合格予測・学習時間・バッジ` },
     { nav: `#plan`, icon: `calendar`, title: `学習計画`, desc: `試験日から逆算した時期と今週やること` },
     { nav: `#bookmarks`, icon: `bookmark`, title: `ブックマーク`, desc: `保存した用語・問題` },
     { nav: `#sources`, icon: `library`, title: `情報源`, desc: `解説の根拠にしている公的機関の一次情報` },
@@ -25,7 +26,7 @@ window.Views.more = (function () {
     const wrap = document.createElement(`div`);
     wrap.className = `view more-view`;
     const ic = (n, s) => UI.icon(n, { size: s || 20 });
-    const inner = (r, trailing) => `<span class="more-row-icon">${ic(r.icon)}</span><span class="more-row-main"><span class="more-row-title">${r.title}${r.badge ? `<span class="more-row-badge">${r.badge}</span>` : ``}</span><span class="more-row-desc">${r.desc}</span></span>${trailing || ic(`chevron-right`, 18)}`;
+    const inner = (r, trailing) => `<span class="more-row-icon${r.tone ? ` ${r.tone}` : ``}" aria-hidden="true">${ic(r.icon)}</span><span class="more-row-main"><span class="more-row-title">${r.title}${r.badge ? `<span class="more-row-badge">${r.badge}</span>` : ``}</span><span class="more-row-desc">${r.desc}</span></span>${trailing || ic(`chevron-right`, 18)}`;
     const rowHtml = (r) => {
       if (r.nav) return `<a class="more-row" href="${r.nav}">${inner(r)}</a>`;
       if (r.report) {
@@ -34,9 +35,9 @@ window.Views.more = (function () {
       }
       return `<button type="button" class="more-row" data-action="${r.action}">${inner(r)}</button>`;
     };
+    // 見出しの下の説明は置かない。行は丸いステッカー+名前+短い説明(押せる行のまとまり)
     wrap.innerHTML = `
       <h2>メニュー</h2>
-      <p class="view-desc">記録・設定・このアプリについて</p>
       <nav class="more-list" aria-label="メニュー">
         ${ROWS.map(rowHtml).join(``)}
       </nav>
@@ -45,7 +46,7 @@ window.Views.more = (function () {
         ${CORNER_ROWS.map(rowHtml).join(``)}
       </nav>
       <div class="card card-compact more-theme-row">
-        <span class="more-theme-label">${ic(`moon`)}テーマ</span>
+        <span class="more-theme-label"><span class="sticker sticker-sm" aria-hidden="true">${ic(`moon`, 18)}</span>テーマ</span>
         <div class="segmented" role="group" aria-label="テーマ" data-role="theme"></div>
       </div>
     `;

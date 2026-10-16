@@ -206,7 +206,7 @@ window.AskAi = (function () {
   function sheetHtml() {
     return `
       <div class="ask-ai-sheet">
-        <p class="ask-ai-status" data-role="status" role="status"><span class="ask-ai-status-icon" data-role="status-icon">${ic(`copy`)}</span><span data-role="status-text">質問文をコピーしています…</span></p>
+        <p class="ask-ai-status" data-role="status" role="status"><span class="sticker sticker-sm ask-ai-status-icon" data-role="status-icon" aria-hidden="true">${ic(`copy`)}</span><span data-role="status-text">質問文をコピーしています…</span></p>
         <p class="ask-ai-lead" data-role="lead">使うAIを開いて、入力欄に貼り付けて送ってください。</p>
         <div class="ask-ai-links">
           ${SERVICES.map((s) => `<a class="btn btn-secondary ask-ai-link" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.name)}を開く${ic(`external`, 16)}</a>`).join(``)}
@@ -241,7 +241,8 @@ window.AskAi = (function () {
     const lead = body.querySelector(`[data-role="lead"]`);
     status.classList.toggle(`is-ok`, copied);
     status.classList.toggle(`is-ng`, !copied);
-    status.querySelector(`[data-role="status-icon"]`).innerHTML = ic(copied ? `check-circle` : `alert`);
+    // 丸いステッカーの中の印(コピーできたら緑の ✓、できなければ注意の色の !)。色は css/shell.css の .ask-ai-status.is-ok / is-ng
+    status.querySelector(`[data-role="status-icon"]`).innerHTML = ic(copied ? `check` : `alert`);
     text.textContent = copied ? `質問文をコピーしました` : `自動でコピーできませんでした`;
     lead.textContent = copied ? `使うAIを開いて、入力欄に貼り付けて送ってください。`
       : `下の質問文を選択してコピーしてから、使うAIを開いて入力欄に貼り付けてください。`;

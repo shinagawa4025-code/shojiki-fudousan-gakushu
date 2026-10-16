@@ -83,40 +83,74 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
   .sheet > .sheet-foot { bottom: calc(-1 * var(--sp-5)); margin-bottom: calc(-1 * var(--sp-5)); padding-bottom: var(--sp-3); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
 }
 
-/* ---------- メニュー(#more) ---------- */
-.more-group-title { margin: var(--sp-5) 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); letter-spacing: .04em; }
+/* ---------- メニュー(#more・js/views/more.js。丸いステッカーの行を1つの面にまとめる。区切り線はステッカーの右から) ---------- */
+.more-list { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--card-border); border-radius: var(--radius-card); background: var(--color-surface); box-shadow: var(--shadow-card); }
+.more-row { position: relative; display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: 64px; padding: 10px var(--sp-4); background: none; border: 0; color: var(--color-text); font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: background var(--dur-1); }
+.more-row + .more-row::before { content: ""; position: absolute; top: 0; left: 72px; right: 0; border-top: 2px solid var(--color-border); }
+.more-row:focus-visible { outline-offset: -2px; }
+@media (hover: hover) { .more-row:hover { background: var(--color-surface-muted); } }
+.more-row:active { background: var(--color-press); }
+.more-row-icon { width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: var(--sticker-bg, var(--cat, var(--sticker-primary))); color: var(--sticker-fg); }
+.more-row-icon .icon { stroke-width: 2.1; }
+.more-view .more-row-icon.sticker-gold { color: var(--gold-ink); }
+.more-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: var(--lh-snug); }
+.more-row-title { font-family: var(--font-display); font-size: .9375rem; font-weight: var(--fw-display); color: var(--color-heading); font-feature-settings: "palt"; }
+.more-row-desc { font-size: var(--fs-xs); line-height: 1.5; color: var(--color-text-muted); }
+.more-row > .icon:last-child { flex-shrink: 0; color: var(--color-text-muted); }
+.more-group-title { margin: var(--sp-6) var(--sp-1) var(--sp-3); font-size: var(--fs-lg); color: var(--color-heading); letter-spacing: .03em; }
 .more-row .more-row-ext { flex-shrink: 0; color: var(--color-text-muted); }
-.more-row-badge { display: inline-block; margin-left: var(--sp-2); padding: 0 6px; border-radius: var(--radius-pill); background: var(--color-surface-muted); color: var(--color-text-muted); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.6; vertical-align: 1px; }
+.more-row-badge { display: inline-block; margin-left: var(--sp-2); padding: 0 6px; border-radius: 6px; background: var(--color-surface-muted); color: var(--color-text-muted); font-family: var(--font-sans); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.6; vertical-align: 1px; }
+.more-theme-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-3); }
+.more-view .more-theme-row { margin-top: var(--sp-5); padding: var(--sp-3) var(--sp-4); }
+.more-theme-label { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: var(--fw-display); color: var(--color-heading); white-space: nowrap; }
+.more-theme-label > .sticker .icon { color: inherit; }
+@media (min-width: 768px) {
+  .more-list, .more-theme-row { max-width: 640px; }
+}
 @media (min-width: 1024px) { .more-group-title { max-width: 640px; } }
 
-/* ---------- 設定: 学ぶ目的 ---------- */
-.profile-goals { display: grid; gap: var(--sp-2); margin: 0; padding: 0; border: 0; }
+/* ---------- 設定(v3: 見出しに丸いステッカー。押せる札は下にふち) ---------- */
+/* 冒頭の注意(記録はこの端末の中だけ): 淡い面に盾のステッカー */
+.settings-view .settings-intro { display: flex; align-items: flex-start; gap: var(--sp-3); margin: 0 0 var(--sp-5); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-card); background: var(--color-surface-muted); color: var(--color-text); font-size: var(--fs-sm); }
+.settings-intro > .sticker { margin-top: 2px; }
+.settings-view .settings-card { padding: var(--sp-5) var(--sp-4); }
+.settings-view .settings-card-title { gap: 10px; margin-bottom: var(--sp-2); }
+.settings-card-title > .sticker { width: 36px; height: 36px; }
+.settings-view .settings-card > .view-desc { font-size: var(--fs-sm); margin-bottom: var(--sp-4); }
+/* 下の行から移動するとき(#settings/goal など)のカードの上の余白。スマホのヘッダー分は html の scroll-padding-top(style.css)で確保済み */
+.settings-view .settings-card { scroll-margin-top: var(--sp-3); }
+@media (min-width: 1024px) { .settings-view .settings-card { scroll-margin-top: var(--sp-6); } }
+
+/* 設定: 学ぶ目的(押せる札。選ぶと緑の枠とふち) */
+.profile-goals { display: grid; gap: var(--sp-3); margin: 0; padding: 0; border: 0; }
 .profile-goals legend { padding: 0; margin-bottom: var(--sp-2); font-size: var(--fs-md); font-weight: 700; color: var(--color-heading); }
 .profile-option {
   position: relative;
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  min-height: 56px;
-  padding: var(--sp-2) var(--sp-3);
+  min-height: 64px;
+  padding: var(--sp-3);
   border: 2px solid var(--color-border);
-  border-radius: var(--radius-btn, 16px);
+  border-radius: 18px;
   background: var(--color-surface);
   /* 押せる札なので下にふち(選択中は緑のふち) */
-  box-shadow: 0 3px 0 var(--lip-neutral, var(--color-border));
+  box-shadow: 0 4px 0 var(--lip-neutral, var(--color-border));
   cursor: pointer;
   line-height: var(--lh-snug);
+  transition: border-color var(--dur-1), background var(--dur-1), transform 60ms, box-shadow 60ms;
 }
+.profile-option:active { transform: translateY(4px); box-shadow: 0 0 0 transparent; }
 .profile-option input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 /* 目的のアイコン: 丸いステッカー(緑の面+白いアイコン) */
-.profile-option-icon { width: 40px; height: 40px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: var(--sticker-primary, var(--color-primary-fill)); color: var(--sticker-fg, #fff); }
+.profile-option-icon { width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: var(--sticker-primary, var(--color-primary-fill)); color: var(--sticker-fg, #fff); }
 .profile-option-icon .icon { stroke-width: 2.1; }
 .profile-option-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.profile-option-title { font-size: var(--fs-md); font-weight: 700; color: var(--color-heading); }
+.profile-option-title { font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-display); color: var(--color-heading); }
 .profile-option-desc { font-size: var(--fs-xs); color: var(--color-text-muted); }
-.profile-option-check { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--color-border-control); display: grid; place-items: center; color: transparent; }
-.profile-option-check .icon { width: 14px; height: 14px; }
-.profile-option:has(input:checked) { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 3px 0 var(--color-primary); }
+.profile-option-check { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--color-border-control); display: grid; place-items: center; color: transparent; }
+.profile-option-check .icon { width: 14px; height: 14px; stroke-width: 3; }
+.profile-option:has(input:checked) { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 4px 0 var(--color-primary); }
 .profile-option:has(input:checked) .profile-option-check { border-color: var(--color-primary-fill); background: var(--color-primary-fill); color: var(--color-on-primary, #fff); }
 .profile-option:has(input:focus-visible) { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 @media (hover: hover) { .profile-option:hover { border-color: var(--color-border-strong); } }
@@ -125,65 +159,118 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
 .profile-interests-title { margin: 0 0 var(--sp-1); font-size: var(--fs-md); font-weight: 700; color: var(--color-heading); }
 .profile-interests-desc { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--color-text-muted); }
 .profile-interests .chip-row { flex-wrap: wrap; }
-.profile-interests .chip { min-height: 40px; }
+.profile-interests .chip { min-height: 44px; }
 .profile-note { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); }
 @media (min-width: 768px) {
   .profile-goals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .profile-goals legend { grid-column: 1 / -1; }
 }
 
-/* ---------- 設定: 記録の保護・保存している量 ---------- */
+/* 設定: 目標の試験(白い札の行。ホームに表示中の試験は緑の枠と淡い緑。札は名前の下の1行に) */
+.settings-view .target-list { gap: var(--sp-3); margin: 0 0 var(--sp-4); }
+.settings-view .target-row { gap: var(--sp-1); padding: var(--sp-2) var(--sp-1) var(--sp-2) var(--sp-1); border: 2px solid var(--color-border); border-radius: 18px; background: var(--color-surface); box-shadow: 0 3px 0 var(--color-border); }
+.settings-view .target-row.is-home { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 3px 0 var(--color-primary-line); }
+.settings-view .target-row-name { display: block; font-family: var(--font-display); font-size: var(--fs-base); font-weight: var(--fw-display); line-height: 1.4; word-break: auto-phrase; }
+.target-row-tags { grid-column: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 4px 0 2px; }
+.settings-view .target-row-date { font-size: var(--fs-sm); font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; }
+.target-row-edit { flex: 1; min-width: 0; min-height: 44px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-2); margin: 0; padding: var(--sp-1) 0; background: none; border: 0; border-radius: var(--radius-sm); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.target-row-edit > .target-row-name, .target-row-edit > .target-row-date { grid-column: 1; }
+.target-row-edit > .target-row-date { display: block; }
+.target-row-hint { grid-column: 2; grid-row: 1 / span 3; display: grid; color: var(--color-text-muted); }
+/* 「まだ登録されていません」は .calc-note(style.css・home.css)の余白をなくす */
+.settings-view .target-empty { margin: 0; }
+.settings-view .target-row .source-tag { background: var(--color-surface-muted); }
+.settings-view .target-row.is-home .source-tag:not(.target-tentative-tag, .target-home-tag) { background: var(--color-surface); }
+.settings-view .target-row .target-home-tag { background: var(--color-primary-fill); color: var(--color-on-primary); }
+.settings-view .target-row .known-toggle.is-known { color: var(--gold-icon); }
+/* 星・ごみ箱・ボタンの組(テーマ・目標の決め方・今日の復習)は、どの端末でも 44px */
+.settings-view .target-row .btn-icon { width: 44px; height: 44px; min-height: 44px; }
+:is(.settings-view, .more-view) .segmented-item { min-height: 44px; }
+
+/* 設定: 記録の保護・保存している量 */
 .settings-protect { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); margin: calc(-1 * var(--sp-2)) 0 var(--sp-3); font-size: var(--fs-sm); color: var(--color-text-muted); }
 .settings-protect[hidden] { display: none; }
 .settings-protect .icon { color: var(--color-text-muted); }
 .settings-protect.is-on .icon { color: var(--color-success); }
 .settings-protect-text { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.settings-protect .link-btn { min-height: 44px; }
 .settings-usage { margin: var(--sp-3) 0 0; font-size: var(--fs-xs); color: var(--color-text-muted); }
+.settings-view .settings-backup-status { display: inline-flex; align-items: center; margin: 0 0 var(--sp-3); padding: 4px 12px; border-radius: var(--radius-pill); background: var(--color-surface-muted); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text); }
+.settings-seg { max-width: 520px; }
+.settings-limit-seg .segmented-item { flex: 1 1 0; min-width: 0; min-height: 44px; flex-direction: column; gap: 0; padding: var(--sp-1) 2px; line-height: 1.2; }
+.settings-limit-seg .segmented-count { margin-left: 0; }
+.settings-import-status { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
+.settings-import-status[hidden] { display: none; }
+/* スマホでは書き出し・読み込みのボタンを横いっぱいに */
+@media (max-width: 767px) {
+  .settings-view [data-role="export"], .settings-view .settings-file-label, .settings-view [data-role="add-target"] { width: 100%; }
+}
 
-/* ---------- 設定: 1日の目標(v12) ---------- */
-.settings-goal-kind { margin-bottom: var(--sp-3); }
+/* 設定: 1日の目標(v12。決め方のボタンの組+大きな数字の入力欄+保存) */
+.settings-goal-kind { margin-bottom: var(--sp-4); }
 .settings-goal-kind .segmented-item { flex: 1 1 0; min-height: 44px; }
 .settings-goal-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-2) var(--sp-3); }
 .settings-goal-field { flex: 0 0 auto; }
-.settings-goal-input { display: flex; align-items: center; gap: var(--sp-2); color: var(--color-text); font-size: var(--fs-md); font-weight: 600; }
-.settings-goal-input .field-input { width: 7.5em; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-.settings-goal-form .btn { min-height: 44px; }
-.settings-goal-range { margin: var(--sp-1) 0 0; font-size: var(--fs-xs); color: var(--color-text-muted); }
+.settings-goal-input { display: flex; align-items: center; gap: var(--sp-2); color: var(--color-text); font-family: var(--font-display); font-size: var(--fs-lg); font-weight: var(--fw-display); }
+.settings-goal-input .field-input { width: 6.5em; flex: 0 0 auto; min-height: 48px; font-family: var(--font-display); font-size: var(--fs-xl); font-weight: var(--fw-display); text-align: center; font-variant-numeric: tabular-nums; }
+.settings-goal-form .btn { min-height: 48px; }
+.settings-goal-range { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--color-text-muted); }
 .settings-goal-msg { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); }
 .settings-goal-msg:empty { display: none; }
 .settings-goal-msg.is-ng { color: var(--color-danger); font-weight: 700; }
-.settings-goal-msg.is-ok { color: var(--color-success); }
+.settings-goal-msg.is-ok { color: var(--color-success); font-weight: 700; }
 .settings-goal-field .field-input[aria-invalid="true"] { border-color: var(--color-danger); }
-.settings-goal-now { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); }
+/* 今の目標: 金色の札(ホームの「今日の目標」のリングと同じ、ごほうびの色) */
+.settings-goal-now { display: inline-flex; align-items: center; margin: var(--sp-3) 0 0; padding: 4px 12px; border-radius: var(--radius-pill); background: var(--gold-soft); color: var(--gold-text); font-size: var(--fs-sm); font-weight: 700; font-variant-numeric: tabular-nums; }
+.settings-goal-now:empty { display: none; }
 
-/* ---------- 設定: 問題の解き方(v12) ---------- */
+/* 設定: 問題の解き方(v12) */
 .settings-answer-opts { display: grid; gap: var(--sp-1); }
-.settings-answer-opts .check-inline { min-height: 44px; align-items: center; }
-.settings-answer-help { margin: 0 0 var(--sp-2) calc(18px + var(--sp-2)); font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
+.settings-answer-opts .check-inline { min-height: 44px; align-items: center; font-weight: 700; }
+.settings-answer-opts .check-inline input { width: 22px; height: 22px; }
+.settings-answer-help { margin: 0 0 var(--sp-2) calc(22px + var(--sp-2)); font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
 .settings-answer-note { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); }
 
 /* ---------- AIに聞く(v12・js/askAi.js) ---------- */
 .ask-ai-btn { min-height: 44px; }
 /* 選択してコピーするための一時的な入力欄(画面の外。iPhone で拡大されないよう 16px) */
 .ask-ai-buffer { position: fixed; top: 0; left: -9999px; width: 1px; height: 1px; padding: 0; border: 0; font-size: 16px; opacity: 0; pointer-events: none; }
-.ask-ai-sheet { display: grid; gap: var(--sp-3); }
+.ask-ai-sheet { display: grid; gap: var(--sp-4); }
 .ask-ai-sheet > p { margin: 0; }
-.ask-ai-status { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-md); background: var(--color-surface-muted); font-size: var(--fs-md); font-weight: 700; color: var(--color-heading); }
-.ask-ai-status-icon { display: inline-grid; flex-shrink: 0; }
+/* コピーの結果: 丸いステッカー+太い文字の帯(できた = 緑、できない = 注意の色) */
+.ask-ai-status { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: 16px; background: var(--color-surface-muted); font-family: var(--font-display); font-size: var(--fs-base); font-weight: var(--fw-display); color: var(--color-heading); }
+.ask-ai-status-icon { flex-shrink: 0; }
+.ask-ai-status-icon .icon { stroke-width: 2.6; }
 .ask-ai-status.is-ok { background: var(--color-success-bg); color: var(--color-success); }
 .ask-ai-status.is-ng { background: var(--color-warning-bg); color: var(--color-warning); }
+.ask-ai-status.is-ng .ask-ai-status-icon { --sticker-bg: var(--color-warning-fill); color: var(--color-on-primary); }
 .ask-ai-lead { font-size: var(--fs-md); color: var(--color-text); line-height: var(--lh-snug); }
 /* スマホは縦に1列(2つと1つに分かれないように)、広い画面は横に3つ */
-.ask-ai-links { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+.ask-ai-links { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
 @media (min-width: 480px) { .ask-ai-links { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.ask-ai-link { min-height: 48px; }
-.ask-ai-caution { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--color-text); line-height: var(--lh-snug); }
+.ask-ai-link { min-height: 52px; font-size: var(--fs-base); }
+.ask-ai-caution { display: flex; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-3); border-radius: 14px; background: var(--color-warning-bg); font-size: var(--fs-sm); color: var(--color-text); line-height: var(--lh-snug); }
 .ask-ai-caution .icon { flex-shrink: 0; margin-top: 1px; color: var(--color-warning); }
-.ask-ai-preview summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: var(--fs-md); font-weight: 600; color: var(--color-primary); }
-.ask-ai-text { display: block; min-height: 12em; resize: vertical; font-size: var(--fs-base); line-height: var(--lh-snug); white-space: pre-wrap; }
+.ask-ai-preview summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 10px; list-style: none; font-size: var(--fs-md); font-weight: 700; color: var(--color-primary); }
+.ask-ai-preview summary::-webkit-details-marker { display: none; }
+/* 開閉の印(下向きの山。開くと上向き) */
+.ask-ai-preview summary::after { content: ""; width: 8px; height: 8px; margin-top: -4px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform var(--dur-2) var(--ease-std); }
+.ask-ai-preview[open] summary::after { margin-top: 4px; transform: rotate(-135deg); }
+.ask-ai-text { display: block; min-height: 12em; margin-top: var(--sp-2); resize: vertical; font-size: var(--fs-base); line-height: var(--lh-snug); white-space: pre-wrap; }
 .ask-ai-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .ask-ai-actions .btn { min-height: 44px; }
 .ask-ai-privacy { font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
+
+/* ---------- 確認のダイアログ(UI.confirm)・シート(UI.sheet) ---------- */
+/* 確認の文は太く大きく。スマホではボタンを横に2つ並べて大きく押しやすく */
+.modal-box { border: 2px solid var(--color-border); }
+.modal-message { font-size: var(--fs-base); font-weight: 700; line-height: var(--lh-snug); color: var(--color-heading); }
+@media (max-width: 479px) {
+  .modal-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .modal-actions .btn { width: 100%; min-height: 48px; }
+}
+/* シートの見出しは少し大きく */
+.sheet-head .sheet-title { font-size: var(--fs-xl); }
 
 /* ---------- 初回ガイドの「まず1問」では、「勘で当たった」と「AIに聞く」を出さない(1問目は解説を読むことに集中してもらう) ---------- */
 .onb-overlay :is(.quiz-unsure, .quiz-ask-ai) { display: none; }

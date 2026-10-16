@@ -6,6 +6,8 @@ window.Views.figures = (function () {
   // 学習内容ではなくアプリの使い方を説明する図(一覧の最後に別の見出しで並べる)。Diagrams.groups の id `app` と、その中の図
   const APP_GROUP = `app`;
   const APP_HELP_IDS = [`srs-cycle`];
+  // 一覧の見出しのステッカーの色(Diagrams.groups の id → 分野の色。css/style.css の .cat-*)。ないものは緑
+  const GROUP_CAT = { takken: `cat-gyoho`, gyoho: `cat-gyoho`, kenri: `cat-kenri`, horei: `cat-horei`, zei: `cat-zei`, menjo: `cat-menjo`, shohi: `cat-shohi`, life: `cat-life` };
 
   // 一覧の見出しごとの図: [{ id, label, ids }](学習内容の分野 → その他 → アプリの使い方。詳細画面の前後移動も同じ順)
   // Diagrams.groups がなければ、学習内容の図をまとめて1つ・アプリの使い方の図を1つ
@@ -151,19 +153,23 @@ window.Views.figures = (function () {
 
     const rel = termsByDiagram();
     const D = window.Diagrams;
+    // タイル: 図・題名・関連する用語(札にせず「・」でつないだ1〜2行の文字)
     const cardHtml = (id) => {
       const def = D.defs[id];
       const terms = rel[id] || [];
       const shown = terms.slice(0, 3);
+      const more = terms.length > shown.length ? ` ほか${terms.length - shown.length}語` : ``;
       return `
         <a class="card card-interactive fig-card" href="#figures/${id}">
           <div class="fig-preview" aria-hidden="true" data-fig="${id}"></div>
           <div class="fig-card-body">
             <p class="fig-card-title">${def.title}</p>
-            ${terms.length ? `<div class="fig-card-terms">${shown.map((t) => `<span class="chip chip-small chip-muted">${t.name}</span>`).join(``)}${terms.length > shown.length ? `<span class="fig-more">ほか${terms.length - shown.length}語</span>` : ``}</div>` : ``}
+            ${terms.length ? `<p class="fig-card-terms-text"><span class="sr-only">関連する用語: </span>${shown.map((t) => t.name).join(`・`)}${more}</p>` : ``}
           </div>
         </a>`;
     };
+    // 見出し: 分野の色の小さなステッカー+名前+件数
+    const headHtml = (s, count) => `<div class="section-head fig-group-head"><h3><span class="sticker sticker-sm${GROUP_CAT[s.id] ? ` ${GROUP_CAT[s.id]}` : ``}" aria-hidden="true">${ic(s.id === APP_GROUP ? `lightbulb` : `diagram`, 18)}</span>${UI.escapeHtml(s.label)}</h3>${count ? `<span class="fig-group-count num">${s.ids.length}点</span>` : ``}</div>`;
     // 学習内容の図は分野ごとの見出しで並べる(見出しのない1グループだけなら、見出しなしの一覧)
     const contentSecs = secs.filter((s) => s.id !== APP_GROUP);
     const help = secs.find((s) => s.id === APP_GROUP);
@@ -171,14 +177,14 @@ window.Views.figures = (function () {
     contentSecs.forEach((s) => {
       const sec = document.createElement(`section`);
       sec.className = `fig-group`;
-      sec.innerHTML = `${s.label ? `<div class="section-head"><h3>${UI.escapeHtml(s.label)}</h3><span class="topic-group-meta">${s.ids.length}点</span></div>` : ``}<div class="fig-grid">${s.ids.map(cardHtml).join(``)}</div>`;
+      sec.innerHTML = `${s.label ? headHtml(s, true) : ``}<div class="fig-grid">${s.ids.map(cardHtml).join(``)}</div>`;
       wrap.appendChild(sec);
     });
     if (contentCount) wrap.insertAdjacentHTML(`beforeend`, `<p class="fig-count">全${contentCount}点</p>`);
     if (help) {
       const sec = document.createElement(`section`);
       sec.className = `fig-help`;
-      sec.innerHTML = `<div class="section-head"><h3>${UI.escapeHtml(help.label)}</h3></div><div class="fig-grid">${help.ids.map(cardHtml).join(``)}</div>`;
+      sec.innerHTML = `${headHtml(help, false)}<div class="fig-grid">${help.ids.map(cardHtml).join(``)}</div>`;
       wrap.appendChild(sec);
     }
     fillPreviews(wrap);

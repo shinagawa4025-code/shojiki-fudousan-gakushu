@@ -3,6 +3,8 @@
 // 「使い方」(サイドバー・メニュー)からは showGuide(): 学び方と復習のしくみ(学ぶ目的は変えない)
 // v12: その年の試験が終わって公式の試験日がないときは、次の年度の見込みの日付(公式発表の前)を「見込み・未発表」と明記して選べる。
 //      「まず1問」では「勘で当たった」と「AIに聞く」を出さない(css/shell.css)
+// v3 の見た目: 各ステップの見出しは家の形のマスコットの吹き出しの中(sayHtml)。目的・テーマは丸いステッカーのタイル。
+//      「まず1問」は4択と同じカード(判定のバーつき)。答えるとマスコットの顔とひとことが変わる。見た目は css/features.css の .onb-*
 window.Onboarding = (function () {
   const PREFIX = `shojikiLearn.v1.`;
   // ホームの「アプリが新しくなりました」の版。内容を変えたらここを変えると、既存の利用者に1度だけ表示される
@@ -86,6 +88,19 @@ window.Onboarding = (function () {
     const s = window.SITE && typeof SITE.contentAsOf === `string` ? SITE.contentAsOf : `2026-10`;
     const m = s.match(/^(\d{4})-(\d{1,2})/);
     return m ? `${m[1]}年${Number(m[2])}月時点` : `2026年10月時点`;
+  }
+
+  // ---- マスコットの案内(v3): 各ステップの見出しは、家の形のマスコットの吹き出しの中に出す ----
+  // expr: 'normal' | 'happy' | 'cheer' | 'think'。hero: ようこそのように大きく中央に置く。
+  // マスコットは飾りなので読み上げない(Mascot が読めない版では吹き出しだけ)
+  function sayHtml(expr, inner, hero) {
+    const m = window.Mascot && typeof Mascot.svg === `function` ? Mascot.svg(expr, hero ? 104 : 60, { className: `onb-mascot` }) : ``;
+    return `<div class="onb-say${hero ? ` is-hero` : ``}${m ? `` : ` no-mascot`}" data-role="say">${m}<div class="onb-bubble">${inner}</div></div>`;
+  }
+
+  // 丸いステッカー(色の面+白いアイコン)。cls: sticker-sm / cat-* など
+  function sticker(icon, cls, size) {
+    return `<span class="sticker${cls ? ` ${cls}` : ``}" aria-hidden="true">${ic(icon, size || 20)}</span>`;
   }
 
   // ---- ステップの枠(初回ガイド・使い方で共通) ----
@@ -215,14 +230,14 @@ window.Onboarding = (function () {
       id: `welcome`,
       render: () => {
         const name = appName();
+        // マスコット(大きく)が吹き出しであいさつ。要点は丸いステッカーの行で
         return `
-          <div class="onb-hero"><img class="onb-logo" src="icons/logo.svg" alt="" width="72" height="72"></div>
-          <h2 class="onb-title" id="onb-title" tabindex="-1">${name ? `${esc(name)}へ` : ``}ようこそ</h2>
+          ${sayHtml(`cheer`, `<h2 class="onb-title" id="onb-title" tabindex="-1">${name ? `${esc(name)}へ` : ``}ようこそ</h2>`, true)}
           <p class="onb-lead">借りる・買う・売る・相続する。暮らしの中の不動産から宅建士試験の合格まで、基礎知識・問題・計算機で少しずつ身につける無料の学習アプリです。</p>
           <ul class="onb-points">
-            <li><span class="onb-point-icon">${ic(`shield`)}</span><span>登録不要・広告なし。学習の記録は<strong>この端末の中だけ</strong>に保存され、外部には送信されません。</span></li>
-            <li><span class="onb-point-icon">${ic(`library`)}</span><span>解説は、法令の条文や国土交通省・国税庁などの一次情報をもとに作っています(${asOfMonth()}。誤りが残っていることもあります)。</span></li>
-            <li><span class="onb-point-icon">${ic(`info`)}</span><span>個人が運営する非公式の学習アプリです。法律・税務の個別相談には対応していません。</span></li>
+            <li>${sticker(`shield`, `sticker-sm onb-point-icon`, 18)}<span>登録不要・広告なし。学習の記録は<strong>この端末の中だけ</strong>に保存され、外部には送信されません。</span></li>
+            <li>${sticker(`library`, `sticker-sm onb-point-icon`, 18)}<span>解説は、法令の条文や国土交通省・国税庁などの一次情報をもとに作っています(${asOfMonth()}。誤りが残っていることもあります)。</span></li>
+            <li>${sticker(`info`, `sticker-sm onb-point-icon`, 18)}<span>個人が運営する非公式の学習アプリです。法律・税務の個別相談には対応していません。</span></li>
           </ul>`;
       },
       next: () => ({ label: `はじめる`, icon: `arrow-right` }),
@@ -236,13 +251,14 @@ window.Onboarding = (function () {
       render: (state) => {
         const list = goals();
         const focusId = state.goal || (list[0] && list[0].id);
+        // 目的は丸いステッカーのタイル(税理士試験は消費税の色。ほかは緑)。選ぶと緑の枠とふち・右上に ✓
         return `
-          <h2 class="onb-title" id="onb-title" tabindex="-1">何のために学びますか?</h2>
+          ${sayHtml(`normal`, `<h2 class="onb-title" id="onb-title" tabindex="-1">何のために学びますか?</h2>`)}
           <p class="onb-lead">おすすめの順番やホームの表示を合わせます。あとから設定で変えられます。</p>
           <div class="onb-choices" role="radiogroup" aria-labelledby="onb-title">
             ${list.map((g) => `
               <button type="button" class="onb-choice" role="radio" aria-checked="${state.goal === g.id}" tabindex="${g.id === focusId ? 0 : -1}" data-goal="${g.id}">
-                <span class="onb-choice-icon">${ic(g.icon, 22)}</span>
+                ${sticker(g.icon, `onb-choice-icon${g.id === `zeirishi` ? ` cat-shohi` : ``}`, 22)}
                 <span class="onb-choice-main"><span class="onb-choice-title">${esc(g.title)}</span><span class="onb-choice-desc">${esc(g.desc)}</span></span>
                 <span class="onb-choice-mark" aria-hidden="true">${ic(`check`, 16)}</span>
               </button>`).join(``)}
@@ -322,8 +338,7 @@ window.Onboarding = (function () {
     const registered = state.targetDate
       ? `<p class="onb-status">${ic(`check-circle`, 18)}<span>登録しました: <strong>${esc(DateUtil.toJapanese(state.targetDate, true))}${state.targetTentative ? `(見込み)` : ``}</strong></span></p>` : ``;
     return `
-      <div class="onb-hero"><span class="onb-hero-icon">${ic(`calendar`, 30)}</span></div>
-      <h2 class="onb-title" id="onb-title" tabindex="-1">試験日を登録しましょう</h2>
+      ${sayHtml(state.targetDate ? `happy` : `normal`, `<h2 class="onb-title" id="onb-title" tabindex="-1">試験日を登録しましょう</h2>`)}
       <p class="onb-lead">ホームに残り日数と1日あたりの学習量の目安を表示します。</p>
       ${registered}
       <div class="onb-date-actions">
@@ -378,15 +393,14 @@ window.Onboarding = (function () {
     const list = opts.filter((o) => map[o.id] && map[o.id].length);
     const sel = state.interests || [];
     return `
-      <div class="onb-hero"><span class="onb-hero-icon">${ic(`sparkles`, 30)}</span></div>
-      <h2 class="onb-title" id="onb-title" tabindex="-1">気になるテーマを選んでください</h2>
+      ${sayHtml(`happy`, `<h2 class="onb-title" id="onb-title" tabindex="-1">気になるテーマを選んでください</h2>`)}
       <p class="onb-lead">いくつでも選べます。選んだテーマから先に出題します。</p>
       <div class="onb-interests" role="group" aria-labelledby="onb-title">
         ${list.map((o) => {
           // 「買う(購入・ローン)」は、かっこの中を2行目に小さく
           const m = String(o.label).match(/^(.+?)\((.+)\)$/);
           const text = m ? `<b>${esc(m[1])}</b><small>${esc(m[2])}</small>` : `<b>${esc(o.label)}</b>`;
-          return `<button type="button" class="onb-interest" aria-pressed="${sel.includes(o.id)}" data-interest="${o.id}" aria-label="${esc(o.label)}">${ic(o.icon, 20)}<span class="onb-interest-text">${text}</span><span class="onb-interest-mark" aria-hidden="true">${ic(`check`, 14)}</span></button>`;
+          return `<button type="button" class="onb-interest" aria-pressed="${sel.includes(o.id)}" data-interest="${o.id}" aria-label="${esc(o.label)}">${sticker(o.icon, `sticker-sm onb-interest-icon`, 18)}<span class="onb-interest-text">${text}</span><span class="onb-interest-mark" aria-hidden="true">${ic(`check`, 14)}</span></button>`;
         }).join(``)}
       </div>`;
   }
@@ -412,12 +426,20 @@ window.Onboarding = (function () {
     return !!(window.Views && Views.quiz && typeof Views.quiz.buildFixedCard === `function` && firstQuestion(null));
   }
 
+  // 「まず1問」のマスコット: 答える前はふつう、正解なら元気に、誤りなら考える顔(吹き出しにひとこと)
+  const QUESTION_REACT = { ok: { expr: `cheer`, text: `正解です! この調子でいきましょう` }, ng: { expr: `think`, text: `おしい! 下の解説を読んでみましょう` } };
+
+  function questionSayHtml(state) {
+    const r = state.answered ? QUESTION_REACT[state.result] : null;
+    return sayHtml(r ? r.expr : `normal`, `<h2 class="onb-title" id="onb-title" tabindex="-1">まずは1問、解いてみましょう</h2><p class="onb-react" data-role="react"${r ? `` : ` hidden`}>${r ? esc(r.text) : ``}</p>`);
+  }
+
   function stepQuestion() {
     return {
       id: `question`,
       hideSkip: true,
-      render: () => `
-        <h2 class="onb-title" id="onb-title" tabindex="-1">まずは1問、解いてみましょう</h2>
+      render: (state) => `
+        ${questionSayHtml(state)}
         <p class="onb-lead">選択肢をタップすると、正解と選択肢ごとの解説が出ます。</p>
         <div class="onb-question" data-role="question"></div>`,
       wire: (body, ctl, state) => {
@@ -433,6 +455,20 @@ window.Onboarding = (function () {
               if (restored) return;
               state.answered = true;
               state.picked = picked;
+              state.result = result;
+              // マスコットの顔と吹き出しのひとことを替える(見出しは替えない。判定は回答のバーが読み上げる)
+              const say = body.querySelector(`[data-role="say"]`);
+              if (say) {
+                const tmp = document.createElement(`div`);
+                tmp.innerHTML = questionSayHtml(state);
+                const next = tmp.firstElementChild;
+                const oldM = say.querySelector(`.mascot`);
+                const newM = next.querySelector(`.mascot`);
+                if (oldM && newM) oldM.replaceWith(newM);
+                const react = say.querySelector(`[data-role="react"]`);
+                const r = QUESTION_REACT[result];
+                if (react && r) { react.textContent = r.text; react.hidden = false; }
+              }
               ctl.refresh();
             },
           }, restore));
@@ -458,7 +494,7 @@ window.Onboarding = (function () {
     return openDialog({
       kind: `first`,
       steps,
-      state: { goal: null, interests: [], targetDate: null, targetTentative: false, answered: false },
+      state: { goal: null, interests: [], targetDate: null, targetTentative: false, answered: false, result: null },
       skipLabel: `スキップ`,
       arrows: false,
       onFinish: (reason, state) => {
@@ -486,13 +522,14 @@ window.Onboarding = (function () {
     ];
     return {
       id: `howto`,
+      // 学ぶ順番は、ホームの今日のメニューと同じ「道」(丸いステッカーを太い線でつなぐ)
       render: () => `
-        <h2 class="onb-title" id="onb-title" tabindex="-1">学び方</h2>
+        ${sayHtml(`happy`, `<h2 class="onb-title" id="onb-title" tabindex="-1">学び方</h2>`)}
         <p class="onb-lead">毎日まず「今日の復習」から。そのあと次の順に進めると、知識が自然とつながります。どこから始めてもかまいません。</p>
         <ol class="onb-flow">
           ${flow.map((f, i) => `
             <li class="onb-flow-item">
-              <span class="onb-flow-icon">${ic(f.icon, 22)}<span class="onb-flow-num">${i + 1}</span></span>
+              <span class="sticker onb-flow-icon">${ic(f.icon, 22)}<span class="onb-flow-num">${i + 1}</span></span>
               <span class="onb-flow-main"><span class="onb-flow-title">${f.title}</span><span class="onb-flow-desc">${f.desc}</span></span>
             </li>`).join(``)}
         </ol>`,
@@ -507,7 +544,7 @@ window.Onboarding = (function () {
         const hasFig = !!(window.Diagrams && window.Diagrams.defs && window.Diagrams.defs[`srs-cycle`] && window.CardUi);
         const fig = hasFig ? CardUi.figureHtml(`srs-cycle`) : ``;
         return `
-          <h2 class="onb-title" id="onb-title" tabindex="-1">復習のしくみ</h2>
+          ${sayHtml(`think`, `<h2 class="onb-title" id="onb-title" tabindex="-1">復習のしくみ</h2>`)}
           <p class="onb-lead">人は覚えたことを時間とともに忘れていきます。忘れかけたころに復習すると、記憶が長持ちします。</p>
           ${fig ? `<div class="onb-figure">${fig}</div>` : `
             <div class="onb-cycle" aria-hidden="true">
@@ -518,9 +555,9 @@ window.Onboarding = (function () {
               <span class="onb-cycle-step">${ic(`repeat`)}思い出す</span>
             </div>`}
           <ul class="onb-points">
-            <li><span class="onb-point-icon">${ic(`repeat`)}</span><span>毎日まず<strong>「今日の復習」</strong>を開きましょう(下のタブの「復習」)。用語カードで「もう一度・難しい・普通・簡単」を選ぶと、次に復習する日が自動で決まり、その日になると今日の復習に並びます。</span></li>
-            <li><span class="onb-point-icon">${ic(`x-circle`)}</span><span>問題で<strong>間違えた用語は自動で</strong>今日の復習に追加されます。</span></li>
-            <li><span class="onb-point-icon">${ic(`flame`)}</span><span>1日1問でも続けると<strong>連続学習日数</strong>が伸びます。ホームで記録を確認できます。</span></li>
+            <li>${sticker(`repeat`, `sticker-sm onb-point-icon`, 18)}<span>毎日まず<strong>「今日の復習」</strong>を開きましょう(下のタブの「復習」)。用語カードで「もう一度・難しい・普通・簡単」を選ぶと、次に復習する日が自動で決まり、その日になると今日の復習に並びます。</span></li>
+            <li>${sticker(`x`, `sticker-sm sticker-warn onb-point-icon`, 18)}<span>問題で<strong>間違えた用語は自動で</strong>今日の復習に追加されます。</span></li>
+            <li>${sticker(`flame-fill`, `sticker-sm sticker-gold onb-point-icon`, 18)}<span>1日1問でも続けると<strong>連続学習日数</strong>が伸びます。ホームで記録を確認できます。</span></li>
           </ul>`;
       },
       next: () => ({ label: `閉じる`, icon: `check` }),

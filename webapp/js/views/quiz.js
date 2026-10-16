@@ -12,7 +12,8 @@
 // v13(デザイン刷新): #quiz・#quiz/due・#quiz/auto は「1問ずつ」の表示。カードは今までどおり一覧として DOM に置き
 //      (戻る・再読み込みの再現・キー操作・「もっと見る」の仕組みはそのまま)、今の1問(.is-current)だけを見せる。
 //      上に太い進み具合のバー(前へ・次へ)、答えると下から判定のバー(「正解!」「おしい!」+「つづける」+「解説を見る」)。
-//      解説(選択肢ごとの○×と注・全体の解説・「勘で当たった」・「AIに聞く」)は「解説を見る」で開く。
+//      解説(選択肢ごとの○×と注・全体の解説・「勘で当たった」・「AIに聞く」)は、間違えたときは最初から開き、
+//      正解したときは閉じておいて「解説を見る」で開く(トピック詳細・ブックマークのカードも同じ)。
 //      トピック詳細・ブックマーク・初回ガイドで使うカード(buildFixedCard)は一覧のままで、判定のバーはカードの下に置く
 window.Views = window.Views || {};
 window.Views.quiz = (function () {
@@ -541,6 +542,8 @@ window.Views.quiz = (function () {
   }
 
   // 回答した直後の判定を判定のバーとして出す(以前のバーの「つづける」は消える。呼んだ側が付け直す)
+  // 間違えたときは解説を最初から開く(正解のときは閉じたまま。「解説を見る」で開く)。戻る・再読み込みで再現したカードも同じ
+  // (初回ガイドのカードは CSS でいつも開いた形)
   function showVerdict(el, v) {
     el.classList.add(`quiz-answer-bar`, `is-shown`);
     el.classList.toggle(`is-ok`, !!v.ok);
@@ -548,13 +551,36 @@ window.Views.quiz = (function () {
     const live = el.querySelector(`[data-role="verdict-live"]`);
     if (live) live.innerHTML = verdictHtml(v);
     const card = el.closest(`.quiz-card`);
+    // 戻る・再読み込みで再現したカードは、前に「解説を見る/閉じる」で開け閉めした状態があればそれに合わせる
+    const memo = card && card.classList.contains(`is-restored`) && card.dataset.quizId ? explainMemo()[card.dataset.quizId] : undefined;
+    if (card && (memo === 1 || (memo !== 0 && !v.ok))) card.classList.add(`is-explained`);
     const explain = card ? card.querySelector(`.quiz-after`) : null;
     const actions = barActions(el);
     if (actions === el) return;
     actions.innerHTML = explainToggleHtml(explain && explain.id, !!(card && card.classList.contains(`is-explained`)));
     actions.querySelector(`[data-role="explain-toggle"]`).addEventListener(`click`, () => {
       setExplained(card, !card.classList.contains(`is-explained`));
+      rememberExplained(card);
     });
+  }
+
+  // 「解説を見る/閉じる」で開け閉めした状態は、その画面の履歴(state の qExplained: 問題の id → 1/0)に残す。
+  // 正解のときは解説が閉じた形で再現されるため、開いて読んでいた解説の中のリンク(図解で確認など)で移動して戻ると、
+  // 解説が閉じてページが短くなり、読んでいた位置に戻れなかった
+  const EXPLAIN_MEMO_MAX = 60;
+  function explainMemo() {
+    const m = historyState().qExplained;
+    return Storage.isPlainObject(m) ? m : {};
+  }
+  function rememberExplained(card) {
+    const id = card && card.dataset.quizId;
+    if (!id) return;
+    const m = Object.assign({}, explainMemo());
+    delete m[id];
+    m[id] = card.classList.contains(`is-explained`) ? 1 : 0;
+    const keys = Object.keys(m);
+    keys.slice(0, Math.max(0, keys.length - EXPLAIN_MEMO_MAX)).forEach((k) => { delete m[k]; });
+    patchHistoryState({ qExplained: m });
   }
 
   // 「解説を見る」: 選択肢ごとの○×と注・記述の注・全体の解説・「勘で当たった」・「AIに聞く」などを開く(カードの .is-explained)
@@ -686,7 +712,9 @@ window.Views.quiz = (function () {
   }
 
   // 選んだ選択肢と正解のタイルが、画面の下に固定した判定のバーに隠れているときは、その分だけ下へ送る
-  // (問題文の先頭が上のバーの下に隠れるほどは送らない。判定のバーの位置は動きの途中でも変わらない値で求める)
+  // (上にあるタイルの先頭が上のバーの下に隠れるほどは送らない。判定のバーの位置は動きの途中でも変わらない値で求める)
+  // 間違えたときは解説が開いてタイルが高くなるので、2つが収まらないときは正解のタイルを優先して見せる
+  // (正解のタイルの先頭が上のバーに隠れない範囲で、下の端まで)
   function revealAnswer(card, fb, bar) {
     if (!card.isConnected || !fb.isConnected || getComputedStyle(fb).position !== `fixed`) return;
     const tiles = card.querySelectorAll(`.choice-btn.correct, .choice-btn.is-picked`);
@@ -697,8 +725,15 @@ window.Views.quiz = (function () {
     const fbTop = window.innerHeight - (parseFloat(getComputedStyle(fb).bottom) || 0) - fb.offsetHeight;
     const over = bottom + 12 - fbTop;
     if (over <= 0) return;
-    const room = top - bar.getBoundingClientRect().bottom - 8;
-    const by = Math.min(over, Math.max(0, room));
+    // 上のバーはまだ貼り付いていないことがある(画面の先頭にいるとき)。送ったあとに貼り付く位置で数える
+    const barBottom = Math.min(bar.getBoundingClientRect().bottom, (parseFloat(getComputedStyle(bar).top) || 0) + bar.offsetHeight);
+    const room = top - barBottom - 8;
+    let by = Math.min(over, Math.max(0, room));
+    const right = card.querySelector(`.choice-btn.correct`);
+    if (right && over > room) {
+      const r = right.getBoundingClientRect();
+      by = Math.max(by, Math.min(r.bottom + 12 - fbTop, r.top - barBottom - 8));
+    }
     if (by > 0) window.scrollBy({ top: by, behavior: UI.prefersReducedMotion() ? `auto` : `smooth` });
   }
 

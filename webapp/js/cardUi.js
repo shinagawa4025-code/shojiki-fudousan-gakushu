@@ -5,6 +5,44 @@ window.CardUi = (function () {
   // 試験対策のトピック(深掘りの見出しを「試験のポイント」にする)
   const EXAM_TOPIC_IDS = [`topicH`, `topicJ`, `topicK`, `topicL`, `topicN`, `topicO`];
 
+  // ---- 分野の色(ステッカー・カードの上の帯・進捗バー。css/style.css の .cat-*) ----
+  // 宅建士の分野(業法・権利・法令・税・免除)→ 税理士の分野(消費税、不動産税務は税の色)→ どれでもなければ暮らし(緑)
+  const CAT_IDS = [`gyoho`, `kenri`, `horei`, `zei`, `menjo`, `shohi`];
+  const CAT_TYPES = [`takken`, `zeirishi`];
+  function catIdOf(id) {
+    if (id === `shisan`) return `zei`;
+    return CAT_IDS.includes(id) ? id : null;
+  }
+  // 用語・基礎知識の分野の id(gyoho など。分からなければ life)
+  function catOf(term) {
+    const S = window.Stats;
+    if (!term || !S || typeof S.categoryOf !== `function`) return `life`;
+    try {
+      for (const typeId of CAT_TYPES) {
+        const c = S.categoryOf(term, typeId);
+        const id = c ? catIdOf(c.id) : null;
+        if (id) return id;
+      }
+    } catch (e) { /* 分野が読めなければ既定の色 */ }
+    return `life`;
+  }
+  // トピックの分野: { id, name }(name は試験の分野名。暮らしのトピックは null)
+  function topicCategory(topicId) {
+    const S = window.Stats;
+    if (S && typeof S.examType === `function`) {
+      try {
+        for (const typeId of CAT_TYPES) {
+          const type = S.examType(typeId);
+          const cats = type && Array.isArray(type.categories) ? type.categories : [];
+          const c = cats.find((x) => (x.topicIds || []).includes(topicId));
+          const id = c ? catIdOf(c.id) : null;
+          if (id) return { id, name: c.name || null };
+        }
+      } catch (e) { /* 分野が読めなければ既定の色 */ }
+    }
+    return { id: `life`, name: null };
+  }
+
   // topicId を渡したときはそのトピックで判定、なければ用語のトピックで判定
   function deepDiveLabel(term, topicId) {
     if (topicId) return EXAM_TOPIC_IDS.includes(topicId) ? `試験のポイント` : `もう一歩踏み込むと`;
@@ -187,7 +225,8 @@ window.CardUi = (function () {
     opts = opts || {};
     const known = opts.known || {};
     const card = document.createElement(`div`);
-    card.className = `flip-card` + (opts.flipped ? ` flipped` : ``);
+    // 分野の色(カードの上の帯)は .cat-* で
+    card.className = `flip-card cat-${catOf(term)}` + (opts.flipped ? ` flipped` : ``);
     card.dataset.termId = term.id;
     const isKnown = !!known[term.id];
     const bmOn = typeof opts.bookmarked === `boolean` ? opts.bookmarked : (window.Bookmarks ? Bookmarks.has(`term:${term.id}`) : false);
@@ -199,7 +238,7 @@ window.CardUi = (function () {
           <div class="flip-face-head">
             <div class="flip-face-tags">
               <span class="badge badge-${term.level}">${term.level}</span>
-              ${hasDiagram ? `<span class="source-tag">${ic(`diagram`, 12)} 図解</span>` : ``}
+              ${hasDiagram ? `<span class="flip-fig" title="図解あり">${ic(`diagram`, 16)}<span class="sr-only">図解あり</span></span>` : ``}
             </div>
             <div class="flip-face-actions">${bookmarkBtnHtml(term.id, bmOn)}${knownBtnHtml(isKnown)}</div>
           </div>
@@ -287,7 +326,8 @@ window.CardUi = (function () {
         b.classList.toggle(`is-known`, on);
         b.setAttribute(`aria-pressed`, String(on));
         b.setAttribute(`aria-label`, on ? `記憶済みを取り消す` : `記憶済みにする`);
-        b.innerHTML = ic(on ? `star-fill` : `star`);
+        // 記憶済みにしたときは金色の星が「ぽん」と出る(動きを減らす設定では CSS で止まる)
+        b.innerHTML = on ? UI.icon(`star-fill`, { size: 20, className: `anim-pop` }) : ic(`star`);
       });
       if (opts.onToggleKnown) opts.onToggleKnown(term, on);
     }
@@ -330,6 +370,6 @@ window.CardUi = (function () {
 
   return {
     buildSourceCitationHtml, buildLawRefHtml, buildFlipCard, diagramsFor, figureHtml, openFigure, deepDiveLabel, deepHtml, practiceNoteHtml, itemMetaHtml,
-    splitLawRef, calcLinksHtml, bookmarkBtnHtml, paintBookmarkButtons, EXAM_TOPIC_IDS,
+    splitLawRef, calcLinksHtml, bookmarkBtnHtml, paintBookmarkButtons, EXAM_TOPIC_IDS, catOf, topicCategory,
   };
 })();

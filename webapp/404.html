@@ -4,27 +4,47 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
   <title>ページが見つかりません|ふどまな</title>
   <link rel="icon" type="image/svg+xml" href="/shojiki-fudousan-gakushu/icons/logo.svg">
-  <!-- GitHub Pages が存在しないURLで返すページ。サイトの階層に関係なく表示できるよう、パスはすべて絶対パスで書く -->
+  <!-- GitHub Pages が存在しないURLで返すページ。サイトの階層に関係なく表示できるよう、パスはすべて絶対パスで書く。
+       アプリの CSS は読めないので、色はアプリのトークン(css/style.css)と同じ値をここに書く -->
   <style>
-    body { margin: 0; font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif; background: #f4f6f9; color: #1a2330; display: grid; place-items: center; min-height: 100vh; padding: 24px; box-sizing: border-box; text-align: center; line-height: 1.7; }
-    main { max-width: 32em; }
-    h1 { font-size: 1.375rem; margin: 16px 0 8px; }
-    p { margin: 0; color: #5a6577; }
-    a { display: inline-block; margin-top: 20px; padding: 12px 20px; border-radius: 12px; background: #2652cc; color: #fff; text-decoration: none; font-weight: 700; }
-    a:focus-visible { outline: 3px solid #2450c8; outline-offset: 3px; }
+    :root { --bg: #f5f8f3; --text: #16211a; --muted: #56665b; --primary: #1e7a4c; --on-primary: #fff; --lip: #135a36; --ground: #dfe7db;
+      --m-roof: #1e7a4c; --m-roof-dark: #135a36; --m-body: #fff6e2; --m-door: #f2b01e; --m-ink: #1f2a22; --m-cheek: #f6a540; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif; background: var(--bg); color: var(--text); display: grid; place-items: center; min-height: 100vh; padding: 24px 16px; box-sizing: border-box; text-align: center; line-height: 1.75; letter-spacing: .02em; }
+    main { max-width: 32em; display: flex; flex-direction: column; align-items: center; }
+    /* 家の形のマスコット(js/mascot.js の「考え中」)。飾りなので読み上げない */
+    .mascot { display: block; overflow: visible; }
+    .mascot-wrap { position: relative; padding-bottom: 6px; }
+    .mascot-wrap::after { content: ""; position: absolute; left: 18%; right: 18%; bottom: 2px; height: 10px; border-radius: 50%; background: var(--ground); }
+    .mascot-wrap .mascot { position: relative; z-index: 1; }
+    .m-roof { fill: var(--m-roof); stroke: var(--m-roof); stroke-width: 8; stroke-linejoin: round; }
+    .m-rd { fill: var(--m-roof-dark); }
+    .m-eave { fill: none; stroke: var(--m-roof-dark); stroke-width: 5; stroke-linecap: round; }
+    .m-body { fill: var(--m-body); }
+    .m-door { fill: var(--m-door); }
+    .m-cheek { fill: var(--m-cheek); opacity: .8; }
+    .m-ink { fill: var(--m-ink); }
+    .m-line { fill: none; stroke: var(--m-ink); stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
+    .m-bub { fill: var(--muted); opacity: .7; }
+    h1 { margin: 20px 0 8px; font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif; font-size: 1.5rem; font-weight: 800; line-height: 1.3; letter-spacing: .03em; font-feature-settings: "palt"; }
+    h1, p { text-wrap: balance; }
+    p { margin: 0; color: var(--muted); }
+    /* アプリのボタンと同じ形: 緑の面+下のふち。押すと沈む */
+    a { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; margin-top: 24px; padding: 10px 24px; box-sizing: border-box; border-radius: 16px; background: var(--primary); color: var(--on-primary); text-decoration: none; font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif; font-weight: 800; letter-spacing: .04em; box-shadow: 0 4px 0 var(--lip); transition: transform 120ms, box-shadow 120ms; }
+    a:active { transform: translateY(4px); box-shadow: 0 0 0 var(--lip); }
+    a:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+    @media (prefers-reduced-motion: reduce) { a { transition: none; } }
     @media (prefers-color-scheme: dark) {
-      body { background: #0f141b; color: #e6ebf1; }
-      p { color: #9aa7b7; }
-      a { background: #3d63d6; }
-      a:focus-visible { outline-color: #8aa8ff; }
+      :root { --bg: #0c130f; --text: #e6efe8; --muted: #9eb1a4; --primary: #3cb878; --on-primary: #06140c; --lip: #23844f; --ground: #1c2a22;
+        --m-roof: #2e9a62; --m-roof-dark: #1e7a4c; --m-body: #f4ead3; --m-door: #f5be3c; }
     }
   </style>
 </head>
 <body>
   <main>
-    <img src="/shojiki-fudousan-gakushu/icons/logo.svg" width="64" height="64" alt="">
+    <div class="mascot-wrap"><svg class="mascot" viewBox="0 0 100 100" width="112" height="112" aria-hidden="true" focusable="false"><rect class="m-rd" x="66" y="17" width="11" height="22" rx="2"/><rect class="m-body" x="18" y="42" width="64" height="52" rx="13"/><path class="m-roof" d="M50 14 88 47H12z"/><path class="m-eave" d="M13 51.5h74"/><path class="m-door" d="M44 94v-9a6 6 0 0 1 12 0v9z"/><ellipse class="m-cheek" cx="29.5" cy="70.5" rx="5" ry="3.2"/><ellipse class="m-cheek" cx="70.5" cy="70.5" rx="5" ry="3.2"/><circle class="m-ink" cx="36" cy="61.5" r="4"/><circle class="m-ink" cx="60" cy="61.5" r="4"/><path class="m-line" d="M56 54q5-3 10 0M46.5 71.5q3.5-2 7 0"/><circle class="m-bub" cx="15" cy="34" r="2.2"/><circle class="m-bub" cx="9" cy="25" r="3.4"/></svg></div>
     <h1>ページが見つかりません</h1>
     <p>お探しのページは見つかりませんでした。URLが変わったか、入力に誤りがある可能性があります。</p>
     <a href="/shojiki-fudousan-gakushu/">ふどまなのトップへ</a>

@@ -19,10 +19,10 @@ window.SITE = (function () {
     tagline: `宅建の合格にも、暮らしの安心にも。`,
     titleSuffix: `宅建・賃貸・売買・相続を基礎から学べる無料アプリ`,
     url: `https://shinagawa4025-code.github.io/shojiki-fudousan-gakushu/`,
-    version: `12.0`,
+    version: `12.1`,
     // 公開日(プライバシーポリシーの制定日・更新履歴の日付にも使う)。公開する日に合わせて直す
     // (v12 は宅建士試験(2026-10-18)の後に公開する。日付を変えたら data/changelog.js の v12 と about.js の PRIVACY_DATES.revised も合わせる)
-    releasedAt: `2026-10-15`,
+    releasedAt: `2026-10-16`,
     // 内容(法令・税制・統計)を確認した基準日
     contentAsOf: `2026-10-15`,
     // バックアップファイル名などに使う英字の名前

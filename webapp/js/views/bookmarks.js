@@ -27,12 +27,18 @@ window.Views.bookmarks = (function () {
   function render(root) {
     const wrap = document.createElement(`div`);
     wrap.className = `view bookmarks-view`;
+    // 画面の説明は見出しの ⓘ から(一覧の上に説明文を置かない)
     wrap.innerHTML = `
-      <h2>ブックマーク</h2>
-      <p class="view-desc">あとで見返したい用語や問題を保存しておく場所です。しおりマークをもう一度押すと一覧から外れます。</p>
-      <div class="segmented bm-filter" role="group" aria-label="表示する種類" data-role="filter"></div>
+      <div class="learn-head">
+        <h2>ブックマーク</h2>
+        <button type="button" class="btn btn-icon learn-info-btn" data-role="info" aria-label="ブックマークについて" aria-haspopup="dialog">${ic(`info`, 20)}</button>
+      </div>
+      <div class="segmented seg-bold bm-filter" role="group" aria-label="表示する種類" data-role="filter"></div>
       <div data-role="body"></div>`;
     root.appendChild(wrap);
+    wrap.querySelector(`[data-role="info"]`).addEventListener(`click`, () => {
+      UI.sheet({ title: `ブックマークについて`, content: `<p class="learn-info-text">あとで見返したい用語や問題を保存しておく場所です。しおりマークをもう一度押すと一覧から外れます。</p>` });
+    });
     const filterEl = wrap.querySelector(`[data-role="filter"]`);
     const body = wrap.querySelector(`[data-role="body"]`);
 
@@ -123,10 +129,12 @@ window.Views.bookmarks = (function () {
       }));
     }
 
-    function section(title, icon, count, content) {
+    // 「すべて」のときの種類ごとの見出し: 小さなステッカー+名前+件数(件数は札にせず太い数字)
+    function section(kind, title, icon, count, content) {
       const sec = document.createElement(`section`);
       sec.className = `bm-section`;
-      sec.innerHTML = `<div class="section-head bm-section-head"><h3>${ic(icon, 20)}${title}<span class="badge badge-soft num">${count}</span></h3></div>`;
+      sec.dataset.kind = kind;
+      sec.innerHTML = `<div class="section-head bm-section-head"><h3><span class="sticker sticker-sm" aria-hidden="true">${ic(icon, 18)}</span>${title}<span class="bm-sec-count num" data-role="sec-count">${count}</span></h3></div>`;
       sec.appendChild(content);
       return sec;
     }
@@ -139,7 +147,7 @@ window.Views.bookmarks = (function () {
     function pagedSection(kind, title, icon, count, list, items, build, page, unit, lazy) {
       const holder = document.createElement(`div`);
       holder.appendChild(list);
-      const target = filter === `all` ? section(title, icon, count, holder) : holder;
+      const target = filter === `all` ? section(kind, title, icon, count, holder) : holder;
       body.appendChild(target);
       const initial = initialShown[kind];
       const make = () => { pagers[kind] = renderPaged(list, items, build, page, unit, initial); };
@@ -218,12 +226,10 @@ window.Views.bookmarks = (function () {
     function refreshCounts() {
       const data = collect();
       paintFilter(data);
-      const counts = { 用語: data.terms.length, 問題: data.quizzes.length };
+      const counts = { term: data.terms.length, quiz: data.quizzes.length };
       body.querySelectorAll(`.bm-section`).forEach((sec) => {
-        const h = sec.querySelector(`h3`);
-        const badge = sec.querySelector(`.badge`);
-        const label = h ? h.textContent.replace(/[0-9]+$/, ``).trim() : ``;
-        if (badge && counts[label] != null) badge.textContent = counts[label];
+        const n = sec.querySelector(`[data-role="sec-count"]`);
+        if (n && counts[sec.dataset.kind] != null) n.textContent = counts[sec.dataset.kind];
       });
       return data;
     }

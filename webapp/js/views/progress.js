@@ -1,5 +1,6 @@
-// 学習の進捗: 弱点分析(次にやること・苦手なポイント・分野別の習熟度)を先頭に、模擬試験の推移・
-// 学習のまとめ(学習済み・連続・復習)・記憶の定着度・学習カレンダー・トピック別
+// 学習の進捗: 記録のカウンター(連続・学習済み・復習)を先頭に、合格予測・弱点分析(次にやること・苦手なポイント・分野別の習熟度)・
+// 模擬試験の推移・学習時間・記憶の定着度・学習カレンダー・バッジ(メダル)・トピック別
+// v3 の見た目: 見出しに丸いステッカー、分野は分野の色(ステッカーとバー。ホームと同じ色)、ごほうびは金色
 // 学ぶ目的が「暮らし・仕事」(learnerProfile の goal が life / work)で試験日の登録がない人には、宅建の分野ではなく
 // 「テーマ別の進捗」(気になるテーマごとの学習済み・次に読む基礎知識・○×)を先頭に出す(テーマ表示)
 // ルート: #progress / #progress/weak(弱点分析までスクロール) / #progress/exam(テーマ表示の人も試験の分野別の分析を見る)
@@ -26,6 +27,48 @@ window.Views.progress = (function () {
 
   // 画面内で選んだ試験(再描画しても保持)
   let selectedType = null;
+
+  // ---- 見た目の部品(v3: 丸いステッカー・分野の色。ホームと同じ色の決め方) ----
+  // 分野の色(ステッカー・バー)。税理士の「不動産税務」は税の色。分からない分野は既定の緑
+  const CAT_IDS = [`gyoho`, `kenri`, `horei`, `zei`, `menjo`, `shohi`];
+  // 分野のアイコン(各分野の代表のトピックと同じ絵)
+  const CAT_ICON = { gyoho: `scale`, kenri: `gavel`, horei: `ruler`, zei: `receipt`, menjo: `mountain`, shohi: `percent`, shisan: `receipt` };
+  function catCls(id) {
+    if (id === `shisan`) return `cat-zei`;
+    return CAT_IDS.includes(id) ? `cat-${id}` : ``;
+  }
+
+  // 丸いステッカー(色の面+白いアイコン。飾りなので読み上げない)。cls: sticker-sm / sticker-gold / cat-* など
+  function sticker(icon, cls, size) {
+    return `<span class="sticker${cls ? ` ${cls}` : ``}" aria-hidden="true">${ic(icon || `lightbulb`, size || 18)}</span>`;
+  }
+
+  // カードの見出し: 左にステッカー(見出しの文字は変えない)
+  function titleHtml(icon, text, id, extraCls, stickerCls) {
+    return `<h3 class="card-title prog-title${extraCls ? ` ${extraCls}` : ``}"${id ? ` id="${id}"` : ``}>${sticker(icon, `sticker-sm${stickerCls ? ` ${stickerCls}` : ``}`, 18)}<span>${text}</span></h3>`;
+  }
+
+  // トピックの分野(宅建士・税理士の分野に入っているトピック。最初に見つかった分野。暮らしのテーマは null)
+  let topicCatMap = null;
+  function topicCat(tid) {
+    if (!topicCatMap) {
+      topicCatMap = {};
+      [`takken`, `zeirishi`].forEach((typeId) => {
+        let type = null;
+        try { type = Stats.examType(typeId); } catch (e) { type = null; }
+        (type && Array.isArray(type.categories) ? type.categories : []).forEach((c) => {
+          (Array.isArray(c.topicIds) ? c.topicIds : []).forEach((id) => { if (!topicCatMap[id]) topicCatMap[id] = c.id; });
+        });
+      });
+    }
+    return topicCatMap[tid] || null;
+  }
+
+  // トピックの行に付ける分野の色(先頭に空白つき。分野のないテーマは既定の緑)
+  function topicCatCls(tid) {
+    const c = catCls(topicCat(tid));
+    return c ? ` ${c}` : ``;
+  }
 
   // ---- 学ぶ目的(learnerProfile。Stats.getProfile がない版では使わない) ----
   function learnerProfile() {
@@ -92,30 +135,35 @@ window.Views.progress = (function () {
 
   // ---- 学習のまとめ(1行) ----
   // scope: テーマ表示では、選んだテーマの項目だけで「学習済み」を数える({done, total, pct})
+  // 記録のカウンター(ホームの記録と同じ形): 連続学習(金色の炎)・学習済み・今日の復習(押すと復習へ)。
+  // 読み上げは「連続学習 3日 最長4日」の順(見た目は数字を上に出す)
   function summaryCard(scope) {
     const card = document.createElement(`section`);
-    card.className = `prog-summary`;
+    card.className = `prog-summary span-all`;
     card.setAttribute(`aria-label`, `学習のまとめ`);
     const ov = scope || Stats.overall();
     const current = Streak.getCurrentStreak();
     const longest = Streak.getLongestStreak();
     const due = Stats.dueReviewCount();
     card.innerHTML = `
-      <div class="prog-strip">
-        <div class="prog-strip-item">
-          <span class="prog-strip-label">${ic(`check-circle`, 14)}学習済み</span>
-          <span class="prog-strip-value num">${ov.pct}<small>%</small></span>
-          <span class="prog-strip-sub num">${ov.done}/${ov.total}項目</span>
+      <div class="prog-stats">
+        <div class="prog-stat is-streak${current > 0 ? `` : ` is-off`}">
+          ${sticker(current > 0 ? `flame-fill` : `flame`, `sticker-sm sticker-gold`, 18)}
+          <span class="prog-stat-label">連続学習</span>
+          <span class="prog-stat-num num"><b>${current}</b><small>日</small></span>
+          <span class="prog-stat-sub num">最長 ${longest}日</span>
         </div>
-        <div class="prog-strip-item is-streak">
-          <span class="prog-strip-label">${ic(`flame`, 14)}連続学習</span>
-          <span class="prog-strip-value num">${current}<small>日</small></span>
-          <span class="prog-strip-sub num">最長 ${longest}日</span>
+        <div class="prog-stat">
+          ${sticker(`check`, `sticker-sm`, 18)}
+          <span class="prog-stat-label">学習済み</span>
+          <span class="prog-stat-num num"><b>${ov.pct}</b><small>%</small></span>
+          <span class="prog-stat-sub num">${ov.done}/${ov.total}項目</span>
         </div>
-        <a class="prog-strip-item prog-strip-link" href="#review">
-          <span class="prog-strip-label">${ic(`repeat`, 14)}今日の復習</span>
-          <span class="prog-strip-value num">${due}<small>件</small></span>
-          <span class="prog-strip-sub">${due ? `復習する` : `今日はなし`}${ic(`chevron-right`, 14)}</span>
+        <a class="prog-stat prog-stat-link" href="#review">
+          ${sticker(`repeat`, `sticker-sm${due ? ` sticker-warn` : ``}`, 18)}
+          <span class="prog-stat-label">今日の復習</span>
+          <span class="prog-stat-num num"><b>${due}</b><small>件</small></span>
+          <span class="prog-stat-sub">${due ? `復習する` : `今日はなし`}${ic(`chevron-right`, 14)}</span>
         </a>
       </div>`;
     return card;
@@ -164,12 +212,18 @@ window.Views.progress = (function () {
   }
 
   // opts.noAttempts: 分野全体でまだ1問も解いていない(各行の「未回答」は出さず、上に1行だけ書く)
+  // 分野のステッカー(分野の色)に、伸ばしたい順の番号を小さく重ねる
+  function catMarkHtml(r) {
+    return `<span class="ana-mark">${sticker(CAT_ICON[r.id] || `target`, `sticker-sm`, 18)}<span class="ana-rank num"><span class="sr-only">優先</span>${r.rank}<span class="sr-only">位</span></span></span>`;
+  }
+
   function catRowHtml(r, opts) {
+    const cat = catCls(r.id);
     if (!r.available) {
       return `
-        <li class="ana-cat is-empty">
+        <li class="ana-cat is-empty${cat ? ` ${cat}` : ``}">
           <div class="ana-cat-top">
-            <span class="ana-rank num"><span class="sr-only">優先</span>${r.rank}<span class="sr-only">位</span></span>
+            ${catMarkHtml(r)}
             <span class="ana-cat-name">${esc(r.name)}${r.questions ? `<span class="topic-group-meta">例年${r.questions}問</span>` : ``}</span>
             <span class="ana-score num">—</span>
           </div>
@@ -181,9 +235,9 @@ window.Views.progress = (function () {
     const flag = r.confidence === `none` ? (opts.noAttempts ? `` : `<span class="ana-flag">未回答</span>`)
       : r.confidence === `low` ? `<span class="ana-flag">データ不足</span>` : ``;
     return `
-      <li class="ana-cat">
+      <li class="ana-cat${cat ? ` ${cat}` : ``}">
         <div class="ana-cat-top">
-          <span class="ana-rank num"><span class="sr-only">優先</span>${r.rank}<span class="sr-only">位</span></span>
+          ${catMarkHtml(r)}
           <span class="ana-cat-name">${esc(r.name)}${r.questions ? `<span class="topic-group-meta">例年${r.questions}問</span>` : ``}</span>
           <span class="ana-score num"><span class="sr-only">習熟度</span><strong>${r.mastery}</strong><small>/100</small></span>
         </div>
@@ -229,14 +283,18 @@ window.Views.progress = (function () {
       if (!hasCats && weakCount) return `<p class="prog-note prog-note-flush">分野の区分がないため、下の「苦手なポイント」から解き直すのがおすすめです。</p>`;
       return `<p class="prog-note prog-note-flush">今のところ特におすすめはありません。この調子で続けましょう。</p>`;
     }
+    // 1行ずつのリスト(ホームの「次にやること」と同じ形)。アイコンは分野の色、今日の復習は要注意の色
     return `
-      <div class="todo-list ana-actions">
-        ${actions.map((a) => `
-          <a class="todo-item" href="${esc(a.nav)}">
-            <span class="todo-icon${a.kind === `review` ? ` is-warn` : ``}">${ic(a.icon || `lightbulb`)}</span>
-            <span class="todo-main"><span class="todo-title">${esc(a.title)}</span><span class="todo-sub">${esc(a.detail)}</span></span>
+      <div class="list-group ana-actions">
+        ${actions.map((a) => {
+          const cat = catCls(a.categoryId);
+          return `
+          <a class="list-row${cat ? ` ${cat}` : ``}" href="${esc(a.nav)}">
+            <span class="list-row-icon${a.kind === `review` ? ` is-warn` : ``}" aria-hidden="true">${ic(a.icon || `lightbulb`)}</span>
+            <span class="list-row-main"><span class="list-row-title">${esc(a.title)}</span><span class="list-row-sub">${esc(a.detail)}</span></span>
             ${ic(`chevron-right`, 18)}
-          </a>`).join(``)}
+          </a>`;
+        }).join(``)}
       </div>`;
   }
 
@@ -262,7 +320,7 @@ window.Views.progress = (function () {
         ${items.map((w) => `
           <li>
             <a class="ana-weak-item" href="${esc(w.nav)}">
-              <span class="ana-weak-icon">${ic(w.icon || `target`, 18)}</span>
+              ${sticker(w.icon || `target`, `sticker-sm ana-weak-icon${w.category && catCls(w.category.id) ? ` ${catCls(w.category.id)}` : ``}`, 18)}
               <span class="ana-weak-main">
                 ${w.context ? `<span class="ana-weak-context">${esc(w.context)}</span>` : ``}
                 <span class="ana-weak-title">${esc(w.title)}</span>
@@ -317,7 +375,9 @@ window.Views.progress = (function () {
   function focusHtml(f) {
     if (!f) return ``;
     const why = Array.isArray(f.reasons) && f.reasons.length ? f.reasons.join(`、`) : (f.reason || ``);
-    return `<p class="ana-focus">${ic(`lightbulb`, 16)}<span>いま伸ばすと効果が大きいのは<strong>${esc(f.name)}</strong>です。${why ? `<span class="ana-focus-why">理由: ${esc(why)}</span>` : ``}</span></p>`;
+    // マスコットの吹き出しで伝える(マスコットは飾りなので読み上げない)
+    const mascot = window.Mascot && typeof Mascot.svg === `function` ? Mascot.svg(`think`, 52, { className: `ana-focus-mascot` }) : ``;
+    return `<div class="ana-focus${mascot ? `` : ` no-mascot`}">${mascot}<p class="ana-focus-bubble">いま伸ばすと効果が大きいのは<strong>${esc(f.name)}</strong>です。${why ? `<span class="ana-focus-why">理由: ${esc(why)}</span>` : ``}</p></div>`;
   }
 
   function analysisCard(state) {
@@ -325,12 +385,12 @@ window.Views.progress = (function () {
     card.className = `card span-all ana-card`;
     card.id = `progress-weak`;
     card.setAttribute(`aria-labelledby`, `ana-title`);
+    // 習熟度の式は下の「習熟度と並び順の決め方」に書く(見出しの下の説明は置かない)
     card.innerHTML = `
       <div class="recommend-head ana-head">
-        <h3 class="card-title ana-title" id="ana-title">${ic(`target`)}弱点分析</h3>
+        ${titleHtml(`target`, `弱点分析`, `ana-title`, `ana-title`)}
         <span class="ana-overall" data-role="overall"></span>
       </div>
-      <p class="prog-note ana-formula">習熟度(100点)= 正答率×70点 + 着手率×30点。回答${Analysis.MIN_CONFIDENT}問未満の分野は正答率の点を割り引きます。自信なしの正解は0.5問として数えます。</p>
       ${state.options.length > 1 ? `
         <div class="segmented prog-segmented" role="group" aria-label="分析する試験" data-role="types">
           ${state.options.map((t) => `<button type="button" class="segmented-item" data-type="${t.id}" aria-pressed="${t.id === state.typeId}">${esc(t.shortName || t.name)}</button>`).join(``)}
@@ -341,7 +401,6 @@ window.Views.progress = (function () {
     const overall = card.querySelector(`[data-role="overall"]`);
     // 試験を切り替えたときだけ、短い一文で読み上げる(分析全体をライブリージョンにすると長文が丸ごと読まれる)
     const status = card.querySelector(`[data-role="ana-status"]`);
-    const formula = card.querySelector(`.ana-formula`);
 
     function paint() {
       const snap = safeAnalyze(state.typeId);
@@ -354,8 +413,6 @@ window.Views.progress = (function () {
       const type = snap.type;
       const name = type ? (type.shortName || type.name) : ``;
       const s = snap.summary;
-      // 習熟度の式は分野別の習熟度を出す試験でだけ見せる
-      formula.hidden = !(type && Array.isArray(type.categories));
       overall.innerHTML = snap.hasData && s.mastery != null
         ? `総合 <strong class="num">${s.mastery}</strong><small>/100</small>`
         : ``;
@@ -419,11 +476,11 @@ window.Views.progress = (function () {
 
   function srsCard() {
     const card = document.createElement(`section`);
-    card.className = `card`;
+    card.className = `card srs-card`;
     const b = Stats.srsBuckets();
     const total = SRS_PARTS.reduce((s, p) => s + (b[p.key] || 0), 0) || 1;
     card.innerHTML = `
-      <h3 class="card-title">記憶の定着度</h3>
+      ${titleHtml(`layers`, `記憶の定着度`)}
       <p class="calc-note prog-note">「今日の復習」で答えた結果から、次に復習するまでの間隔が長い用語ほど定着しています。</p>
       <div class="srs-bar" role="img" aria-label="${SRS_PARTS.map((p) => `${p.label}${b[p.key] || 0}語`).join(`、`)}">
         ${SRS_PARTS.map((p) => (b[p.key] ? `<span class="srs-seg srs-${p.key}" style="flex-grow:${b[p.key]}" title="${p.label}: ${b[p.key]}語"></span>` : ``)).join(``)}
@@ -494,10 +551,11 @@ window.Views.progress = (function () {
       }
     }
 
+    card.className = `card heat-card`;
     card.innerHTML = `
       <div class="recommend-head">
-        <h3 class="card-title">学習カレンダー</h3>
-        <span class="streak-chip">${ic(`flame`, 16)}${Streak.getCurrentStreak()}日連続</span>
+        ${titleHtml(`calendar`, `学習カレンダー`)}
+        <span class="streak-chip${Streak.getCurrentStreak() > 0 ? `` : ` is-off`}">${ic(`flame`, 16)}${Streak.getCurrentStreak()}日連続</span>
       </div>
       <p class="calc-note prog-note">${active
         ? `直近${WEEKS}週間で${active}日・合計${total}回学習しました(これまでに学習した日は${Streak.totalActiveDays()}日)。`
@@ -599,7 +657,7 @@ window.Views.progress = (function () {
       return `<text class="chart-axis" x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="middle">${d.getMonth() + 1}/${d.getDate()}</text>`;
     }).join(``);
     // フル=塗りつぶしの点、ショート=白抜きの輪
-    const dots = points.map((p, i) => `<circle class="chart-dot is-${p.mode}" data-i="${i}" cx="${x(i).toFixed(1)}" cy="${y(p.pct).toFixed(1)}" r="4.5"></circle>`).join(``);
+    const dots = points.map((p, i) => `<circle class="chart-dot is-${p.mode}" data-i="${i}" cx="${x(i).toFixed(1)}" cy="${y(p.pct).toFixed(1)}" r="5.5"></circle>`).join(``);
     // タップしやすいよう、点より大きい透明の当たり判定を重ねる
     const hits = points.map((p, i) => `<circle class="chart-hit" data-i="${i}" data-label="${esc(pointLabel(p, i))}" cx="${x(i).toFixed(1)}" cy="${y(p.pct).toFixed(1)}" r="14"><title>${esc(pointLabel(p, i))}</title></circle>`).join(``);
     // 最後の点の値: 目安の線の近く(±8)にあるときは線の下に出す(右端の「目安」の文字と重ねない)
@@ -636,9 +694,10 @@ window.Views.progress = (function () {
   function examCard() {
     const card = document.createElement(`section`);
     card.className = `card`;
+    card.className = `card exam-trend-card`;
     const points = examPoints();
     if (!points.length) {
-      card.innerHTML = `<h3 class="card-title">模擬試験の得点推移</h3>`;
+      card.innerHTML = titleHtml(`timer`, `模擬試験の得点推移`);
       card.appendChild(UI.emptyState({
         icon: `timer`,
         title: `まだ模擬試験の記録がありません`,
@@ -653,7 +712,7 @@ window.Views.progress = (function () {
     const modes = new Set(points.map((p) => p.mode));
     card.innerHTML = `
       <div class="recommend-head">
-        <h3 class="card-title">模擬試験の得点推移</h3>
+        ${titleHtml(`timer`, `模擬試験の得点推移`)}
         <a class="link-btn" href="#exam">模擬試験へ${ic(`chevron-right`, 16)}</a>
       </div>
       <p class="prog-note prog-trend">${trendSentence(points)}</p>
@@ -692,8 +751,10 @@ window.Views.progress = (function () {
     const max = r.max || 50;
     const pr = r.passRange;
     const label = `予測 ${r.low}〜${r.high}点(見込み${r.expected}点)${pr ? `、過去の合格点 ${pr.min}〜${pr.max}点` : ``}(${max}点満点)`;
+    // 過去の合格点は金色の帯(上に「過去の合格点」の札)。予測の幅はその上に緑の帯、見込みは白い丸のつまみ
     return `
-      <div class="pred-bar" role="img" aria-label="${esc(label)}">
+      <div class="pred-bar${pr ? ` has-pass` : ``}" role="img" aria-label="${esc(label)}">
+        ${pr ? `<span class="pred-pass-tag" style="left:${pctOf((pr.min + pr.max) / 2, max)}%">過去の合格点</span>` : ``}
         <div class="pred-track">
           ${pr ? `<span class="pred-pass" style="left:${pctOf(pr.min, max)}%;width:${pctOf(Math.max(0.6, pr.max - pr.min), max)}%"></span>` : ``}
           <span class="pred-range" style="left:${pctOf(r.low, max)}%;width:${pctOf(Math.max(0.6, r.high - r.low), max)}%"></span>
@@ -742,15 +803,21 @@ window.Views.progress = (function () {
   function catRangesHtml(r) {
     return `
       <ul class="pred-cats">
-        ${r.byCat.map((c) => `
-          <li class="pred-cat">
-            <div class="mini-bar-head"><b>${esc(c.label)}</b><span class="num">${c.fixed ? `免除(${c.n}点)` : `${c.low}〜${c.high}点`}<small> / ${c.n}問</small></span></div>
-            <div class="pred-track is-small" aria-hidden="true">
-              <span class="pred-range" style="left:${pctOf(c.low, c.n)}%;width:${pctOf(Math.max(c.n * 0.02, c.high - c.low), c.n)}%"></span>
-              <span class="pred-mark" style="left:${pctOf(c.expected, c.n)}%"></span>
+        ${r.byCat.map((c) => {
+          const cat = catCls(c.cat);
+          return `
+          <li class="pred-cat${cat ? ` ${cat}` : ``}${c.fixed ? ` is-fixed` : ``}">
+            ${sticker(CAT_ICON[c.cat] || `target`, `sticker-sm`, 18)}
+            <div class="pred-cat-main">
+              <div class="mini-bar-head"><b>${esc(c.label)}</b><span class="num">${c.fixed ? `免除(${c.n}点)` : `${c.low}〜${c.high}点`}<small> / ${c.n}問</small></span></div>
+              <div class="pred-track is-small" aria-hidden="true">
+                <span class="pred-range" style="left:${pctOf(c.low, c.n)}%;width:${pctOf(Math.max(c.n * 0.02, c.high - c.low), c.n)}%"></span>
+                <span class="pred-mark" style="left:${pctOf(c.expected, c.n)}%"></span>
+              </div>
+              ${c.fixed ? `` : `<p class="pred-cat-meta num">解答 ${fmtNum(c.answers)}問分(重み付き)・正答率の推定 ${Math.round(c.p * 100)}%</p>`}
             </div>
-            ${c.fixed ? `` : `<p class="pred-cat-meta num">解答 ${fmtNum(c.answers)}問分(重み付き)・正答率の推定 ${Math.round(c.p * 100)}%</p>`}
-          </li>`).join(``)}
+          </li>`;
+        }).join(``)}
       </ul>`;
   }
 
@@ -784,8 +851,9 @@ window.Views.progress = (function () {
         console.error(`[合格予測] 計算できませんでした`, e);
         r = null;
       }
+      const title = titleHtml(`chart`, `合格予測<span class="prog-title-sub">(宅建士)</span>`, `pred-title`);
       if (!r) {
-        card.innerHTML = `<h3 class="card-title" id="pred-title">${ic(`chart`)}合格予測(宅建士)</h3><p class="prog-note prog-note-flush">合格予測を表示できませんでした。</p>`;
+        card.innerHTML = `${title}<p class="prog-note prog-note-flush">合格予測を表示できませんでした。</p>`;
         return;
       }
       const toggle = `
@@ -801,9 +869,11 @@ window.Views.progress = (function () {
           <h4 class="ana-sub">${ic(`chart`, 18)}分野ごとの予測</h4>
           ${catRangesHtml(r)}`;
       } else {
+        // 分野ごとの足りない数: 分野の色の点を付けた札(押すとその分野の4択へ)
         const links = r.needWhere.map((w) => {
           const tid = quizTopicOf(w.cat);
-          return `<a class="chip chip-small" href="${tid ? `#quiz/${tid}` : `#quiz`}">${esc(w.label)} あと${w.need}問</a>`;
+          const cat = catCls(w.cat);
+          return `<a class="chip chip-small pred-need-chip${cat ? ` ${cat}` : ``}" href="${tid ? `#quiz/${tid}` : `#quiz`}"><span class="pred-dot" aria-hidden="true"></span>${esc(w.label)} あと${w.need}問</a>`;
         });
         body = `
           <div class="pred-empty">
@@ -817,7 +887,7 @@ window.Views.progress = (function () {
       }
       card.innerHTML = `
         <div class="recommend-head">
-          <h3 class="card-title" id="pred-title">${ic(`chart`)}合格予測(宅建士)</h3>
+          ${title}
           <span class="pred-badge">アプリ独自の推定</span>
         </div>
         ${toggle}
@@ -861,7 +931,7 @@ window.Views.progress = (function () {
     const label = (d) => `${DateUtil.toJapanese(d.date, true)}: ${d.sec >= 60 ? durText(d.sec) : d.sec > 0 ? `1分未満` : `記録なし`}`;
     card.innerHTML = `
       <div class="recommend-head">
-        <h3 class="card-title" id="st-title">${ic(`clock`)}学習時間</h3>
+        ${titleHtml(`clock`, `学習時間`, `st-title`)}
         <span class="st-total num">直近7日 <strong>${durText(week)}</strong></span>
       </div>
       <div class="st-chart" role="img" aria-label="${esc(`直近7日の学習時間(古い順): ${days.map(label).join(`、`)}`)}" data-role="st-chart">
@@ -892,38 +962,90 @@ window.Views.progress = (function () {
     }
     if (!Array.isArray(list) || !list.length) return null;
     const earned = list.filter((b) => b.earnedAt).length;
+    const rows = list.map((b) => {
+      const pr = b.progress;
+      const unit = pr && pr.unit ? pr.unit : ``;
+      const got = !!b.earnedAt;
+      return {
+        b, got, pr,
+        status: got ? `${DateUtil.toJapanese(b.earnedAt)}に獲得` : pr ? `${pr.now}/${pr.goal}${unit}` : `未獲得`,
+        pct: got ? 100 : pr && pr.goal > 0 ? Math.round((Math.min(pr.now, pr.goal) / pr.goal) * 100) : 0,
+      };
+    });
+    // 最初に下の欄で見せるメダル: 獲得に一番近いもの(すべて獲得済みなら最後に獲得したもの)
+    const locked = rows.filter((x) => !x.got);
+    const first = locked.length ? locked.reduce((m, x) => (x.pct > m.pct ? x : m), locked[0])
+      : rows.slice().sort((x, y) => (x.b.earnedAt < y.b.earnedAt ? 1 : -1))[0];
     const card = document.createElement(`section`);
     card.className = `card span-all badge-card`;
     card.id = `progress-badges`;
     card.setAttribute(`aria-labelledby`, `badge-title`);
     card.innerHTML = `
       <div class="recommend-head">
-        <h3 class="card-title" id="badge-title">${ic(`trophy`)}バッジ</h3>
+        ${titleHtml(`trophy-fill`, `バッジ`, `badge-title`, ``, `sticker-gold`)}
         <span class="badge-total num">${list.length}個中 <strong>${earned}</strong>個</span>
       </div>
       <ul class="badge-grid">
-        ${list.map((b) => {
-          const pr = b.progress;
-          const unit = pr && pr.unit ? pr.unit : ``;
-          const got = !!b.earnedAt;
-          const status = got ? `${DateUtil.toJapanese(b.earnedAt)}に獲得` : pr ? `${pr.now}/${pr.goal}${unit}` : `未獲得`;
-          const pct = pr && pr.goal > 0 ? Math.round((Math.min(pr.now, pr.goal) / pr.goal) * 100) : 0;
-          return `
-            <li class="badge-item${got ? ` is-earned` : ` is-locked`}">
-              <span class="badge-icon" aria-hidden="true">${ic(b.icon || `star`, 22)}</span>
-              <span class="badge-main">
-                <span class="badge-name">${esc(b.name)}<span class="sr-only">${got ? `(獲得済み)` : `(未獲得)`}</span></span>
-                <span class="badge-desc">${esc(b.desc)}</span>
-                ${got ? `<span class="badge-status">${ic(`check-circle`, 14)}${esc(status)}</span>` : `
-                  <span class="badge-progress">
-                    <span class="progress-bar" role="progressbar" aria-label="${esc(`${b.name}の進み具合`)}" aria-valuemin="0" aria-valuemax="${pr ? pr.goal : 1}" aria-valuenow="${pr ? Math.min(pr.now, pr.goal) : 0}" aria-valuetext="${esc(status)}"><span class="progress-bar-fill" style="width:${pct}%"></span></span>
-                    <span class="badge-status num" aria-hidden="true">${esc(status)}</span>
-                  </span>`}
-              </span>
-            </li>`;
-        }).join(``)}
-      </ul>`;
+        ${rows.map((x, i) => `
+          <li class="badge-item${x.got ? ` is-earned` : ` is-locked`}">
+            <button type="button" class="badge-btn" data-badge="${i}" aria-pressed="${x === first}" aria-controls="badge-detail">
+              ${medalHtml(x, false)}
+              <span class="badge-name">${esc(x.b.name)}<span class="sr-only">${x.got ? `(獲得済み)` : `(未獲得)`}</span></span>
+            </button>
+            ${x.got ? `<span class="badge-status num">${ic(`check-circle-fill`, 14)}<span class="sr-only">${esc(x.status)}</span><span aria-hidden="true">${esc(badgeShortDate(x.b.earnedAt))}</span></span>`
+              : `<span class="badge-status num" role="progressbar" aria-label="${esc(`${x.b.name}の進み具合`)}" aria-valuemin="0" aria-valuemax="${x.pr ? x.pr.goal : 1}" aria-valuenow="${x.pr ? Math.min(x.pr.now, x.pr.goal) : 0}" aria-valuetext="${esc(x.status)}">${esc(x.status)}</span>`}
+          </li>`).join(``)}
+      </ul>
+      <div class="badge-detail" id="badge-detail" aria-live="polite" data-role="badge-detail">${badgeDetailHtml(first, locked.length > 0 && !first.got)}</div>`;
+    // メダルを押すと、下の欄にそのバッジの説明と進み具合を出す(iPhone ではツールチップが出ないため)
+    const detail = card.querySelector(`[data-role="badge-detail"]`);
+    card.querySelector(`.badge-grid`).addEventListener(`click`, (e) => {
+      const btn = e.target.closest(`[data-badge]`);
+      if (!btn) return;
+      const x = rows[Number(btn.dataset.badge)];
+      if (!x) return;
+      card.querySelectorAll(`[data-badge]`).forEach((b) => b.setAttribute(`aria-pressed`, String(b === btn)));
+      detail.innerHTML = badgeDetailHtml(x, false);
+    });
     return card;
+  }
+
+  // メダル: 獲得済みは金色(光の線・リボン)、まだのものは灰色+進み具合の輪(緑)
+  function medalHtml(x, large) {
+    const R = 33;
+    const C = 2 * Math.PI * R;
+    const ring = x.got ? `` : `
+      <svg class="medal-ring" viewBox="0 0 72 72" aria-hidden="true" focusable="false">
+        <circle class="medal-ring-track" cx="36" cy="36" r="${R}"></circle>
+        ${x.pct > 0 ? `<circle class="medal-ring-fill" cx="36" cy="36" r="${R}" stroke-dasharray="${((C * x.pct) / 100).toFixed(1)} ${C.toFixed(1)}"></circle>` : ``}
+      </svg>`;
+    return `<span class="medal${x.got ? ` is-gold` : ``}${large ? ` medal-lg` : ``}" aria-hidden="true">${ring}<span class="medal-face">${ic(x.b.icon || `star`, large ? 30 : 24)}</span></span>`;
+  }
+
+  // 「10/16」(年が違えば年も)
+  function badgeShortDate(s) {
+    const d = DateUtil.parse(s);
+    if (!d) return String(s || ``);
+    const now = DateUtil.parse(DateUtil.today());
+    return `${now && d.getFullYear() !== now.getFullYear() ? `${d.getFullYear()}/` : ``}${d.getMonth() + 1}/${d.getDate()}`;
+  }
+
+  // 下の欄: メダル・名前・説明・進み具合(next: 最初に出す「次のバッジ」)
+  function badgeDetailHtml(x, next) {
+    if (!x) return ``;
+    const eyebrow = x.got ? `獲得済み` : next ? `次のバッジ` : `未獲得`;
+    return `
+      ${medalHtml(x, true)}
+      <div class="badge-detail-main">
+        <p class="badge-detail-eyebrow">${eyebrow}</p>
+        <p class="badge-detail-name">${esc(x.b.name)}</p>
+        <p class="badge-desc">${esc(x.b.desc)}</p>
+        ${x.got ? `<p class="badge-detail-status">${ic(`check-circle-fill`, 14)}${esc(x.status)}</p>` : `
+          <div class="badge-detail-bar">
+            <span class="progress-bar" aria-hidden="true"><span class="progress-bar-fill" style="width:${x.pct}%"></span></span>
+            <span class="badge-detail-num num">${esc(x.status)}</span>
+          </div>`}
+      </div>`;
   }
 
   // ---- テーマ別の進捗(テーマ表示) ----
@@ -970,8 +1092,8 @@ window.Views.progress = (function () {
       : stmtCount > 0 ? { nav: `#ox/topic/${encodeURIComponent(topic.id)}`, label: `○×で腕試し` } : null;
     return `
       <li class="prog-theme">
-        <a class="prog-theme-main" href="${href}">
-          <span class="topic-icon">${ic(topic.icon || `book-open`)}</span>
+        <a class="prog-theme-main${topicCatCls(topic.id)}" href="${href}">
+          ${sticker(topic.icon || `book-open`, ``, 20)}
           <span class="prog-theme-body">
             <span class="prog-theme-head"><span class="prog-theme-name">${esc(topic.name)}</span><span class="cat-bar-meta num"><span class="sr-only">学習済み</span>${r.learned || 0}/${r.total}</span></span>
             <span class="progress-bar" aria-hidden="true"><span class="progress-bar-fill${pct === 100 ? ` fill-success` : ``}" style="width:${pct}%"></span></span>
@@ -998,7 +1120,7 @@ window.Views.progress = (function () {
     });
     card.innerHTML = `
       <div class="recommend-head">
-        <h3 class="card-title prog-theme-title" id="prog-theme-title">${ic(`target`)}テーマ別の進捗</h3>
+        ${titleHtml(`target`, `テーマ別の進捗`, `prog-theme-title`, `prog-theme-title`)}
         <a class="link-btn" href="#settings/profile">${hasInterests ? `テーマを変更` : `テーマを選ぶ`}</a>
       </div>
       <p class="prog-note">${hasInterests
@@ -1017,7 +1139,7 @@ window.Views.progress = (function () {
     card.id = `progress-weak`;
     card.setAttribute(`aria-labelledby`, `prog-weak-title`);
     card.innerHTML = `
-      <h3 class="card-title ana-title" id="prog-weak-title">${ic(`alert`)}苦手なポイント</h3>
+      ${titleHtml(`alert`, `苦手なポイント`, `prog-weak-title`, `ana-title`, `sticker-warn`)}
       <p class="prog-note">間違えた問題・用語です。タップすると解き直し・読み直しができます。</p>
       ${weakHtml(items, ``)}`;
     return card;
@@ -1029,7 +1151,7 @@ window.Views.progress = (function () {
     const card = document.createElement(`section`);
     card.className = `card span-all prog-other-card`;
     card.innerHTML = `
-      ${ids.length ? `<h3 class="card-title">ほかの暮らし・取引のテーマ</h3>` : ``}
+      ${ids.length ? titleHtml(`home`, `ほかの暮らし・取引のテーマ`) : ``}
       <div data-role="list"></div>
       <div class="prog-more-links">
         <a class="link-btn" href="#topics">${ic(`book-open`, 16)}すべてのトピック(宅建士・税理士試験も)${ic(`chevron-right`, 16)}</a>
@@ -1047,8 +1169,8 @@ window.Views.progress = (function () {
     const rows = Stats.byTopic().filter((r) => !only || only.includes(r.topic.id));
     if (only) rows.sort((a, b) => only.indexOf(a.topic.id) - only.indexOf(b.topic.id));
     wrapEl.innerHTML = rows.map((r) => `
-          <a class="prog-topic" href="#topics/${r.topic.id}">
-            <span class="topic-icon">${ic(r.topic.icon || `book-open`)}</span>
+          <a class="prog-topic${topicCatCls(r.topic.id)}" href="#topics/${r.topic.id}">
+            ${sticker(r.topic.icon || `book-open`, `sticker-sm`, 18)}
             <span class="prog-topic-main">
               <span class="prog-topic-head"><span class="prog-topic-name">${esc(r.topic.name)}</span><span class="cat-bar-meta">${r.done}/${r.total}</span></span>
               <span class="progress-bar"><span class="progress-bar-fill${r.pct === 100 ? ` fill-success` : ``}" style="width:${r.pct}%"></span></span>
@@ -1063,11 +1185,11 @@ window.Views.progress = (function () {
     card.className = `card span-all`;
     const rows = Stats.byTopic();
     card.innerHTML = `
-      <h3 class="card-title">トピック別の進捗</h3>
+      ${titleHtml(`book-open`, `トピック別の進捗`)}
       <div class="prog-topic-list">
         ${rows.map((r) => `
-          <a class="prog-topic" href="#topics/${r.topic.id}">
-            <span class="topic-icon">${ic(r.topic.icon || `book-open`)}</span>
+          <a class="prog-topic${topicCatCls(r.topic.id)}" href="#topics/${r.topic.id}">
+            ${sticker(r.topic.icon || `book-open`, `sticker-sm`, 18)}
             <span class="prog-topic-main">
               <span class="prog-topic-head"><span class="prog-topic-name">${esc(r.topic.name)}</span><span class="cat-bar-meta">${r.done}/${r.total}</span></span>
               <span class="progress-bar"><span class="progress-bar-fill${r.pct === 100 ? ` fill-success` : ``}" style="width:${r.pct}%"></span></span>
@@ -1095,7 +1217,8 @@ window.Views.progress = (function () {
     const weak = themeWeakCard(snap);
     const time = safeCard(studyTimeCard);
     const badges = safeCard(badgeCard);
-    const cards = [theme, summaryCard(themeScope(ids, isLearned)), weak, time, srsCard(), heatmapCard()];
+    // 記録のカウンターを先頭に(試験の表示と同じ並び)
+    const cards = [summaryCard(themeScope(ids, isLearned)), theme, weak, time, srsCard(), heatmapCard()];
     if (examPoints().length) cards.push(examCard());
     cards.push(badges, otherThemesCard(chosen.length ? ids : LIFE_ORDER), dataNote());
     cards.filter(Boolean).forEach((el) => grid.appendChild(el));
@@ -1116,9 +1239,9 @@ window.Views.progress = (function () {
     const themes = useThemeView(profile, param);
     const wrap = document.createElement(`div`);
     wrap.className = `view progress-view${themes ? ` is-themes` : ``}`;
+    // 見出しの下の説明は置かない(上の記録のカウンターから始める)
     wrap.innerHTML = `
       <h2>学習の進捗</h2>
-      <p class="view-desc">${themes ? `気になるテーマごとの進み具合と、次に読むところを確認できます。` : `分野ごとの得意・苦手と、次にやることを確認できます。`}</p>
       <div class="prog-grid" data-role="grid"></div>`;
     root.appendChild(wrap);
     const grid = wrap.querySelector(`[data-role="grid"]`);
@@ -1130,8 +1253,8 @@ window.Views.progress = (function () {
     const time = safeCard(studyTimeCard);
     const badges = safeCard(badgeCard);
     const predictFirst = state.typeId === `takken`;
-    // 並び: (合格予測) → 弱点分析 → (合格予測) → 模擬試験の推移 → まとめ → 学習時間 → 定着度 → カレンダー → バッジ → トピック別
-    [predictFirst ? predict : null, analysis, predictFirst ? null : predict, examCard(), summaryCard(), time, srsCard(), heatmapCard(), badges, topicCard(), dataNote()]
+    // 並び: 記録のカウンター → (合格予測) → 弱点分析 → (合格予測) → 模擬試験の推移 → 学習時間 → 定着度 → カレンダー → バッジ → トピック別
+    [summaryCard(), predictFirst ? predict : null, analysis, predictFirst ? null : predict, examCard(), time, srsCard(), heatmapCard(), badges, topicCard(), dataNote()]
       .filter(Boolean).forEach((el) => grid.appendChild(el));
     const jumps = { weak: analysis, predict, time, badges };
     const jump = param && Object.prototype.hasOwnProperty.call(jumps, param) ? jumps[param] : null;

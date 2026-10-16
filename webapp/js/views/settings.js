@@ -28,6 +28,11 @@ window.Views.settings = (function () {
   const NO_BACKUP = new Set([`studyTimeLock`]);
   const esc = (s) => UI.escapeHtml(s);
 
+  // カードの見出し(v3): 左に丸いステッカー(色の面+白いアイコン。飾りなので読み上げない)。cls: sticker-gold など
+  function cardTitle(icon, text, cls) {
+    return `<h3 class="settings-card-title"><span class="sticker sticker-sm${cls ? ` ${cls}` : ``}" aria-hidden="true">${UI.icon(icon, { size: 18 })}</span><span>${text}</span></h3>`;
+  }
+
   function typeOk(key, v) {
     const types = (KEY_TYPES[key] || ``).split(`|`);
     return types.some((t) => {
@@ -84,7 +89,7 @@ window.Views.settings = (function () {
     const interests = profile ? profile.interests || [] : [];
     return `
       <div class="card settings-card" data-role="profile-card">
-        <h3 class="settings-card-title">${UI.icon(`target`)}学ぶ目的</h3>
+        ${cardTitle(`target`, `学ぶ目的`)}
         <p class="view-desc">選んだ目的に合わせて、ホームのおすすめとトピックの並びが変わります。</p>
         <fieldset class="profile-goals" data-role="goals">
           <legend class="sr-only">何のために学びますか</legend>
@@ -214,7 +219,7 @@ window.Views.settings = (function () {
   function goalCardHtml() {
     return `
       <div class="card settings-card" data-role="goal-card">
-        <h3 class="settings-card-title">${UI.icon(`flame`)}1日の目標</h3>
+        ${cardTitle(`flame-fill`, `1日の目標`, `sticker-gold`)}
         <p class="view-desc">ホームの「今日の学習」のリングの目標です。学習の回数(4択・○×・用語カードなど)か、学習時間(分)で決められます。達成した日は記録され、バッジにも数えます。</p>
         <div data-role="goal-kind"></div>
         <form class="settings-goal-form" data-role="goal-form" novalidate>
@@ -315,7 +320,7 @@ window.Views.settings = (function () {
   function answerCardHtml() {
     return `
       <div class="card settings-card" data-role="answer-card">
-        <h3 class="settings-card-title">${UI.icon(`pencil-check`)}問題の解き方</h3>
+        ${cardTitle(`pencil-check`, `問題の解き方`)}
         <div class="settings-answer-opts">
           <label class="check-inline"><input type="checkbox" data-role="ai-button" aria-describedby="settings-ai-help"${aiButtonOn() ? ` checked` : ``}>解説に「AIに聞く」ボタンを出す</label>
           <p class="settings-answer-help" id="settings-ai-help">4択・○×・模擬試験の結果で、問題・自分の答え・解説をまとめた質問文をコピーし、ChatGPT・Claude・Gemini に貼り付けて質問できます。アプリからAIのサービスには何も送信しません。</p>
@@ -343,12 +348,12 @@ window.Views.settings = (function () {
     wrap.className = `view settings-view`;
     wrap.innerHTML = `
       <h2>設定</h2>
-      <p class="view-desc">学習の記録(記憶済みの用語・解いた問題・復習の予定など)は、この端末のブラウザの中にだけ保存されています。Safariで長期間開かないと記録が消えることがあります。ホーム画面に追加するか、定期的にバックアップを取ってください。</p>
+      <p class="view-desc settings-intro"><span class="sticker sticker-sm" aria-hidden="true">${UI.icon(`shield`, { size: 18 })}</span><span>学習の記録(記憶済みの用語・解いた問題・復習の予定など)は、この端末のブラウザの中にだけ保存されています。Safariで長期間開かないと記録が消えることがあります。ホーム画面に追加するか、定期的にバックアップを取ってください。</span></p>
 
       ${profileCardHtml(readProfile())}
 
       <div class="card settings-card" data-role="targets-card">
-        <h3 class="settings-card-title">${UI.icon(`calendar`)}目標の試験</h3>
+        ${cardTitle(`calendar`, `目標の試験`)}
         <p class="view-desc">登録した試験日までの残り日数と1日あたりの学習量の目安がホームに表示されます。★を付けた試験がホームに大きく表示されます(終了した試験は、次の試験に切り替わります)。試験名をタップすると編集できます。</p>
         <div class="target-list" data-role="target-list"></div>
         <button type="button" class="btn" data-role="add-target">${UI.icon(`calendar`)}試験日を登録</button>
@@ -357,7 +362,7 @@ window.Views.settings = (function () {
       ${goalCardHtml()}
 
       <div class="card settings-card" data-role="limit-card">
-        <h3 class="settings-card-title">${UI.icon(`repeat`)}今日の復習</h3>
+        ${cardTitle(`repeat`, `今日の復習`)}
         <p class="view-desc">「今日の復習」で1日に出す新しい用語の数です。期限が来た復習はこの数に関係なくすべて出題されます。</p>
         <div data-role="new-limit"></div>
       </div>
@@ -365,14 +370,14 @@ window.Views.settings = (function () {
       ${answerCardHtml()}
 
       <div class="card settings-card">
-        <h3 class="settings-card-title">${UI.icon(`moon`)}テーマ</h3>
+        ${cardTitle(`moon`, `テーマ`)}
         <p class="view-desc">配色を手動で切り替えられます(既定は端末の設定に追従します)。</p>
         <div data-role="theme"></div>
       </div>
 
       ${ttsSupported ? `
       <div class="card settings-card">
-        <h3 class="settings-card-title">${UI.icon(`volume`)}読み上げ</h3>
+        ${cardTitle(`volume`, `読み上げ`)}
         <p class="view-desc">用語カードの読み上げ速度を調整できます。</p>
         <label class="settings-range-label">
           <span>速度: <span data-role="rate-value">1.0</span>倍</span>
@@ -384,7 +389,7 @@ window.Views.settings = (function () {
       </div>` : ``}
 
       <div class="card settings-card" data-role="backup-card">
-        <h3 class="settings-card-title">${UI.icon(`download`)}エクスポート(バックアップ)</h3>
+        ${cardTitle(`download`, `エクスポート(バックアップ)`)}
         <p class="view-desc">現在の学習データを1つのJSONファイルとして保存します。別の端末への移行や、記録が消えたときの復元に使えます。</p>
         <p class="settings-backup-status" data-role="backup-status">${esc(backupStatusText())}</p>
         <p class="settings-protect" data-role="protect" hidden>
@@ -396,7 +401,7 @@ window.Views.settings = (function () {
       </div>
 
       <div class="card settings-card">
-        <h3 class="settings-card-title">${UI.icon(`upload`)}インポート(復元・移行)</h3>
+        ${cardTitle(`upload`, `インポート(復元・移行)`)}
         <p class="view-desc">エクスポートしたJSONファイルを選択すると、現在のデータを上書きして復元します。読み込んだあとは自動で再読み込みします。</p>
         <input type="file" accept="application/json,.json" data-role="import-file" id="settings-import-file" class="settings-file-input sr-only">
         <label for="settings-import-file" class="btn btn-secondary settings-file-label">${UI.icon(`upload`)}バックアップ(JSON)を選択</label>
@@ -430,8 +435,9 @@ window.Views.settings = (function () {
             <div class="target-row${onHome ? ` is-home` : ``}">
               <button type="button" class="btn btn-icon known-toggle${t.primary ? ` is-known` : ``}" data-primary="${esc(t.id)}" aria-pressed="${!!t.primary}" aria-label="${esc(`${t.name}: ${starLabel}`)}">${UI.icon(t.primary ? `star-fill` : `star`)}</button>
               <button type="button" class="target-row-main target-row-edit" data-edit="${esc(t.id)}" aria-label="${esc(`「${t.name}」を編集${tentative ? `(試験日は見込み)` : ``}`)}">
-                <span class="target-row-name">${esc(t.name)}<span class="source-tag">${esc(type ? type.shortName : `その他`)}</span>${tentative ? `<span class="source-tag target-tentative-tag">見込み</span>` : ``}${onHome ? `<span class="source-tag target-home-tag">ホームに表示中</span>` : ``}</span>
-                <span class="target-row-date">${DateUtil.toJapanese(t.date, true)}${tentative ? `<span class="nowrap">(見込み)</span>` : ``}・<span class="nowrap">${d > 0 ? `あと${d}日` : d === 0 ? `今日` : `終了`}</span></span>
+                <span class="target-row-name">${esc(t.name)}</span>
+                <span class="target-row-tags"><span class="source-tag">${esc(type ? type.shortName : `その他`)}</span>${tentative ? `<span class="source-tag target-tentative-tag">見込み</span>` : ``}${onHome ? `<span class="source-tag target-home-tag">ホームに表示中</span>` : ``}</span>
+                <span class="target-row-date"><span class="nowrap">${DateUtil.toJapanese(t.date, true)}</span>${tentative ? `<span class="nowrap">(見込み)</span>` : ``}・<span class="nowrap">${d > 0 ? `あと${d}日` : d === 0 ? `今日` : `終了`}</span></span>
                 <span class="target-row-hint" aria-hidden="true">${UI.icon(`chevron-right`, { size: 18 })}</span>
               </button>
               <button type="button" class="btn btn-icon" data-remove="${esc(t.id)}" aria-label="${esc(`「${t.name}」を削除`)}">${UI.icon(`trash`)}</button>

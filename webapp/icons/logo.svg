@@ -1,8 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <title>ふどまな</title>
-  <rect width="512" height="512" rx="112" fill="#1e7a4c"/>
-  <g transform="translate(256 260) scale(1.04) translate(-256 -274)"><g fill="#ffffff" stroke="#ffffff" stroke-width="12" stroke-linejoin="round">
-    <path d="M244 150 120 248Q114 253 114 262V380Q176 364 244 390Z"/>
-    <path d="M268 150 392 248Q398 253 398 262V380Q336 364 268 390Z"/>
-  </g><path d="M144 300Q182 291 214 301M144 330Q182 321 214 331M298 301Q330 291 368 300M298 331Q330 321 368 330" fill="none" stroke="#a6dcbc" stroke-width="10" stroke-linecap="round"/><path d="M228 346A28 28 0 0 1 284 346V398Q284 404 278 404H234Q228 404 228 398Z" fill="#f2b01e"/></g>
+  <!-- 小さく(28〜32px)出すロゴ: 家の形のマスコット(js/mascot.js)を緑の札に乗せたもの。札の下に押せる物と同じ「ふち」 -->
+  <rect width="512" height="512" rx="112" fill="#135a36"/>
+  <path fill="#1e7a4c" d="M112 0h288a112 112 0 0 1 112 112v262a112 112 0 0 1-112 112H112a112 112 0 0 1-112-112V112a112 112 0 0 1 112-112z"/>
+  <g transform="translate(45.58 28.17) scale(4.2083)">
+    <!-- ステッカーのふち(札の緑と屋根の緑を分ける) -->
+    <g fill="#fff6e2" stroke="#fff6e2" stroke-linejoin="round">
+      <rect x="66" y="17" width="11" height="22" rx="2" stroke-width="11"/>
+      <rect x="18" y="42" width="64" height="52" rx="13" stroke-width="11"/>
+      <path d="M50 14 88 47H12z" stroke-width="19"/>
+    </g>
+    <rect fill="#135a36" x="66" y="17" width="11" height="22" rx="2"/>
+    <rect fill="#fff6e2" x="18" y="42" width="64" height="52" rx="13"/>
+    <path fill="#2e9a62" stroke="#2e9a62" stroke-width="8" stroke-linejoin="round" d="M50 14 88 47H12z"/>
+    <path d="M13 51.5h74" stroke="#135a36" stroke-width="5" stroke-linecap="round"/>
+    <path fill="#f2b01e" d="M44 94v-9a6 6 0 0 1 12 0v9z"/>
+    <!-- 顔は小さくても見えるよう、目と口をアプリのマスコットより少し大きく -->
+    <ellipse fill="#f6a540" cx="28.5" cy="71" rx="6" ry="3.8"/>
+    <ellipse fill="#f6a540" cx="71.5" cy="71" rx="6" ry="3.8"/>
+    <circle fill="#1f2a22" cx="37.5" cy="62.5" r="5.2"/>
+    <circle fill="#1f2a22" cx="62.5" cy="62.5" r="5.2"/>
+    <circle fill="#fff" cx="39.3" cy="60.7" r="1.7"/>
+    <circle fill="#fff" cx="64.3" cy="60.7" r="1.7"/>
+    <path fill="#1f2a22" d="M43.5 69q6.5 8 13 0z"/>
+  </g>
 </svg>

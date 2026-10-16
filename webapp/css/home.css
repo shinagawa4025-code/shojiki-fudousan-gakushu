@@ -23,13 +23,6 @@
 /* ---------- ホーム(v3: ゲーム感のある学習アプリ) ---------- */
 /* 上に記録のカウンター → マスコットのあいさつと大きな「つづける」→ 今日のメニューの「道」→ 残り日数の色のカード → タイル。
    押せる物は下にふち(--lip-*)があり押すと沈む。置いてあるだけの面は線+下 2px。アイコンは丸いステッカー(分野の色) */
-/* 連続学習・お祝いの色(旧名。いまは金色) */
-.home-view, .onb-overlay {
-  --home-warm: var(--gold);
-  --home-warm-ink: var(--gold-text);
-  --home-warm-soft: var(--gold-soft);
-  --home-radius: var(--radius-card);
-}
 
 /* 上: 記録のカウンター+マスコット(スマホは縦に、PC は左右に) */
 .home-head { display: flex; flex-direction: column; gap: var(--sp-4); margin: var(--sp-1) 0 var(--sp-6); }
@@ -173,7 +166,6 @@
 .hero2-days { margin: 0; font-size: var(--fs-md); font-weight: 700; line-height: 1.2; color: var(--color-heading); }
 .hero2-days strong { margin-right: 2px; font-size: 2.125rem; line-height: 1.1; color: var(--color-primary); font-variant-numeric: tabular-nums; }
 .hero2-sub { margin: 2px 0 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
-.hero2-sub-lead { margin-top: var(--sp-1); color: var(--color-text); text-wrap: pretty; }
 .hero2-link { display: inline-flex; align-items: center; gap: var(--sp-1); align-self: flex-start; min-height: 44px; font-size: var(--fs-sm); }
 .hero2-target-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .hero2-notes { display: flex; flex-direction: column; gap: var(--sp-2); }
@@ -276,7 +268,7 @@ a.theme-card:active { transform: translateY(4px); box-shadow: 0 0 0 transparent;
 .continue-bar .progress-bar-fill { display: block; }
 
 /* 1行ずつのリスト(次にやること): 行のアイコンは丸いステッカー(分野の色。style.css の .list-row-icon) */
-.home-view .list-group { overflow: hidden; border: 1px solid var(--card-border); border-radius: var(--home-radius); background: var(--color-surface); box-shadow: var(--shadow-card); }
+.home-view .list-group { overflow: hidden; border: 1px solid var(--card-border); border-radius: var(--radius-card); background: var(--color-surface); box-shadow: var(--shadow-card); }
 .home-view .list-row { position: relative; display: flex; align-items: center; gap: var(--sp-3); min-height: 64px; padding: 10px var(--sp-4); color: var(--color-text); text-decoration: none; transition: background var(--dur-1); }
 .home-view .list-row + .list-row::before { content: ""; position: absolute; top: 0; left: 68px; right: 0; border-top: 2px solid var(--color-border); }
 .home-view .list-row:active { background: var(--color-press); }
@@ -342,7 +334,10 @@ a.theme-card:active { transform: translateY(4px); box-shadow: 0 0 0 transparent;
 /* 模擬試験 */
 .home-exam { display: flex; flex-direction: column; gap: var(--sp-3); }
 .home-exam-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) 10px; }
-.home-exam-head .card-title { flex: 1; margin: 0; }
+/* 題名は縮めない(幅の狭いスマホで「模/擬/試/験」と1文字ずつ折り返さないように。入りきらないときは前回・最高が次の行へ) */
+.home-exam-head .card-title { flex: 1 0 auto; margin: 0; }
+/* カードの見出しのステッカーは 36px(進捗・計画・設定のカードと同じ) */
+.home-exam-head > .sticker { width: 36px; height: 36px; }
 .home-exam-scores { display: flex; gap: var(--sp-3); margin: 0; font-size: var(--fs-sm); color: var(--color-text-muted); }
 .home-exam-scores strong { font-family: var(--font-display); font-size: var(--fs-xl); font-weight: var(--fw-display); color: var(--color-heading); }
 .home-exam .home-card-note { margin: 0; }
@@ -412,143 +407,11 @@ a.theme-card:active { transform: translateY(4px); box-shadow: 0 0 0 transparent;
 .after-note { margin: 0; }
 
 /* 日本語の見出し・ボタンは、対応ブラウザでは文節の切れ目で折り返す */
-:is(.home-say, .theme-title, .after-next-title, .hero-predict > span, .home-plan-phase, .home-go-title, .list-row-title, .purpose-note > span, .purpose-item > span, .hero2-eyebrow > span, .home-news-head .card-title, .home-note-main > strong, .continue-title, .count-lead, .path-goal-text, .onb-title, .onb-choice-title, .onb-choice-desc, .onb-interest-text b, .onb-official > span) { word-break: auto-phrase; }
+:is(.home-say, .theme-title, .after-next-title, .hero-predict > span, .home-plan-phase, .home-go-title, .list-row-title, .purpose-note > span, .purpose-item > span, .hero2-eyebrow > span, .home-news-head .card-title, .home-note-main > strong, .continue-title, .count-lead, .path-goal-text) { word-break: auto-phrase; }
 
-/* ---------- 初回ガイド・使い方(features.css の .onb-* を上書き。スマホは全画面) ---------- */
-/* 初回ガイドの上に用語のシートを開いたときは、シートを前に出す */
-body.onb-open .sheet-backdrop { z-index: 180; }
-.onb-logo { width: 72px; height: 72px; border-radius: 18px; }
-.onb-title { text-wrap: balance; }
-.onb-lead { text-wrap: pretty; }
-.onb-points li { padding: 10px var(--sp-3); }
-.onb-foot { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
-.onb-dots { justify-content: center; }
-.onb-prev { min-height: 44px; padding: 0 var(--sp-3) 0 var(--sp-2); }
-.onb-next { min-height: 48px; min-width: 120px; padding: 0 var(--sp-5); font-weight: 700; }
-.onb-next.btn-secondary { font-weight: 600; }
-@media (max-width: 767px), (max-height: 500px) and (orientation: landscape) {
-  .onb-overlay { padding: 0; background: var(--color-surface); }
-  .onb-overlay .onb-dialog { max-width: none; height: 100%; max-height: none; border-radius: 0; box-shadow: none; padding-top: var(--safe-top); animation: fade-in var(--dur-2) var(--ease-std); }
-  .onb-top { padding: var(--sp-2) var(--sp-2) 0 var(--sp-4); padding-left: max(var(--sp-4), env(safe-area-inset-left, 0px)); }
-  .onb-body { padding: var(--sp-2) max(var(--sp-4), env(safe-area-inset-right, 0px)) var(--sp-4) max(var(--sp-4), env(safe-area-inset-left, 0px)); }
-  .onb-foot { padding: var(--sp-3) max(var(--sp-4), env(safe-area-inset-right, 0px)) calc(var(--sp-3) + var(--safe-bottom)) max(var(--sp-4), env(safe-area-inset-left, 0px)); }
-}
-:root[data-theme="dark"] .onb-overlay { background: var(--color-overlay); }
-@media (max-width: 767px), (max-height: 500px) and (orientation: landscape) { :root[data-theme="dark"] .onb-overlay { background: var(--color-surface-raised); } }
-@media (max-width: 359px) {
-  .onb-prev-text { display: none; }
-  .onb-prev { padding: 0 var(--sp-2); }
-  .onb-next { min-width: 0; padding: 0 var(--sp-4); }
-}
-@media (min-width: 768px) {
-  .onb-dialog { max-width: 560px; }
-}
-
-/* 目的の選択(大きなラジオカード) */
-.onb-choices { display: grid; gap: var(--sp-2); }
-.onb-choice { display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: 64px; margin: 0; padding: var(--sp-3); border: 2px solid var(--color-border); border-radius: var(--radius-btn); background: var(--color-surface); color: var(--color-text); font: inherit; text-align: left; cursor: pointer; box-shadow: 0 3px 0 var(--lip-neutral); transition: border-color var(--dur-1), background var(--dur-1); }
-/* 押せる札なので下にふち(選択中は緑のふち。設定の目的の選択と同じ形) */
-.onb-choice[aria-checked="true"] { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 3px 0 var(--color-primary); }
-@media (hover: hover) { .onb-choice:hover { border-color: var(--color-primary); } }
-/* 目的のアイコン: 丸いステッカー(緑の面+白いアイコン) */
-.onb-choice-icon { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; background: var(--sticker-primary); color: var(--sticker-fg); }
-.onb-choice-icon .icon { stroke-width: 2.1; }
-.onb-choice-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: var(--lh-snug); }
-.onb-choice-title { font-size: var(--fs-base); font-weight: 700; color: var(--color-heading); text-wrap: balance; }
-.onb-choice-desc { font-size: var(--fs-sm); color: var(--color-text-muted); text-wrap: balance; }
-.onb-choice-mark { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border: 1.5px solid var(--color-border-control); border-radius: 50%; color: transparent; }
-.onb-choice[aria-checked="true"] .onb-choice-mark { border-color: var(--color-primary-fill); background: var(--color-primary-fill); color: var(--color-on-primary); }
-
-/* 試験日の登録 */
-.onb-date-actions { display: flex; flex-direction: column; gap: var(--sp-2); }
-.onb-official { justify-content: flex-start; text-align: left; }
-.onb-official > span { min-width: 0; text-wrap: balance; }
-.onb-date-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius-md); background: var(--color-surface-muted); }
-.onb-date-form[hidden] { display: none; }
-.onb-date-form .field { flex: 1 1 160px; margin: 0; }
-.onb-date-form .btn { min-height: 44px; }
-
-/* 気になるテーマ(複数選択のチップ) */
-.onb-interests { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
-.onb-interest { position: relative; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; min-height: 52px; margin: 0; padding: var(--sp-2) var(--sp-3); border: 2px solid var(--color-border); border-radius: var(--radius-btn); box-shadow: 0 3px 0 var(--lip-neutral); background: var(--color-surface); color: var(--color-text); font: inherit; font-size: var(--fs-md); font-weight: 600; line-height: 1.35; text-align: left; cursor: pointer; }
-.onb-interest > .icon { flex-shrink: 0; color: var(--color-primary); }
-.onb-interest-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.onb-interest-text b { font-weight: 700; text-wrap: balance; }
-.onb-interest-text small { font-size: var(--fs-xs); font-weight: 600; color: var(--color-text-muted); text-wrap: balance; }
-.onb-interest-mark { display: grid; place-items: center; flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--color-border-control); color: transparent; }
-.onb-interest[aria-pressed="true"] { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-heading); box-shadow: 0 3px 0 var(--color-primary); }
-.onb-interest[aria-pressed="true"] .onb-interest-mark { border-color: var(--color-primary-fill); background: var(--color-primary-fill); color: var(--color-on-primary); }
-@media (max-width: 359px) {
-  .onb-interests { grid-template-columns: minmax(0, 1fr); }
-}
-
-/* 最初の1問 */
-.onb-step-question { margin: 0; }
-.onb-step-question .onb-title { font-size: var(--fs-lg); }
-.onb-question .quiz-card { margin: 0; }
-/* 全画面のガイドの中では下のタブがないので、回答バーは一番下に付ける */
-.onb-overlay .quiz-answer-bar { bottom: 0; }
-/* 固定した回答バーの下に問題の文字がのぞかないよう、スクロール領域の下の余白をなくし、代わりにカードの下に余白を付ける */
-.onb-body.onb-body-flush { padding-bottom: 0; }
-.onb-body-flush .onb-question .quiz-card { margin-bottom: var(--sp-4); }
-
-/* 幅の狭い端末(320px): ようこそ・目的の選択がなるべく1画面に収まるよう(4つ目の目的が隠れないよう)、余白と飾りを小さくする */
-@media (max-width: 359px) {
-  .onb-step { gap: var(--sp-2); }
-  .onb-hero { padding-top: 0; }
-  .onb-logo { width: 52px; height: 52px; border-radius: 14px; }
-  .onb-lead { font-size: var(--fs-sm); line-height: var(--lh-snug); }
-  .onb-points li { padding: 6px var(--sp-2); gap: var(--sp-2); }
-  .onb-point-icon { width: 28px; height: 28px; }
-  .onb-choices { gap: 6px; }
-  .onb-choice { min-height: 0; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); }
-  .onb-choice-icon { width: 32px; height: 32px; }
-  .onb-choice-icon .icon { width: 18px; height: 18px; }
-  .onb-choice-title { font-size: var(--fs-md); text-wrap: wrap; }
-  .onb-choice-desc { font-size: var(--fs-xs); text-wrap: wrap; }
-  .onb-choice-mark { width: 20px; height: 20px; }
-}
+/* ---------- 初回ガイド・使い方: 見た目はすべて css/features.css の .onb-*(v3 でここの上書きをまとめた) ---------- */
 
 /* ---------- 試験日の登録フォーム ---------- */
 .target-form-name { margin-top: var(--sp-3); }
 
-/* ---------- 設定 ---------- */
-/* スマホのヘッダー分は html の scroll-padding-top(style.css)で確保済みなので、ここは少しの余白だけ */
-.settings-view .settings-card { scroll-margin-top: var(--sp-3); }
-@media (min-width: 1024px) { .settings-view .settings-card { scroll-margin-top: var(--sp-6); } }
-.target-row.is-home { border-color: var(--color-primary); }
-.target-row-edit { flex: 1; min-width: 0; min-height: 44px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-2); margin: 0; padding: var(--sp-1) 0; background: none; border: 0; border-radius: var(--radius-sm); color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.target-row-edit > .target-row-name, .target-row-edit > .target-row-date { grid-column: 1; }
-.target-row-edit > .target-row-date { display: block; }
-.target-row-hint { grid-column: 2; grid-row: 1 / span 2; display: grid; color: var(--color-text-muted); }
-.target-home-tag { background: var(--color-primary-soft); color: var(--color-primary); }
-/* 幅の狭いスマホ(320px など)では行の余白を詰め、試験日が「(火)・」だけ次の行に残らないようにする */
-@media (max-width: 359px) {
-  .target-row { gap: var(--sp-1); padding: var(--sp-1) var(--sp-2); }
-}
-.target-empty { margin: 0; }
-.settings-backup-status { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--color-text-muted); }
-.settings-seg { max-width: 520px; }
-.settings-limit-seg .segmented-item { flex: 1 1 0; min-width: 0; min-height: 44px; flex-direction: column; gap: 0; padding: var(--sp-1) 2px; line-height: 1.2; }
-.settings-limit-seg .segmented-count { margin-left: 0; }
-.settings-import-status { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
-.settings-import-status[hidden] { display: none; }
-
-/* ---------- その他: 1行ずつのメニュー ---------- */
-.more-list { display: flex; flex-direction: column; overflow: hidden; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-1); }
-.more-row { display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: 56px; padding: var(--sp-2) var(--sp-4); background: none; border: 0; color: var(--color-text); font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: background var(--dur-1); }
-.more-row + .more-row { border-top: 1px solid var(--color-border); }
-.more-row:focus-visible { outline-offset: -2px; }
-.more-row:active { background: var(--color-surface-muted); }
-@media (hover: hover) { .more-row:hover { background: var(--color-surface-muted); } }
-.more-row-icon { width: 40px; height: 40px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: var(--sticker-bg, var(--cat, var(--sticker-primary))); color: var(--sticker-fg); }
-.more-row-icon .icon { stroke-width: 2.1; }
-.more-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: var(--lh-snug); }
-.more-row-title { font-size: var(--fs-md); font-weight: 700; color: var(--color-heading); font-feature-settings: "palt"; }
-.more-row-desc { font-size: var(--fs-xs); color: var(--color-text-muted); }
-.more-row > .icon:last-child { flex-shrink: 0; color: var(--color-text-muted); }
-.more-theme-row { margin-top: var(--sp-4); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-3); }
-.more-theme-label { display: flex; align-items: center; gap: var(--sp-2); font-weight: 700; white-space: nowrap; }
-@media (min-width: 768px) {
-  .more-list, .more-theme-row { max-width: 640px; }
-}
+/* 設定の画面・メニュー(#more)の見た目は css/shell.css */

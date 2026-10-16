@@ -1,5 +1,6 @@
 // 図解: window.Diagrams = { defs: { [図解ID]: { title, alt, caption, group, render } }, byTerm: { [用語ID]: [図解ID] }, groups: [{ id, label, ids }] }
 // 色はすべて css/style.css の .dg-* クラス経由(ライト/ダーク両対応)。id・defs・インラインstyleは使わない(1ページに複数並べても衝突しないように)
+// v3 の配色では primary(ブランド)と success がどちらも緑なので、同じ図の中で見分けたい系列は青(accent)と青緑(teal。css/learning.css)を使う
 // groups は図解の一覧の見出しと並び順(どのグループにも入っていない図は、一覧の「その他」に並ぶ)
 window.Diagrams = (function () {
   const W = 360;
@@ -140,7 +141,7 @@ window.Diagrams = (function () {
       }
       s += group(8, 8, 200, `dg-box-success`, `住居系(8)`, res);
       s += group(216, 8, 136, `dg-box-danger`, `商業系(2)`, com);
-      s += group(216, 108, 136, `dg-box-primary`, `工業系(3)`, ind);
+      s += group(216, 108, 136, `dg-box-accent`, `工業系(3)`, ind);
       s += txt(284, 238, `名称の「〜地域」は省略`, `dg-text-muted dg-text-sm`);
       return s;
     },
@@ -268,12 +269,12 @@ window.Diagrams = (function () {
       const X = (y) => 24 + y * 4.8;
       let s = ``;
       // 凡例
-      s += rect(12, 8, 14, 12, `dg-fill-primary`, 2);
+      s += rect(12, 8, 14, 12, `dg-fill-accent`, 2);
       s += txt(32, 14, `更新あり`, `dg-text-muted dg-text-sm`, `start`);
       s += rect(100, 8, 14, 12, `dg-fill-success`, 2);
       s += txt(120, 14, `更新なし(定期借地権)`, `dg-text-muted dg-text-sm`, `start`);
       const rows = [
-        { name: `普通借地権`, tag: `更新後は20年→以後10年`, from: 30, to: null, cls: `dg-fill-primary`, label: `30年以上` },
+        { name: `普通借地権`, tag: `更新後は20年→以後10年`, from: 30, to: null, cls: `dg-fill-accent`, label: `30年以上` },
         { name: `一般定期借地権`, tag: `書面(公正証書等)で`, from: 50, to: null, cls: `dg-fill-success`, label: `50年以上` },
         { name: `事業用定期借地権等`, tag: `事業用のみ・公正証書`, from: 10, to: 50, cls: `dg-fill-success`, label: `10年以上50年未満` },
         { name: `建物譲渡特約付借地権`, tag: `建物を地主に譲渡`, from: 30, to: null, cls: `dg-fill-success`, label: `30年以上` },
@@ -495,8 +496,8 @@ window.Diagrams = (function () {
       steps.forEach((st, i) => {
         const y = 8 + i * 40;
         const last = i === steps.length - 1;
-        const cls = last ? `dg-box-success` : (i === 4 || i === 5 ? `dg-box-primary` : `dg-box`);
-        s += circle(18, y + 14, 11, last ? `dg-fill-success` : `dg-fill-primary`);
+        const cls = last ? `dg-box-success` : (i === 4 || i === 5 ? `dg-box-accent` : `dg-box`);
+        s += circle(18, y + 14, 11, last ? `dg-fill-success` : `dg-fill-accent`);
         s += txt(18, y + 14, String(i + 1), `dg-text-strong dg-text-on-fill`);
         s += rect(bx, y, bw, 28, cls);
         s += txt(bc, y + 14, st[0], last ? `dg-text-strong` : `dg-text`);
@@ -679,8 +680,8 @@ window.Diagrams = (function () {
       let s = ``;
       s += txt(8, 12, `代金(税抜)を価格帯に分け、それぞれに率を掛けて合計`, `dg-text-muted`, `start`);
       const segs = [
-        { x: 8, w: 104, cls: `dg-box-primary`, rate: `5%`, inc: `税込5.5%` },
-        { x: 114, w: 104, cls: `dg-box-accent`, rate: `4%`, inc: `税込4.4%` },
+        { x: 8, w: 104, cls: `dg-box-accent`, rate: `5%`, inc: `税込5.5%` },
+        { x: 114, w: 104, cls: `dg-box-teal`, rate: `4%`, inc: `税込4.4%` },
       ];
       segs.forEach((g) => {
         s += rect(g.x, 28, g.w, 44, g.cls, 4);
@@ -768,9 +769,9 @@ window.Diagrams = (function () {
       s += rect(12, 118, 120, 54, `dg-box`);
       s += txt(72, 136, `B(買主1)`, `dg-text-strong`);
       s += txt(72, 156, `登記なし`, `dg-text dg-text-sm dg-text-danger`);
-      s += rect(228, 118, 120, 54, `dg-box-primary`);
+      s += rect(228, 118, 120, 54, `dg-box-accent`);
       s += txt(288, 136, `C(買主2)`, `dg-text-strong`);
-      s += txt(288, 156, `③先に登記`, `dg-text dg-text-sm dg-text-primary`);
+      s += txt(288, 156, `③先に登記`, `dg-text dg-text-sm dg-text-accent`);
       s += rect(12, 184, 120, 44, `dg-box-danger`);
       s += txt(72, 199, `Cに所有権を`, `dg-text dg-text-sm`);
       s += txt(72, 216, `対抗できない`, `dg-text-strong dg-text-danger`);

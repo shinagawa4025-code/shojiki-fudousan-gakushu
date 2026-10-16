@@ -325,17 +325,21 @@ window.Views.review = (function () {
       const next = nextDueInfo();
       const el = document.createElement(`div`);
       el.className = `rv-done`;
-      el.innerHTML = `
-        <div class="rv-done-ring" aria-hidden="true">
+      // 上の飾り: 元気な表情のマスコット(紙吹雪はここから)。マスコットがなければ従来のチェックの輪
+      const hero = window.Mascot && typeof Mascot.svg === `function`
+        ? `<div class="rv-done-hero" aria-hidden="true">${Mascot.svg(`cheer`, 112, { className: `rv-done-mascot` })}</div>`
+        : `<div class="rv-done-ring" aria-hidden="true">
           <svg viewBox="0 0 120 120" focusable="false"><circle cx="60" cy="60" r="56"></circle><path d="M38 62 L54 77 L84 45"></path></svg>
           <span class="rv-done-dot d1"></span><span class="rv-done-dot d2"></span><span class="rv-done-dot d3"></span><span class="rv-done-dot d4"></span>
-        </div>
+        </div>`;
+      el.innerHTML = `
+        ${hero}
         <h3 class="rv-done-title" tabindex="-1">今日の復習、完了!</h3>
         <p class="rv-done-sub">お疲れさまでした。この調子で続けましょう。</p>
         <div class="rv-done-stats">
           <div class="rv-done-stat"><strong class="num">${done}</strong><span>評価した枚数</span></div>
           <div class="rv-done-stat"><strong class="num">${pct}<small>%</small></strong><span>思い出せた</span></div>
-          ${streak != null ? `<div class="rv-done-stat is-warm"><strong class="num">${streak}</strong><span>日連続</span></div>` : ``}
+          ${streak != null ? `<div class="rv-done-stat is-warm"><span class="rv-done-stat-head"><span class="sticker sticker-gold" aria-hidden="true">${ic(`flame-fill`, 16)}</span><strong class="num">${streak}</strong></span><span>日連続</span></div>` : ``}
         </div>
         ${next ? `<p class="rv-done-next">${ic(`calendar`)}<span>次の復習は <b>${next.days === 1 ? `明日` : `${next.days}日後`} ${next.count}枚</b></span></p>` : ``}
         <div class="rv-done-actions">
@@ -350,6 +354,14 @@ window.Views.review = (function () {
       area.appendChild(el);
       const title = el.querySelector(`.rv-done-title`);
       if (title) title.focus({ preventScroll: true });
+      // 紙吹雪(動きを減らす設定では Mascot.confetti が何もしない)。最後の評価のあとのスクロールが済んでから位置を測る
+      const heroEl = el.querySelector(`.rv-done-hero`);
+      if (heroEl && typeof Mascot.confetti === `function`) {
+        requestAnimationFrame(() => {
+          if (!heroEl.isConnected) return;
+          try { Mascot.confetti(heroEl); } catch (e) { /* 飾りなので失敗しても続ける */ }
+        });
+      }
     }
 
     function renderQueue() {

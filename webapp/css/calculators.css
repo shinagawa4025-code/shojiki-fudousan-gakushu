@@ -1,9 +1,5 @@
 /* 計算機(js/views/calculators.js 専用) */
 
-/* 入力欄の枠線(入力欄の背景に対して3:1以上: ライト 3.3:1 / ダーク 3.6:1) */
-:root { --calc-input-border: #848e9c; }
-:root[data-theme="dark"] { --calc-input-border: #6a7b92; }
-
 /* 分類(下線のタブ)と計算機チップ。上の「学ぶ」メニュー(区分の切り替え)と見分けられるよう、分類は塗りのない下線タブにする */
 .calc-tabs {
   display: flex;
@@ -17,28 +13,31 @@
   -webkit-touch-callout: none;
 }
 .calc-tabs::-webkit-scrollbar { display: none; }
+.calc-tabs { border-bottom-width: 2px; }
 .calc-tab {
   flex: 1 1 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 44px;
+  min-height: 48px;
   padding: 0 var(--sp-3);
-  margin-bottom: -1px;
+  margin-bottom: -2px;
   border: 0;
-  border-bottom: 3px solid transparent;
+  border-bottom: 4px solid transparent;
   background: none;
   color: var(--color-text-muted);
   font: inherit;
+  font-family: var(--font-display);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: var(--fw-display);
+  letter-spacing: .03em;
   white-space: nowrap;
   cursor: pointer;
   transition: color var(--dur-1), border-color var(--dur-1);
 }
-.calc-tab .icon { flex-shrink: 0; }
-.calc-tab[aria-pressed="true"] { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+.calc-tab .icon { flex-shrink: 0; stroke-width: 2.2; }
+.calc-tab[aria-pressed="true"] { color: var(--color-primary); border-bottom-color: var(--color-primary-fill); }
 @media (hover: hover) { .calc-tab:hover { color: var(--color-text); } .calc-tab[aria-pressed="true"]:hover { color: var(--color-primary); } }
 .calc-tab:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; border-radius: var(--radius-sm); }
 .calculators-view .calc-chips { margin-bottom: var(--sp-4); }
@@ -48,17 +47,10 @@
 /* 見出し */
 .calc-back { margin-bottom: var(--sp-2); }
 .calc-head { display: flex; gap: var(--sp-3); align-items: flex-start; margin-bottom: var(--sp-4); }
-.calc-head-icon {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-md);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  display: grid;
-  place-items: center;
-}
-.calc-head-text { min-width: 0; }
+/* 見出しのアイコン: 丸いステッカー(色は .sticker と .cat-zei。css/style.css) */
+.calc-head-icon { flex-shrink: 0; }
+.calc-head-icon .icon { stroke-width: 2.1; }
+.calc-head-text { min-width: 0; padding-top: 2px; }
 .calc-title { margin: 0 0 var(--sp-1); font-size: var(--fs-xl); line-height: var(--lh-tight); color: var(--color-heading); }
 .calc-title:focus, .calc-result-title:focus { outline: none; }
 .calc-desc { margin: 0; font-size: var(--fs-md); color: var(--color-text-muted); line-height: var(--lh-snug); }
@@ -74,13 +66,14 @@
 .calc-result-card { scroll-margin-top: var(--sp-3); }
 
 /* 入力フォーム */
-.calc-form { display: flex; flex-direction: column; gap: var(--sp-3); }
-.calc-field { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 400; }
-.calc-field-label { color: var(--color-text); line-height: var(--lh-snug); font-weight: 600; }
+.calc-form { display: flex; flex-direction: column; gap: var(--sp-4); }
+.calc-field { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 400; }
+.calc-field-label { color: var(--color-heading); line-height: var(--lh-snug); font-weight: 700; }
 .calc-field-unit { color: var(--color-text-muted); font-weight: 400; margin-left: 2px; }
 .calc-input-wrap { position: relative; display: flex; align-items: center; }
-.calc-field .calc-input-wrap input[type="text"] { padding-right: 4.5em; font-variant-numeric: tabular-nums; }
-.calc-field input[type="text"], .calc-field select { border-color: var(--calc-input-border); }
+.calc-field .calc-input-wrap input[type="text"] { padding-right: 4.5em; font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums; }
+/* 入力欄: 大きめの角丸・2px の枠(操作部品の線 --color-border-control。面に対して 3:1 以上) */
+.calc-field input[type="text"], .calc-field select { min-height: 50px; border-color: var(--color-border-control); border-radius: var(--radius-md); }
 .calc-field input:focus, .calc-field select:focus { outline: none; border-color: var(--color-focus); box-shadow: 0 0 0 2px var(--color-focus); }
 .calc-field input[aria-invalid="true"] { border-color: var(--color-danger); }
 .calc-field input[aria-invalid="true"]:focus { border-color: var(--color-danger); box-shadow: 0 0 0 2px var(--color-danger); }
@@ -132,7 +125,8 @@
 
 /* スマホの結果サマリー(主要な結果が画面外のときだけ、アプリバーのすぐ下に重ねて出す。高さ0なので場所を取らない) */
 .calc-sticky-sentinel { height: 0; }
-.calc-sticky { position: sticky; top: calc(var(--app-bar-h) + var(--safe-top)); z-index: 30; height: 0; visibility: hidden; }
+/* アプリバーの下の線(2px。style.css の .app-header)の分だけ下げる */
+.calc-sticky { position: sticky; top: calc(var(--app-bar-h) + var(--safe-top) + 2px); z-index: 30; height: 0; visibility: hidden; }
 .calc-sticky.is-shown { visibility: visible; }
 .calc-sticky-bar {
   display: flex;
@@ -155,24 +149,34 @@
 
 /* 結果カード */
 .calc-result-card { display: flex; flex-direction: column; gap: var(--sp-3); }
-.calc-result-title { margin: 0; font-size: var(--fs-base); color: var(--color-heading); }
+.calc-result-title { margin: 0; font-size: var(--fs-lg); color: var(--color-heading); }
 .calc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-2); }
-/* 3つ並ぶときは、主要な結果を1行目いっぱいに、残り2つを2行目に並べる(空きマスを作らない) */
-.calc-stats:has(> :nth-child(3)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.calc-stats:has(> :nth-child(3)) > .calc-stat.is-primary { grid-column: 1 / -1; }
+/* 主要な結果は1行目いっぱいの大きな数字のカード。ほかの数字は2行目に並べる(空きマスを作らない) */
+.calc-stats:has(> :nth-child(2)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.calc-stats:has(> :nth-child(2)) > .calc-stat.is-primary { grid-column: 1 / -1; }
+.calc-stats:has(> :nth-child(2)):not(:has(> :nth-child(3))) > .calc-stat:not(.is-primary) { grid-column: 1 / -1; }
 .calc-stat {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: var(--sp-3);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-btn);
   background: var(--color-surface-muted);
   min-width: 0;
 }
-.calc-stat.is-primary { background: var(--color-primary-soft); }
 .calc-stat .stat-value { overflow-wrap: anywhere; }
 .calc-stat:not(.is-primary) .stat-value { font-size: var(--fs-xl); color: var(--color-heading); }
+.calc-stat:not(.is-primary) .stat-label { font-weight: 600; }
 .calc-stat-sub { font-size: var(--fs-xs); color: var(--color-text-muted); }
+/* 主要な結果: 緑の塗りに白い大きな数字(ホームの残り日数のカードと同じ形。ダークは明るい緑に濃い文字) */
+.calc-stat.is-primary { padding: var(--sp-4) var(--sp-5) 18px; background: var(--color-primary-fill); color: var(--color-on-primary); box-shadow: 0 var(--lip-h) 0 var(--lip-primary); margin-bottom: var(--lip-h); }
+.calc-stat.is-primary .stat-label { font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-display); color: inherit; }
+.calc-stat.is-primary .stat-value { margin-top: 2px; font-size: 2.5rem; line-height: 1.05; letter-spacing: 0; color: inherit; }
+.calc-stat.is-primary .stat-value small { margin-left: 4px; font-size: var(--fs-lg); font-weight: var(--fw-display); color: inherit; }
+.calc-stat.is-primary .calc-stat-sub { margin-top: 4px; font-size: var(--fs-sm); font-weight: 600; color: inherit; }
+@media (max-width: 359px) {
+  .calc-stat.is-primary .stat-value { font-size: 2.125rem; }
+}
 .calc-empty { flex-direction: row; align-items: center; color: var(--color-text-muted); }
 .calc-empty p { margin: 0; }
 

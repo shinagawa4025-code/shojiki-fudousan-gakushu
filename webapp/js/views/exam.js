@@ -6,6 +6,9 @@
 //      採点時に解答を AnswerLog に記録し、見直し印を付けて正解した問題は「自信なし」として扱う(結果の unsure にその数)
 // 履歴の容量: 問題文・選択肢まで残すのは新しい5回分だけ。それより古い回の4択問題は ID と解答(と選択肢の並び)だけにし
 // (compact: true)、結果を開いたときに今のデータから問題文を復元する。データから消えた問題は「現在のデータにありません」と出す
+// v13(デザイン刷新): メニューは試験の長さの札(ステッカー)・分野の色の配分・大きな「開始」。受験中は本番どおり正誤も紙吹雪も出さず、
+//      選択肢は4択と同じ厚みのある札(選んだものだけ緑)、問題一覧は角の丸い札・見直し印は金色。
+//      結果はマスコット(目安ライン到達は元気な顔・届かなければ考える顔)・大きな得点(到達は金色)・分野の色のバー、到達した採点の直後だけ紙吹雪
 window.Views = window.Views || {};
 window.Views.exam = (function () {
   const TYPE_ID = `takken`;
@@ -33,6 +36,10 @@ window.Views.exam = (function () {
   const COUNT_UP_MS = 600; // 採点直後の得点のカウントアップ
   const ic = (name, size) => UI.icon(name, { size: size || 18 });
   const esc = (s) => UI.escapeHtml(s);
+  // 分野の色とアイコン(丸いステッカー・進捗バー。css/style.css の .cat-*。○×一問一答と同じ)。分からない分野は緑
+  const CAT_ICONS = { gyoho: `scale`, kenri: `gavel`, horei: `ruler`, zei: `receipt`, menjo: `mountain` };
+  const catCls = (id) => (CAT_ICONS[id] ? `cat-${id}` : `cat-life`);
+  const catSticker = (id, cls, size) => `<span class="sticker ${cls} ${catCls(id)}" aria-hidden="true">${ic(CAT_ICONS[id] || `list`, size)}</span>`;
 
   // 受験メニューで選んだ設定(画面を行き来しても保持)
   const pref = { mode: `full`, timed: true };
@@ -883,22 +890,33 @@ window.Views.exam = (function () {
       return styledParts(mode).map((x) => `${x.c.name}${x.n}問`).join(`・`);
     }
 
+    // 試験の長さの札(ステッカー+名前+問題数・時間。押せる物なので下にふち)。読み上げは「フル 50問・120分」
+    const formatTile = (mode, icon, name) => {
+      const def = modeDef(mode);
+      return `<button type="button" class="exam-format" data-mode="${mode}" aria-pressed="${pref.mode === mode}">
+          <span class="sticker exam-format-sticker" aria-hidden="true">${ic(icon, 24)}</span>
+          <span class="exam-format-text"><span class="exam-format-name">${name}</span> <span class="exam-format-meta num">${def.total}問・${def.minutes}分</span></span>
+        </button>`;
+    };
+
     const wrap = document.createElement(`div`);
     wrap.className = `view exam-view`;
     wrap.innerHTML = `
       <h2>模擬試験</h2>
       <p class="view-desc">宅建士試験の本番形式(問題数・制限時間・分野配分)で出題します。試験中は正誤を表示せず、提出後にまとめて採点します。</p>
       <div data-role="resume"></div>
-      <section class="card exam-setup" aria-labelledby="exam-setup-title">
-        <h3 class="card-title" id="exam-setup-title">${ic(`timer`, 20)} 試験を始める</h3>
-        <div class="segmented exam-mode-switch" role="group" aria-label="試験の長さ" data-role="modes">
-          <button type="button" class="segmented-item" data-mode="full" aria-pressed="${pref.mode === `full`}">フル ${modeDef(`full`).total}問・${modeDef(`full`).minutes}分</button>
-          <button type="button" class="segmented-item" data-mode="short" aria-pressed="${pref.mode === `short`}">ショート ${SHORT_TOTAL}問・${modeDef(`short`).minutes}分</button>
+      <section class="exam-setup" aria-labelledby="exam-setup-title">
+        <h3 class="sr-only" id="exam-setup-title">試験を始める</h3>
+        <div class="exam-formats" role="group" aria-label="試験の長さ" data-role="modes">
+          ${formatTile(`full`, `timer`, `フル`)}
+          ${formatTile(`short`, `bolt`, `ショート`)}
         </div>
-        <label class="check-inline exam-timed-toggle"><input type="checkbox" data-role="timed" ${pref.timed ? `checked` : ``}> 時間制限あり</label>
-        <p class="calc-note exam-timed-note" data-role="timed-note"></p>
+        <div class="exam-options">
+          <label class="check-inline exam-timed-toggle"><input type="checkbox" data-role="timed" ${pref.timed ? `checked` : ``}> 時間制限あり</label>
+          <p class="calc-note exam-timed-note" data-role="timed-note"></p>
+        </div>
         <div class="exam-breakdown" data-role="breakdown"></div>
-        <button type="button" class="btn btn-lg btn-block" data-role="start">${ic(`play`, 20)}試験を開始する</button>
+        <button type="button" class="btn btn-lg btn-block exam-start" data-role="start">${ic(`play`, 22)}<span>試験を開始する</span></button>
       </section>
 
       <section aria-labelledby="exam-history-title" class="exam-history">
@@ -939,10 +957,12 @@ window.Views.exam = (function () {
         : `時間を気にせず解けます。中断していた時間を除いた経過時間が記録されます。`;
       const styled = styledParts(pref.mode);
       const styledSum = styled.reduce((n, x) => n + x.n, 0);
+      // 分野の配分: 分野の色の帯(飾り。数は下の一覧で読む)と、分野のステッカーを付けた一覧
       breakdown.innerHTML = `
-        <p class="exam-breakdown-title">分野別の問題数(${def.total}問)</p>
-        <ul class="exam-breakdown-list">
-          ${cats.map((c) => `<li><span>${esc(c.name)}</span><span class="num">${def.quotas[c.id] || 0}問</span></li>`).join(``)}
+        <p class="exam-breakdown-title" id="exam-breakdown-title">分野別の問題数(${def.total}問)</p>
+        <div class="exam-alloc" aria-hidden="true">${cats.map((c) => `<span class="exam-alloc-seg ${catCls(c.id)}" style="flex-grow:${def.quotas[c.id] || 0}"></span>`).join(``)}</div>
+        <ul class="exam-breakdown-list" aria-labelledby="exam-breakdown-title">
+          ${cats.map((c) => `<li>${catSticker(c.id, `exam-bd-sticker`, 14)}<span class="exam-bd-name">${esc(c.name)}</span><span class="num">${def.quotas[c.id] || 0}問</span></li>`).join(``)}
         </ul>
         ${styledSum ? `<p class="exam-pace-note exam-styled-note">${ic(`list`, 16)}<span>うち個数・組合せの問題 最大${styledSum}問(${esc(styled.map((x) => `${x.c.name}${x.n}`).join(`・`))})</span></p>` : ``}
         <p class="exam-pace-note">${ic(`clock`, 16)}<span>1問あたり約${fmtPer(guideSecPerQuestion(pref.mode))}(${def.minutes}分÷${def.total}問)</span></p>`;
@@ -989,7 +1009,7 @@ window.Views.exam = (function () {
     const timeText = s.timed ? `残り ${fmtClock(s.deadline - Date.now())}` : `時間制限なし・経過 ${fmtClock(elapsed)}`;
     container.innerHTML = `
       <section class="card exam-resume" aria-labelledby="exam-resume-title">
-        <div class="exam-resume-icon" aria-hidden="true">${ic(`timer`, 24)}</div>
+        <span class="sticker exam-resume-icon" aria-hidden="true">${ic(s.mode === `retry` ? `repeat` : `timer`, 24)}</span>
         <div class="exam-resume-main">
           <h3 class="exam-resume-title" id="exam-resume-title">${s.mode === `retry` ? `解き直しの途中です` : `中断中の試験があります`}</h3>
           <p class="exam-resume-meta num">${esc(modeText(s.mode, n))}・回答 ${answered}/${n}・<span data-role="resume-time">${timeText}</span></p>
@@ -1050,9 +1070,9 @@ window.Views.exam = (function () {
           const p = Math.round((e.score / e.total) * 100);
           return `
           <a class="todo-item exam-history-item" href="#exam/result/${encodeURIComponent(e.id)}"${i >= HISTORY_SHOW ? ` hidden` : ``}>
-            <span class="todo-icon ${passed ? `is-ok` : ``}">${ic(passed ? `trophy` : `clock`, 20)}</span>
+            <span class="todo-icon ${passed ? `is-ok` : ``}" aria-hidden="true">${ic(passed ? `trophy-fill` : `clock`, 20)}</span>
             <span class="todo-main">
-              <span class="todo-title num">${e.score}/${e.total}問<span class="exam-history-pct">${p}%</span>・${esc(modeDef(e.mode).label)}${isBest ? `<span class="badge badge-accent exam-best-badge">最高</span>` : ``}</span>
+              <span class="todo-title num">${e.score}/${e.total}問<span class="exam-history-pct">${p}%</span>・${esc(modeDef(e.mode).label)}${isBest ? `<span class="badge badge-gold exam-best-badge">最高</span>` : ``}</span>
               <span class="todo-sub">${esc(fmtDateTime(e.finishedAt || e.startedAt))}・${fmtDuration(e.durationSec || 0)}${e.timed ? `` : `・時間制限なし`}</span>
             </span>
             ${ic(`chevron-right`, 18)}
@@ -1263,13 +1283,13 @@ window.Views.exam = (function () {
       qcard.innerHTML = `
         <div class="exam-q-head">
           <span class="exam-q-num num">問${i + 1}<small> / ${n}</small></span>
-          <span class="badge badge-soft">${esc(catName(q.categoryId))}</span>
+          <span class="exam-q-cat ${catCls(q.categoryId)}">${catSticker(q.categoryId, `exam-q-cat-sticker`, 13)}<span>${esc(catName(q.categoryId))}</span></span>
         </div>
         ${q.prompt ? `<p class="exam-q-prompt">${esc(q.prompt)}</p>` : ``}
         <p class="quiz-question exam-stem">${esc(q.stem)}</p>
         ${statementsHtml(q)}
-        <div class="choice-list" role="group" aria-label="問${i + 1}の選択肢">
-          ${q.choices.map((text, ci) => `<button type="button" class="btn choice-btn exam-choice${chosen === ci ? ` is-selected` : ``}" data-choice="${ci}" aria-pressed="${chosen === ci}"><span class="choice-key">${ci + 1}</span><span>${esc(text)}</span></button>`).join(``)}
+        <div class="choice-list${styleOfQ(q) ? ` choice-list-styled` : ``}" role="group" aria-label="問${i + 1}の選択肢">
+          ${q.choices.map((text, ci) => `<button type="button" class="btn choice-btn exam-choice${chosen === ci ? ` is-selected` : ``}" data-choice="${ci}" aria-pressed="${chosen === ci}"><span class="choice-key">${ci + 1}</span><span class="exam-choice-text">${esc(text)}</span></button>`).join(``)}
         </div>
       `;
       qcard.querySelectorAll(`[data-choice]`).forEach((b) => b.addEventListener(`click`, () => choose(Number(b.dataset.choice))));
@@ -1626,6 +1646,9 @@ window.Views.exam = (function () {
       ? (type.targetNote || `35点はこのアプリ独自の目安です(合格点は毎年変わります)`)
       : `目安${line}問は、このアプリ独自の目安${type.targetScore || 35}点(${type.totalQuestions || 50}問中)を${entry.total}問に換算したものです。本試験の合格点は毎年変わります。`;
     const notices = Array.isArray(entry.notices) ? entry.notices.filter((x) => typeof x === `string`) : [];
+    // マスコット(飾り): 目安ライン到達は元気な顔、届かなかったときは考える顔(解き直しは7割で分ける)
+    const good = isRetry ? pct >= GOOD_PCT : passed;
+    const heroMascot = window.Mascot && typeof Mascot.svg === `function` ? Mascot.svg(good ? `cheer` : `think`, 88, { className: `exam-result-mascot` }) : ``;
 
     // 分野別(カテゴリの並び順。分野外の問題があれば最後に)
     const catRows = cats.filter((c) => byCat[c.id] && byCat[c.id].total > 0).map((c) => ({ id: c.id, name: c.name, correct: byCat[c.id].correct || 0, total: byCat[c.id].total }));
@@ -1678,8 +1701,8 @@ window.Views.exam = (function () {
             ${lowRows.map((r) => {
               const topic = topicForCategory(r.id);
               return `
-              <li class="exam-next-item">
-                <div class="exam-next-head"><span class="exam-next-name">${esc(r.name)}</span><span class="exam-next-meta num">${r.correct}/${r.total}問・${r.pct}%</span></div>
+              <li class="exam-next-item ${catCls(r.id)}">
+                <div class="exam-next-head">${catSticker(r.id, `exam-next-sticker`, 13)}<span class="exam-next-name">${esc(r.name)}</span><span class="exam-next-meta num">${r.correct}/${r.total}問・${r.pct}%</span></div>
                 <div class="chip-row">
                   <a class="chip chip-small" href="#ox/cat/${encodeURIComponent(r.id)}/10">${ic(`o-x`, 14)}○×で10問</a>
                   ${topic ? `<a class="chip chip-small" href="#topics/${encodeURIComponent(topic.id)}">${ic(topic.icon || `book-open`, 14)}基礎を読む</a>` : ``}
@@ -1702,10 +1725,13 @@ window.Views.exam = (function () {
     wrap.innerHTML = `
       <h2>${isRetry ? `解き直しの結果` : `模擬試験の結果`}</h2>
       ${opts.autoGraded ? `<p class="exam-notice">${ic(`alert`, 18)}<span>制限時間を過ぎていたため、保存されていた回答で自動的に採点しました。</span></p>` : ``}
-      <section class="card exam-result-hero ${isRetry ? `` : passed ? `is-pass` : `is-fail`}">
+      <section class="card exam-result-hero ${isRetry ? `` : passed ? `is-pass` : `is-fail`}" data-role="hero">
         <div class="exam-result-top">
-          <p class="exam-score" aria-label="${entry.total}問中${entry.score}問正解"><span class="exam-score-value num">${entry.score}</span><span class="exam-score-total num">/ ${entry.total}問</span></p>
-          ${isRetry ? `` : `<p class="exam-verdict">${ic(passed ? `trophy` : `target`, 20)}${passed ? `目安ライン到達` : `目安まであと${line - entry.score}問`}</p>`}
+          ${heroMascot}
+          <div class="exam-result-scorebox">
+            <p class="exam-score" aria-label="${entry.total}問中${entry.score}問正解"><span class="exam-score-value num">${entry.score}</span><span class="exam-score-total num">/ ${entry.total}問</span></p>
+            ${isRetry ? `` : `<p class="exam-verdict">${ic(passed ? `trophy-fill` : `target`, 18)}${passed ? `目安ライン到達` : `目安まであと${line - entry.score}問`}</p>`}
+          </div>
         </div>
         <div class="progress-bar progress-bar-lg exam-score-bar" aria-hidden="true">
           <div class="progress-bar-fill ${passed ? `fill-success` : ``}" data-role="score-fill" style="width:${pct}%"></div>
@@ -1729,14 +1755,14 @@ window.Views.exam = (function () {
       <section class="card" aria-labelledby="exam-cat-title">
         <h3 class="card-title" id="exam-cat-title">分野別の正答</h3>
         <div class="cat-bars exam-cat-bars">
-          ${catRows.map((r) => {
-            const fill = r.pct >= GOOD_PCT ? `fill-success` : r.pct < 50 ? `exam-fill-low` : ``;
-            return `
-            <div>
-              <div class="cat-bar-head"><span class="cat-bar-name">${esc(r.name)}</span><span class="cat-bar-meta">${r.correct}/${r.total}問・${r.pct}%</span></div>
-              <div class="progress-bar"><div class="progress-bar-fill ${fill}" style="width:${r.pct}%"></div></div>
-            </div>`;
-          }).join(``)}
+          ${catRows.map((r) => `
+            <div class="exam-cat-row ${catCls(r.id)}${r.pct < GOOD_PCT ? ` is-low` : ``}">
+              ${catSticker(r.id, `sticker-sm`, 16)}
+              <div class="exam-cat-main">
+                <div class="cat-bar-head"><span class="cat-bar-name">${esc(r.name)}</span><span class="cat-bar-meta">${r.correct}/${r.total}問・${r.pct}%</span></div>
+                <div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill" style="width:${r.pct}%"></div></div>
+              </div>
+            </div>`).join(``)}
         </div>
         ${weakHtml}
       </section>` : ``}
@@ -1766,6 +1792,12 @@ window.Views.exam = (function () {
         fill.style.width = `0%`;
         requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = `${pct}%`; }));
       }
+    }
+    // 目安ラインに届いた採点の直後だけ、マスコットの横から紙吹雪(試験中・届かなかったとき・解き直し・履歴から開いたときは出さない。
+    // 動きを減らす設定では Mascot.confetti が何もしない)
+    if (fresh && passed && !isRetry && window.Mascot && typeof Mascot.confetti === `function`) {
+      const hero = wrap.querySelector(`[data-role="hero"] .exam-result-mascot`) || wrap.querySelector(`[data-role="hero"]`);
+      try { Mascot.confetti(hero); } catch (e) { /* 飾りなので失敗しても続ける */ }
     }
 
     renderWrongList(wrap, wrong, flaggedOk, isFlagged);

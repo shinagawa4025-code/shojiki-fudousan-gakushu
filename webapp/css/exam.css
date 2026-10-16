@@ -1,33 +1,88 @@
-/* 模擬試験(js/views/exam.js 専用) */
+/* 模擬試験(js/views/exam.js 専用)
+   v13(デザイン刷新): 押せる物(試験の長さの札・選択肢・問題一覧の番号・ボタン)は下にふちの厚み、置いてあるだけの面は枠と下の厚み。
+   分野は分野の色(.cat-*)のステッカーとバー、見直し印・目安ライン到達は金色。受験中は正誤の色を出さない(選んだものだけ緑) */
 
 /* ---------- 受験メニュー ---------- */
-.exam-mode-switch { margin-bottom: var(--sp-3); }
-.exam-mode-switch .segmented-item { flex: 1 1 0; min-height: 40px; }
-.exam-timed-toggle { margin-bottom: var(--sp-1); }
-.exam-timed-note { margin: 0 0 var(--sp-3); line-height: var(--lh-snug); }
-
-.exam-breakdown {
-  background: var(--color-surface-muted);
-  border-radius: var(--radius-md);
-  padding: var(--sp-3) var(--sp-4);
-  margin-bottom: var(--sp-4);
+.exam-setup { margin: 0 0 var(--sp-5); }
+/* 試験の長さ: ステッカー+名前+問題数・時間の札を2つ並べる。選んでいる札は緑の枠・淡い緑の面・緑のふち */
+.exam-formats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.exam-format {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+  min-height: 76px;
+  padding: var(--sp-3);
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--lip-neutral);
+  transition: background var(--dur-1), border-color var(--dur-1), box-shadow 60ms, transform 60ms;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
-.exam-breakdown-title { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-heading); }
+.exam-format:active { transform: translateY(4px); box-shadow: 0 0 0 var(--lip-neutral); }
+@media (hover: hover) { .exam-format:hover { border-color: var(--color-primary); } }
+.exam-format[aria-pressed="true"] { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 4px 0 var(--lip-primary); }
+.exam-format[aria-pressed="true"]:active { box-shadow: 0 0 0 var(--lip-primary); }
+.exam-format-sticker { width: 44px; height: 44px; }
+.exam-format-sticker .icon { stroke-width: 2.2; }
+.exam-format-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; line-height: 1.25; }
+.exam-format-name { font-family: var(--font-display); font-size: var(--fs-lg); font-weight: var(--fw-display); color: var(--color-heading); font-feature-settings: "palt"; letter-spacing: .04em; }
+.exam-format-meta { font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); white-space: nowrap; }
+.exam-format[aria-pressed="true"] .exam-format-meta { color: var(--color-text); }
+@media (max-width: 359px) {
+  .exam-formats { gap: var(--sp-2); }
+  .exam-format { gap: var(--sp-2); padding: var(--sp-2); }
+  .exam-format-sticker { width: 36px; height: 36px; }
+  .exam-format-name { font-size: var(--fs-base); }
+  .exam-format-meta { font-size: var(--fs-xs); }
+}
+
+/* 時間制限(チェックと説明) */
+.exam-options { margin: var(--sp-4) 0 0; padding: var(--sp-1) var(--sp-3) var(--sp-3); border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.exam-timed-toggle { min-height: 44px; font-weight: 700; }
+.exam-timed-note { margin: 0; line-height: var(--lh-snug); }
+
+/* 分野別の問題数: 分野の色の帯と、ステッカー付きの一覧 */
+.exam-breakdown {
+  margin: var(--sp-4) 0 var(--sp-5);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+.exam-breakdown-title { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); }
+.exam-alloc { display: flex; gap: 3px; height: 14px; margin: 0 0 var(--sp-3); }
+.exam-alloc-seg { flex: 1 1 0; min-width: 6px; border-radius: var(--radius-pill); background: var(--cat, var(--color-primary-fill)); }
 .exam-breakdown-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: var(--sp-1) var(--sp-4);
+  gap: var(--sp-2) var(--sp-4);
   font-size: var(--fs-sm);
 }
-.exam-breakdown-list li { display: flex; justify-content: space-between; gap: var(--sp-2); padding: 2px 0; border-bottom: 1px dashed var(--color-border); }
-.exam-breakdown-list .num { font-weight: 700; color: var(--color-primary); }
+.exam-breakdown-list li { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.exam-bd-sticker { width: 26px; height: 26px; }
+.exam-bd-sticker .icon { stroke-width: 2.4; }
+.exam-bd-name { flex: 1 1 auto; min-width: 0; font-weight: 700; color: var(--color-text); }
+.exam-breakdown-list .num { font-family: var(--font-display); font-weight: var(--fw-display); color: var(--color-heading); }
 .exam-pace-note { display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-3) 0 0; font-size: var(--fs-sm); color: var(--color-text); font-variant-numeric: tabular-nums; }
 .exam-pace-note .icon { color: var(--color-primary); flex-shrink: 0; }
 /* うち個数・組合せの問題(すぐ下の1問あたりの目安とまとめて見せる) */
 .exam-styled-note + .exam-pace-note { margin-top: var(--sp-1); }
+
+/* 大きな「試験を開始する」(厚みのある緑のボタン) */
+.exam-view .exam-start { --lip-h: 5px; min-height: 60px; gap: var(--sp-2); font-size: var(--fs-lg); letter-spacing: .08em; }
 
 /* この模擬試験について(折りたたみ) */
 .exam-about { padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
@@ -41,21 +96,23 @@
 .exam-about-list { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--fs-md); line-height: var(--lh-body); }
 .exam-about-list a { color: var(--color-primary); display: inline-flex; align-items: center; gap: 2px; }
 
-/* 中断中の試験(再開バナー) */
+/* 中断中の試験(再開バナー): 緑の枠の面に、時計のステッカー */
 .exam-resume {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-3) var(--sp-4);
-  border: 2px solid var(--color-primary);
+  border-color: var(--color-primary-line);
   background: var(--color-primary-soft);
+  box-shadow: 0 0 0 1px var(--color-primary-line), 0 3px 0 var(--color-primary-line);
 }
-.exam-resume-icon { width: 44px; height: 44px; border-radius: var(--radius-md); display: grid; place-items: center; background: var(--color-primary-fill); color: var(--color-on-primary); flex-shrink: 0; }
+.exam-resume-icon { width: 48px; height: 48px; }
 .exam-resume-main { flex: 1 1 200px; min-width: 0; }
 .exam-resume-title { margin: 0 0 2px; color: var(--color-heading); }
 .exam-resume-meta { margin: 0; font-size: var(--fs-sm); color: var(--color-text); }
 .exam-resume-warn { margin: var(--sp-1) 0 0; font-size: var(--fs-xs); color: var(--color-warning); display: flex; align-items: center; gap: var(--sp-1); }
 .exam-resume-actions { display: flex; gap: var(--sp-2); flex: 1 1 100%; }
+.exam-resume-actions .btn { min-height: 48px; }
 .exam-resume-actions .btn:first-child { flex: 1; }
 
 /* 履歴 */
@@ -66,8 +123,8 @@
 .exam-history-item { color: var(--color-text); text-decoration: none; min-height: 56px; }
 .exam-history-item > .icon:last-child { color: var(--color-text-muted); }
 .exam-history-pct { margin-left: var(--sp-1); font-size: var(--fs-sm); font-weight: 400; color: var(--color-text-muted); }
-/* 最高点はお祝いの暖色(連続学習と同じ色) */
-.exam-best-badge { margin-left: var(--sp-2); vertical-align: 1px; background: var(--color-warm-soft, var(--color-accent-soft)); color: var(--color-warm-ink, var(--color-accent)); }
+/* 最高点はごほうびの金色 */
+.exam-best-badge { margin-left: var(--sp-2); vertical-align: 1px; }
 .exam-history-more { margin-top: var(--sp-2); min-height: 44px; }
 
 /* ---------- 受験中(フォーカスモード) ---------- */
@@ -83,8 +140,7 @@ body.exam-active .subnav { display: none; }
   top: 0;
   z-index: 30;
   background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  box-shadow: var(--shadow-1);
+  border-bottom: 2px solid var(--color-border);
   margin: calc(-1 * var(--sp-5)) calc(-1 * var(--sp-4)) var(--sp-4);
   padding: calc(var(--sp-2) + var(--safe-top)) var(--sp-4) var(--sp-2);
   display: flex;
@@ -92,35 +148,41 @@ body.exam-active .subnav { display: none; }
   gap: var(--sp-2);
 }
 .exam-topbar-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-width: 0; }
-.exam-topbar-actions { display: flex; gap: var(--sp-1); flex-shrink: 0; }
+.exam-topbar-actions { display: flex; gap: var(--sp-2); flex-shrink: 0; }
 /* ボタンの文字は折り返さない(「一覧」「中断」が1文字ずつ縦に並ばないように) */
-.exam-topbar-actions .btn { min-height: 40px; padding: var(--sp-1) var(--sp-3); white-space: nowrap; flex-shrink: 0; }
+.exam-topbar-actions .btn { min-height: 44px; padding: var(--sp-1) var(--sp-3); white-space: nowrap; flex-shrink: 0; }
 
+/* 残り時間(経過時間)の札: 大きな太い数字。10分を切ると注意の色、5分を切ると赤みのある色 */
 .exam-timer {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
-  padding: var(--sp-1) var(--sp-3);
-  min-height: 40px;
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-2);
+  min-height: 44px;
   min-width: 0;
+  border: 2px solid var(--color-border);
   border-radius: var(--radius-pill);
   background: var(--color-surface-muted);
   color: var(--color-heading);
   white-space: nowrap;
 }
-.exam-timer-label { font-size: var(--fs-xs); color: var(--color-text-muted); }
-.exam-timer-value { font-size: var(--fs-lg); font-weight: 700; letter-spacing: .02em; }
-.exam-timer.is-warn { background: var(--color-warning-bg); color: var(--color-warning); }
-.exam-timer.is-danger { background: var(--color-danger-bg); color: var(--color-danger); }
-.exam-timer.is-warn .exam-timer-label, .exam-timer.is-danger .exam-timer-label { color: inherit; }
+.exam-timer > .icon { color: var(--color-primary); }
+.exam-timer-label { font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); }
+.exam-timer-value { font-family: var(--font-display); font-size: var(--fs-xl); font-weight: var(--fw-display); letter-spacing: .02em; line-height: 1; }
+.exam-timer.is-warn { border-color: var(--color-warning); background: var(--color-warning-bg); color: var(--color-warning); }
+.exam-timer.is-danger { border-color: var(--color-danger-fill); background: var(--color-danger-bg); color: var(--color-danger); }
+.exam-timer:is(.is-warn, .is-danger) :is(.exam-timer-label, .icon) { color: inherit; }
 
+/* 回答済みの数とペース(太い進み具合のバー) */
 .exam-progress { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
-.exam-progress-text { font-size: var(--fs-xs); color: var(--color-text-muted); white-space: nowrap; }
+.exam-progress-text { font-size: var(--fs-xs); font-weight: 600; color: var(--color-text-muted); white-space: nowrap; }
+.exam-progress .progress-bar { height: 14px; background: var(--color-border-strong); }
 .exam-pace { color: var(--color-text); font-weight: 700; }
 .exam-pace.is-behind { color: var(--color-warning); }
 
 /* スマホ: 情報バーを1行に収める(一覧は記号だけ・時計の記号を省く) */
 @media (max-width: 480px) {
+  .exam-topbar-actions { gap: var(--sp-1); }
   .exam-topbar-actions .exam-nav-toggle > span { display: none; }
   .exam-topbar-actions .exam-nav-toggle { width: 44px; min-width: 44px; padding: 0; }
   .exam-topbar-actions .btn { padding-inline: var(--sp-2); }
@@ -131,71 +193,118 @@ body.exam-active .subnav { display: none; }
 }
 @media (max-width: 359px) {
   .exam-submit-btn > .icon { display: none; }
+  .exam-timer-value { font-size: var(--fs-lg); }
 }
 /* 残り時間のお知らせ(上に出すトースト)は、スマホでは情報バーの下に出す(回答数・ペースを隠さない) */
 @media (max-width: 767px) {
-  body.exam-active .toast.toast-top { top: calc(var(--safe-top) + 92px); }
+  body.exam-active .toast.toast-top { top: calc(var(--safe-top) + 100px); }
 }
 
 .exam-run-title { font-size: var(--fs-md); color: var(--color-text-muted); font-weight: 700; margin: 0 0 var(--sp-3); }
 
-.exam-q-card { margin-bottom: var(--sp-3); }
+/* 問題のカード(置いてあるだけの面) */
+.exam-q-card { margin-bottom: var(--sp-3); padding: var(--sp-4) var(--sp-4) var(--sp-5); }
 .exam-q-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 /* 試験中の見出しは「問1 / 50 分野」の1行だけ */
-.exam-q-card .exam-q-head { flex-wrap: nowrap; min-width: 0; }
-.exam-q-card .exam-q-head .badge { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.exam-q-num { font-size: var(--fs-lg); font-weight: 700; color: var(--color-heading); margin-right: var(--sp-1); white-space: nowrap; }
-.exam-q-num small { font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 400; }
+.exam-q-card .exam-q-head { flex-wrap: nowrap; gap: var(--sp-3); min-width: 0; }
+.exam-q-num { font-family: var(--font-display); font-size: var(--fs-xl); font-weight: var(--fw-display); color: var(--color-heading); margin-right: var(--sp-1); white-space: nowrap; line-height: 1.2; }
+.exam-q-num small { font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 700; }
+/* 分野の札(小さなステッカー+分野名) */
+.exam-q-cat { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-sm); font-weight: 700; color: var(--color-text); }
+.exam-q-cat > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exam-q-cat-sticker { width: 24px; height: 24px; }
+.exam-q-cat-sticker .icon { stroke-width: 2.4; }
 .exam-q-prompt { margin: var(--sp-3) 0 0; font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 700; }
 .exam-stem { font-size: var(--fs-base); line-height: var(--lh-body); color: var(--color-text); margin: var(--sp-2) 0 var(--sp-3); white-space: pre-wrap; }
-.exam-q-card .exam-stem { font-size: var(--fs-base); }
-.exam-choice { font-size: var(--fs-base); line-height: 1.6; }
+.exam-q-card .exam-stem { margin-top: var(--sp-3); font-size: var(--fs-base); line-height: 1.8; color: var(--color-heading); }
 
-/* 個数・組合せの問題の記述ア〜エ(本試験の問題用紙と同じく、記号のあとに文を並べる。試験中は正誤を出さない) */
+/* 個数・組合せの問題の記述ア〜エ(本試験の問題用紙と同じく、記号のあとに文を並べる。試験中は正誤を出さない)。
+   4択の記述と同じく、1つずつの白い札に角の丸い四角の記号 */
 .exam-stmts {
   list-style: none;
   margin: 0 0 var(--sp-3);
-  padding: var(--sp-3);
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  gap: var(--sp-2);
 }
-.exam-stmt { display: flex; align-items: baseline; gap: var(--sp-2); font-size: var(--fs-base); line-height: var(--lh-body); color: var(--color-text); }
+.exam-stmt {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 2px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 0 var(--color-border);
+  font-size: var(--fs-base);
+  line-height: 1.7;
+  color: var(--color-text);
+}
 .exam-stmt-label {
   flex-shrink: 0;
-  min-width: 1.9em;
-  padding: 0 var(--sp-1);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface);
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-top: -2px;
+  border-radius: 9px;
+  background: var(--color-surface-muted);
   color: var(--color-heading);
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  line-height: 1.6;
-  text-align: center;
+  font-family: var(--font-display);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-display);
+  line-height: 1;
 }
 .exam-stmt-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 /* 幅の狭いスマホ(320px など)では余白を詰めて、文に幅を使う */
 @media (max-width: 359px) {
-  .exam-stmts { padding: var(--sp-2); }
-  .exam-stmt { gap: var(--sp-1); }
+  .exam-stmt { gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-2); }
 }
 
-/* 選んだ選択肢(試験中は正誤を出さない) */
+/* 選択肢: 4択と同じ大きな札に丸い番号、下に厚み(css/practice.css の .quiz-card .choice-btn と同じ形)。
+   試験中は正誤を出さず、選んだものだけ緑の枠・淡い緑の面・番号を緑で塗る */
+.exam-q-card .choice-list { gap: var(--sp-3); margin-top: var(--sp-4); }
+.exam-q-card .exam-choice {
+  gap: var(--sp-3);
+  min-height: 60px;
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-3);
+  border-radius: 18px;
+  font-size: .9375rem;
+  line-height: 1.65;
+}
+.exam-q-card .exam-choice .choice-key {
+  width: 34px;
+  height: 34px;
+  margin-top: -4px;
+  border: 2px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--fs-base);
+  box-shadow: 0 2px 0 var(--lip-neutral);
+}
+.exam-choice-text { flex: 1 1 auto; min-width: 0; }
+@media (hover: hover) {
+  .exam-q-card .exam-choice:not(.is-selected):hover { background: var(--color-surface-muted); border-color: var(--color-primary); }
+  .exam-q-card .exam-choice:not(.is-selected):hover .choice-key { border-color: var(--color-primary); color: var(--color-primary); }
+}
 .exam-choice.is-selected,
-.exam-choice.is-selected:hover {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
-  box-shadow: inset 0 0 0 1px var(--color-primary);
+.exam-choice.is-selected:hover { --btn-lip: var(--lip-primary); background: var(--color-primary-soft); border-color: var(--color-primary); }
+.exam-q-card .exam-choice.is-selected .choice-key { background: var(--color-primary-fill); border-color: var(--color-primary-fill); color: var(--color-on-primary); box-shadow: none; }
+.exam-choice.is-selected .exam-choice-text { color: var(--color-heading); font-weight: 700; }
+/* 個数・組合せの選択肢(一つ〜四つ・「ア、イ」)は短いので、4択と同じく2列の大きな札。文字は見出し用の太字 */
+.exam-q-card .choice-list-styled .exam-choice { min-height: 64px; align-items: center; }
+.exam-q-card .choice-list-styled .choice-key { margin-top: 0; }
+.exam-q-card .choice-list-styled .exam-choice-text { font-family: var(--font-display); font-size: var(--fs-lg); font-weight: var(--fw-display); line-height: 1.4; letter-spacing: .04em; }
+@media (max-width: 359px) {
+  .exam-q-card .choice-list-styled .exam-choice { gap: var(--sp-2); padding-inline: var(--sp-2) var(--sp-3); }
+  .exam-q-card .choice-list-styled .exam-choice-text { font-size: var(--fs-base); }
 }
-.exam-choice.is-selected .choice-key { background: var(--color-primary-fill); border-color: var(--color-primary-fill); color: var(--color-on-primary); }
 
-/* [前へ] [見直し] [次へ] */
+/* [前へ] [見直し] [次へ]。見直し印を付けた問題では「見直し」が金色 */
 .exam-pager { display: flex; gap: var(--sp-2); }
-.exam-pager .btn { flex: 1 1 0; min-width: 0; min-height: 48px; padding-inline: var(--sp-2); white-space: nowrap; }
-.exam-flag-btn.is-on { background: var(--color-warning-bg); border-color: var(--color-warning); color: var(--color-warning); font-weight: 700; }
+.exam-pager .btn { flex: 1 1 0; min-width: 0; min-height: 52px; padding-inline: var(--sp-2); white-space: nowrap; }
+.exam-flag-btn.is-on, .exam-flag-btn.is-on:hover { --btn-lip: var(--gold-lip); background: var(--gold); border-color: var(--gold); color: var(--gold-ink); }
 .exam-kbd-hint { display: none; font-size: var(--fs-xs); color: var(--color-text-muted); margin: var(--sp-3) 0 0; text-align: center; }
 
 /* スマホ・タブレット: 前へ/次へを画面の下に固定する(長い問題でもスクロールせずに移動できる) */
@@ -205,64 +314,73 @@ body.exam-active .subnav { display: none; }
     bottom: 0;
     z-index: 5;
     background: var(--color-bg);
-    border-top: 1px solid var(--color-border);
+    border-top: 2px solid var(--color-border);
     margin: 0 calc(-1 * var(--sp-4));
-    padding: var(--sp-2) var(--sp-4) calc(var(--safe-bottom) + var(--sp-2));
+    padding: var(--sp-2) var(--sp-4) calc(var(--safe-bottom) + var(--sp-3));
   }
 }
 
 /* 問題一覧(ナビゲーター) */
 .exam-side { display: none; }
-.exam-side-card { padding: var(--sp-3) var(--sp-4); }
-.exam-side-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-2); font-weight: 700; color: var(--color-heading); }
+.exam-side-card { padding: var(--sp-3) var(--sp-4) var(--sp-4); }
+.exam-side-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-2); font-family: var(--font-display); font-weight: var(--fw-display); color: var(--color-heading); }
 .exam-nav-summary { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--color-text); font-weight: 700; }
 .exam-nav-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); font-size: var(--fs-2xs); color: var(--color-text-muted); margin-bottom: var(--sp-2); }
 .exam-nav-legend span { display: inline-flex; align-items: center; gap: var(--sp-1); }
-.exam-nav-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--color-border-strong); background: var(--color-surface); position: relative; }
+.exam-nav-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 2px solid var(--color-border-strong); background: var(--color-surface); position: relative; }
 .exam-nav-swatch.is-answered { background: var(--color-primary-fill); border-color: var(--color-primary-fill); }
-.exam-nav-swatch.is-flagged { border-color: var(--color-warning); box-shadow: inset 0 0 0 2px var(--color-warning-bg); background: var(--color-warning-fill); }
-.exam-nav-group { display: flex; justify-content: space-between; gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-1); font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); }
-.exam-nav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: var(--sp-1); }
+.exam-nav-swatch.is-flagged { border-color: var(--gold-icon); background: var(--gold); }
+.exam-nav-group { display: flex; justify-content: space-between; gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-2); font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); }
+.exam-nav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: var(--sp-2); padding-bottom: 3px; }
+/* 番号の札: 角の丸い四角に下のふち。回答済みは緑の塗り、見直し印は金色の枠と右上の金色の丸 */
 .exam-nav-cell {
   position: relative;
-  min-height: 40px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-strong);
+  min-height: 44px;
+  border-radius: 12px;
+  border: 2px solid var(--color-border-strong);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: var(--fs-sm);
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-display);
   cursor: pointer;
   padding: 0;
-  transition: background var(--dur-1), border-color var(--dur-1);
+  box-shadow: 0 3px 0 var(--lip-neutral);
+  transition: background var(--dur-1), border-color var(--dur-1), box-shadow 60ms, transform 60ms;
+  touch-action: manipulation;
 }
-@media (hover: hover) { .exam-nav-cell:hover { border-color: var(--color-primary); } }
-.exam-nav-cell.is-answered { background: var(--color-primary-fill); border-color: var(--color-primary-fill); color: var(--color-on-primary); }
+.exam-nav-cell:active { transform: translateY(3px); box-shadow: 0 0 0 var(--lip-neutral); }
+@media (hover: hover) { .exam-nav-cell:not(.is-answered):hover { border-color: var(--color-primary); } }
+.exam-nav-cell.is-answered { background: var(--color-primary-fill); border-color: var(--color-primary-fill); color: var(--color-on-primary); box-shadow: 0 3px 0 var(--lip-primary); }
+.exam-nav-cell.is-flagged { border-color: var(--gold-icon); }
 .exam-nav-cell.is-flagged::after {
   content: "";
   position: absolute;
-  top: -1px;
-  right: -1px;
-  width: 0;
-  height: 0;
-  border-top: 12px solid var(--color-warning-fill);
-  border-left: 12px solid transparent;
-  border-top-right-radius: var(--radius-sm);
+  top: -7px;
+  right: -7px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--gold);
 }
-.exam-nav-cell[aria-current="true"] { outline: 3px solid var(--color-focus); outline-offset: 1px; }
+.exam-nav-cell[aria-current="true"] { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 .exam-nav-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
-.exam-nav-actions .btn { flex: 1 1 120px; min-height: 40px; }
-.exam-nav-submit { margin-top: var(--sp-3); min-height: 44px; }
+.exam-nav-actions .btn { flex: 1 1 120px; min-height: 44px; }
+/* PC の右の問題一覧は幅が狭いので、2つのボタンを縦に並べる(「次の見直しへ」が2行に割れないように) */
+.exam-side .exam-nav-actions .btn { flex-basis: 100%; }
+.exam-nav-submit { margin-top: var(--sp-3); min-height: 48px; }
 
 /* 提出前の確認(シート) */
 .exam-submit-status { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 700; }
 .exam-submit-ok { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-md); background: var(--color-success-bg); color: var(--color-success); font-weight: 700; font-size: var(--fs-md); }
-.exam-submit-group { margin: 0 0 var(--sp-3); padding: var(--sp-3); border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.exam-submit-group { margin: 0 0 var(--sp-3); padding: var(--sp-3); border-radius: var(--radius-md); background: var(--gold-soft); }
+.exam-submit-group .exam-submit-label .icon { color: var(--gold-icon); }
 .exam-submit-group.is-warn { background: var(--color-warning-bg); }
 .exam-submit-label { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-1); margin: 0 0 var(--sp-2); font-weight: 700; font-size: var(--fs-md); color: var(--color-heading); }
 .exam-submit-group.is-warn .exam-submit-label .icon { color: var(--color-warning); }
 .exam-submit-label small { font-weight: 400; font-size: var(--fs-xs); color: var(--color-text-muted); }
-.exam-submit-group .chip { min-width: 52px; justify-content: center; }
+.exam-submit-group .chip { min-width: 52px; min-height: 40px; justify-content: center; background: var(--color-surface); }
 .exam-submit-more { align-self: center; font-size: var(--fs-sm); color: var(--color-text-muted); }
 .exam-submit-hint { margin: 0 0 var(--sp-2); font-size: var(--fs-xs); color: var(--color-text-muted); }
 .exam-submit-grid { margin-bottom: var(--sp-3); }
@@ -276,11 +394,11 @@ body.exam-active .subnav { display: none; }
   gap: var(--sp-2);
   margin: 0 calc(-1 * var(--sp-4));
   padding: var(--sp-3) var(--sp-4) calc(var(--sp-5) + var(--safe-bottom));
-  border-top: 1px solid var(--color-border);
+  border-top: 2px solid var(--color-border);
 }
 /* 背景はシートと同じ色にする(ダークモードでシートの色が変わっても合わせる) */
 .exam-submit-sheet .sheet-body, .exam-submit, .exam-submit-actions { background-color: inherit; }
-.exam-submit-actions .btn { flex: 1 1 180px; min-height: 48px; }
+.exam-submit-actions .btn { flex: 1 1 180px; min-height: 52px; }
 
 /* ---------- 結果 ---------- */
 .exam-notice {
@@ -300,15 +418,17 @@ body.exam-active .subnav { display: none; }
 .exam-notice p { margin: 0; }
 .exam-notice p + p { margin-top: var(--sp-1); }
 
+/* 得点のカード: マスコット+大きな得点+目安の札。目安ライン到達は金色の枠と厚み・金色の得点・金色の札 */
 .exam-result-hero { padding: var(--sp-5); }
-/* 目安ライン到達: 上から成功色がうっすら広がる見出し(不合格・解き直しは通常のカード) */
-.exam-result-hero.is-pass { background: linear-gradient(180deg, var(--color-success-bg), var(--color-surface) 55%); }
-.exam-result-top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--sp-2) var(--sp-4); margin-bottom: var(--sp-3); }
+.exam-result-hero.is-pass { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 4px 0 var(--gold-lip); }
+.exam-result-top { display: flex; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.exam-result-mascot { width: 88px; height: 88px; }
+.exam-result-scorebox { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; gap: var(--sp-2); min-width: 0; }
 .exam-score { margin: 0; display: flex; align-items: baseline; gap: var(--sp-2); color: var(--color-heading); }
 /* 得点はカウントアップ中も幅が揺れないよう等幅の数字・右寄せ */
-.exam-score-value { font-size: var(--fs-display); font-weight: 700; line-height: 1; color: var(--color-primary); font-variant-numeric: tabular-nums; text-align: right; }
-.exam-result-hero.is-pass .exam-score-value { color: var(--color-success); }
-.exam-score-total { font-size: var(--fs-lg); color: var(--color-text-muted); font-weight: 700; }
+.exam-score-value { font-family: var(--font-display); font-size: 3.25rem; font-weight: var(--fw-display); line-height: 1; letter-spacing: 0; color: var(--color-primary); font-variant-numeric: tabular-nums; text-align: right; }
+.exam-result-hero.is-pass .exam-score-value { color: var(--gold-text); }
+.exam-score-total { font-family: var(--font-display); font-size: var(--fs-lg); color: var(--color-text-muted); font-weight: var(--fw-display); }
 .exam-score-bar .progress-bar-fill.is-growing { transition: width 600ms var(--ease-out); }
 @media (prefers-reduced-motion: reduce) { .exam-score-bar .progress-bar-fill.is-growing { transition: none; } }
 .exam-verdict {
@@ -318,49 +438,64 @@ body.exam-active .subnav { display: none; }
   gap: var(--sp-1);
   padding: var(--sp-1) var(--sp-3);
   border-radius: var(--radius-pill);
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
   font-size: var(--fs-md);
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
 }
-/* 合格の見出しは成功色の背景なので、到達の印は白地+成功色の枠で浮かせる */
-.exam-result-hero.is-pass .exam-verdict { background: var(--color-surface); color: var(--color-success); box-shadow: inset 0 0 0 1px var(--color-success); }
+.exam-verdict .icon { color: var(--color-primary); }
+.exam-result-hero.is-pass .exam-verdict { background: var(--gold); color: var(--gold-ink); }
+.exam-result-hero.is-pass .exam-verdict .icon { --icon-cut: var(--gold); color: var(--gold-ink); }
 .exam-score-bar { position: relative; overflow: visible; }
 .exam-score-bar .progress-bar-fill { overflow: hidden; }
-.exam-score-line { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--color-text); border-radius: 1px; }
+.exam-score-line { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; background: var(--color-text); border-radius: 2px; }
 .exam-result-note { margin: var(--sp-3) 0; font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); }
 .exam-result-sub { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0 0 var(--sp-2); font-size: var(--fs-md); color: var(--color-text); line-height: var(--lh-snug); }
 .exam-result-sub .icon { color: var(--color-primary); flex-shrink: 0; margin-top: 2px; }
 .exam-result-sub strong { color: var(--color-heading); }
-.exam-result-sub .exam-newbest { display: inline-flex; align-items: center; gap: 2px; padding: 0 var(--sp-2); border-radius: var(--radius-pill); background: var(--color-warm-soft, var(--color-accent-soft)); color: var(--color-warm-ink, var(--color-accent)); white-space: nowrap; }
-.exam-result-sub .exam-newbest .icon { color: var(--color-warm, var(--color-accent)); margin-top: 0; }
+.exam-result-sub .exam-newbest { display: inline-flex; align-items: center; gap: 2px; padding: 0 var(--sp-2); border-radius: var(--radius-pill); background: var(--gold); color: var(--gold-ink); white-space: nowrap; }
+.exam-result-sub .exam-newbest .icon { color: var(--gold-ink); margin-top: 0; }
 .exam-result-sub + .exam-result-meta { margin-top: var(--sp-3); }
-.exam-result-meta { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2) var(--sp-4); }
+.exam-result-meta { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2) var(--sp-4); padding-top: var(--sp-3); border-top: 2px solid var(--color-border); }
 .exam-result-meta div { min-width: 0; }
 .exam-result-meta dt { font-size: var(--fs-xs); color: var(--color-text-muted); }
-.exam-result-meta dd { margin: 0; font-size: var(--fs-md); font-weight: 700; color: var(--color-text); }
-.exam-result-meta dd small { font-size: var(--fs-xs); font-weight: 400; color: var(--color-text-muted); }
+.exam-result-meta dd { margin: 0; font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-display); color: var(--color-text); }
+.exam-result-meta dd small { font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 400; color: var(--color-text-muted); }
+@media (max-width: 359px) {
+  .exam-result-hero { padding: var(--sp-4); }
+  .exam-result-top { gap: var(--sp-3); }
+  .exam-result-mascot { width: 68px; height: 68px; }
+  .exam-score-value { font-size: 2.5rem; }
+}
 
 /* 次にやること(結果の上の方) */
 .exam-next .card-title .icon { color: var(--color-primary); }
 .exam-next-retry { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
-.exam-next-retry .btn { min-height: 48px; }
+.exam-next-retry .btn { min-height: 52px; }
 .exam-retry-flag { font-size: var(--fs-sm); }
 .exam-next-lead { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--color-text-muted); font-weight: 700; line-height: var(--lh-snug); }
-.exam-next-retry + .exam-next-lead { padding-top: var(--sp-3); border-top: 1px solid var(--color-border); }
+.exam-next-retry + .exam-next-lead { padding-top: var(--sp-3); border-top: 2px solid var(--color-border); }
 .exam-next-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
 .exam-next-item { display: flex; flex-direction: column; gap: var(--sp-2); }
-.exam-next-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2); }
-.exam-next-name { font-weight: 700; color: var(--color-heading); }
+.exam-next-head { display: flex; align-items: center; gap: var(--sp-2); }
+.exam-next-sticker { width: 24px; height: 24px; }
+.exam-next-sticker .icon { stroke-width: 2.4; }
+.exam-next-name { flex: 1 1 auto; min-width: 0; font-weight: 700; color: var(--color-heading); }
 .exam-next-meta { font-size: var(--fs-sm); color: var(--color-danger); font-weight: 700; white-space: nowrap; }
 
-.exam-cat-bars .progress-bar { height: 10px; }
-.progress-bar-fill.exam-fill-low { background: var(--color-danger-fill); }
-.exam-weak { margin: var(--sp-4) 0 0; padding-top: var(--sp-3); border-top: 1px solid var(--color-border); font-size: var(--fs-md); line-height: var(--lh-snug); }
+/* 分野別の正答: 分野の色のステッカーとバー。7割に届かなかった分野は数字を赤みのある色で */
+.exam-cat-bars { gap: var(--sp-4); }
+.exam-cat-row { display: flex; align-items: center; gap: var(--sp-3); }
+.exam-cat-main { flex: 1 1 auto; min-width: 0; }
+.exam-cat-row .sticker .icon { stroke-width: 2.3; }
+.exam-cat-bars .progress-bar { height: 12px; }
+.exam-cat-row.is-low .cat-bar-meta { color: var(--color-danger); font-weight: 700; }
+.exam-weak { margin: var(--sp-4) 0 0; padding-top: var(--sp-3); border-top: 2px solid var(--color-border); font-size: var(--fs-md); line-height: var(--lh-snug); }
 .exam-weak .icon { color: var(--color-primary); }
 
 .exam-result-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: 0 0 var(--sp-5); }
-.exam-result-actions .btn { flex: 1 1 160px; min-height: 44px; }
+.exam-result-actions .btn { flex: 1 1 160px; min-height: 48px; }
 
 /* 間違えた問題(短く: 問題文・あなたの解答・正解。解説と全選択肢は折りたたみ) */
 .exam-wrong h3 { margin-top: var(--sp-3); }
@@ -372,41 +507,52 @@ body.exam-active .subnav { display: none; }
 .exam-wrong-list .card { margin: 0; }
 .exam-wrong-item { padding: var(--sp-3) var(--sp-4); }
 .exam-wrong-head { row-gap: var(--sp-1); }
-.exam-wrong-head .exam-q-num { font-size: var(--fs-base); }
-.exam-flag-tag { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); font-weight: 700; color: var(--color-warning); }
+.exam-wrong-head .exam-q-num { font-size: var(--fs-lg); }
+/* 分野名は淡い緑の札ではなく、分野の色の丸+文字(試験中の見出しの分野のステッカー・ほかの画面の分野の色と合わせる) */
+.exam-wrong-head .badge-soft { gap: 5px; padding-inline: 2px; background: none; color: var(--color-text); }
+.exam-wrong-head .badge-soft::before { content: ""; flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--cat, var(--color-primary-fill)); }
+.exam-wrong-item[data-cat="gyoho"] .badge-soft { --cat: var(--cat-gyoho); }
+.exam-wrong-item[data-cat="kenri"] .badge-soft { --cat: var(--cat-kenri); }
+.exam-wrong-item[data-cat="horei"] .badge-soft { --cat: var(--cat-horei); }
+.exam-wrong-item[data-cat="zei"] .badge-soft { --cat: var(--cat-zei); }
+.exam-wrong-item[data-cat="menjo"] .badge-soft { --cat: var(--cat-menjo); }
+/* 見直し印は金色 */
+.exam-flag-tag { display: inline-flex; align-items: center; gap: 2px; padding: 2px var(--sp-2); border-radius: 6px; background: var(--gold-soft); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.5; color: var(--gold-text); }
+.exam-flag-tag .icon { color: var(--gold-icon); }
 .exam-wrong-item .exam-q-prompt { margin-top: var(--sp-2); }
-.exam-wrong-item .exam-stem { margin: var(--sp-2) 0; font-size: var(--fs-md); line-height: var(--lh-snug); }
+.exam-wrong-item .exam-stem { margin: var(--sp-2) 0; font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--color-heading); }
 .exam-status-skip { background: var(--color-surface-muted); color: var(--color-text-muted); }
-.exam-compare { margin: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.exam-compare { margin: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
 /* 見出し(あなた/正解)は本文の頭に並べ、本文に幅を使う */
-.exam-compare-row { padding: var(--sp-1) var(--sp-2); border-radius: var(--radius-sm); border-left: 3px solid var(--color-border-strong); background: var(--color-surface-muted); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.exam-compare-row { padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-md); border: 2px solid var(--color-border-strong); background: var(--color-surface-muted); font-size: var(--fs-sm); line-height: var(--lh-snug); }
 .exam-compare-row dt { display: inline-flex; align-items: center; gap: 2px; margin-right: var(--sp-1); font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); white-space: nowrap; vertical-align: 1px; }
 .exam-compare-row dt .icon { flex-shrink: 0; }
 .exam-compare-row dd { display: inline; margin: 0; color: var(--color-text); }
-.exam-compare-row.is-yours { border-left-color: var(--color-danger); background: var(--color-danger-bg); }
+.exam-compare-row.is-yours { border-color: var(--color-danger-fill); background: var(--color-danger-bg); }
 .exam-compare-row.is-yours dt { color: var(--color-danger); }
-.exam-compare-row.is-correct { border-left-color: var(--color-success); background: var(--color-success-bg); }
+.exam-compare-row.is-correct { border-color: var(--color-success-fill); background: var(--color-success-bg); }
 .exam-compare-row.is-correct dt { color: var(--color-success); }
 
 .exam-more { margin-top: var(--sp-2); }
-.exam-more summary { display: flex; align-items: center; gap: var(--sp-2); min-height: 40px; cursor: pointer; list-style: none; font-size: var(--fs-sm); font-weight: 700; color: var(--color-primary); }
+.exam-more summary { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; cursor: pointer; list-style: none; font-size: var(--fs-sm); font-weight: 700; color: var(--color-primary); }
 .exam-more summary::-webkit-details-marker { display: none; }
 .exam-more summary > span { flex: 1; }
 .exam-more summary > .icon:last-child { color: var(--color-text-muted); transition: transform var(--dur-2) var(--ease-std); }
 .exam-more[open] summary > .icon:last-child { transform: rotate(180deg); }
 .exam-review-legend { margin: 0 0 var(--sp-2); font-size: var(--fs-xs); color: var(--color-text-muted); }
+/* 記述ア〜エ・選択肢: 1つずつの白い札に、○ / × の丸い印 */
 .exam-review-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
-.exam-review-choice { display: flex; gap: var(--sp-2); align-items: flex-start; padding: var(--sp-2); border-radius: var(--radius-sm); border: 1px solid var(--color-border); }
-.exam-review-choice.is-answer { border-color: var(--color-success); }
-.exam-mark { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: var(--fs-sm); line-height: 1; }
-.exam-mark.is-true { background: var(--color-success-bg); color: var(--color-success); }
-.exam-mark.is-false { background: var(--color-danger-bg); color: var(--color-danger); }
+.exam-review-choice { display: flex; gap: var(--sp-2); align-items: flex-start; padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-2); border-radius: 14px; border: 2px solid var(--color-border); background: var(--color-surface); box-shadow: 0 2px 0 var(--color-border); }
+.exam-review-choice.is-answer { border-color: var(--color-success-fill); box-shadow: 0 2px 0 var(--lip-success); }
+.exam-mark { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: var(--fs-sm); line-height: 1; color: var(--color-on-primary); }
+.exam-mark.is-true { background: var(--color-success-fill); }
+.exam-mark.is-false { background: var(--color-danger-fill); }
 .exam-review-main { flex: 1; min-width: 0; }
 .exam-review-text { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text); }
 .exam-tag { display: inline-block; margin-left: var(--sp-1); padding: 0 6px; border-radius: var(--radius-xs); font-size: var(--fs-2xs); font-weight: 700; vertical-align: 1px; white-space: nowrap; }
-.exam-tag.is-answer { background: var(--color-success-bg); color: var(--color-success); }
-.exam-tag.is-chosen { background: var(--color-danger-bg); color: var(--color-danger); }
-.exam-review-choice.is-answer .exam-tag.is-chosen { background: var(--color-success-bg); color: var(--color-success); }
+.exam-tag.is-answer { background: var(--color-success-fill); color: var(--color-on-primary); }
+.exam-tag.is-chosen { background: var(--color-danger-fill); color: var(--color-on-primary); }
+.exam-review-choice.is-answer .exam-tag.is-chosen { background: var(--color-success-fill); color: var(--color-on-primary); }
 .exam-wrong-links { margin-top: var(--sp-3); }
 .exam-wrong-more { margin-top: var(--sp-3); min-height: 44px; }
 .exam-wrong-item:focus { outline: none; }
@@ -416,16 +562,16 @@ body.exam-active .subnav { display: none; }
 /* 結果の記述ア〜エ: 記号(ア〜エ)を文の頭に置く */
 .exam-stmt-tag {
   display: inline-block;
-  min-width: 1.7em;
+  min-width: 1.8em;
   margin-right: var(--sp-1);
   padding: 0 4px;
-  border-radius: var(--radius-xs);
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface);
+  border-radius: 6px;
+  background: var(--color-surface-muted);
   color: var(--color-heading);
+  font-family: var(--font-display);
   font-size: var(--fs-xs);
-  font-weight: 700;
-  line-height: 1.5;
+  font-weight: var(--fw-display);
+  line-height: 1.6;
   text-align: center;
   vertical-align: 1px;
 }
@@ -446,14 +592,16 @@ body.exam-active .subnav { display: none; }
   .exam-timer { order: 1; }
   .exam-progress { order: 2; flex: 1; }
   .exam-topbar-actions { order: 3; }
-  .exam-q-card .exam-stem, .exam-choice, .exam-q-card .exam-stmt { font-size: var(--fs-lg); }
+  .exam-q-card .exam-stem, .exam-q-card .exam-choice, .exam-q-card .exam-stmt { font-size: var(--fs-lg); }
   .exam-result-meta { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+  .exam-result-mascot { width: 104px; height: 104px; }
   .exam-resume-actions { flex: 0 0 auto; }
   .exam-result-actions .btn { flex: 0 1 auto; }
   .exam-next-retry { flex-direction: row; align-items: center; flex-wrap: wrap; }
   .exam-next-retry .btn { width: auto; }
   .exam-next-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3) var(--sp-6); }
   .exam-wrong-item { padding: var(--sp-4) var(--sp-5); }
+  .exam-format { min-height: 84px; padding: var(--sp-3) var(--sp-4); }
 }
 @media (min-width: 768px) and (max-width: 1023px) {
   .exam-pager { margin: 0 calc(-1 * var(--sp-6)); padding-left: var(--sp-6); padding-right: var(--sp-6); }
@@ -471,16 +619,16 @@ body.exam-active .subnav { display: none; }
     margin-bottom: var(--sp-3);
   }
   .exam-topbar-row { display: contents; }
-  .exam-timer { order: 1; min-height: 36px; }
+  .exam-timer { order: 1; min-height: 40px; }
   .exam-progress { order: 2; flex: 1; }
   .exam-topbar-actions { order: 3; }
-  .exam-topbar-actions .btn { min-height: 36px; }
+  .exam-topbar-actions .btn { min-height: 40px; }
   .exam-pager {
     padding-top: var(--sp-1);
     padding-bottom: calc(var(--safe-bottom) + var(--sp-1));
     padding-inline: max(var(--sp-4), env(safe-area-inset-left)) max(var(--sp-4), env(safe-area-inset-right));
   }
-  .exam-pager .btn { min-height: 40px; }
+  .exam-pager .btn { min-height: 44px; }
   .exam-run-title { margin-bottom: var(--sp-2); }
   body.exam-active .toast.toast-top { top: calc(var(--safe-top) + 56px); }
 }

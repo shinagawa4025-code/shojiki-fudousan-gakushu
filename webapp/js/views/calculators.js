@@ -636,6 +636,9 @@ window.Views.calculators = (function () {
     </details>`;
   }
 
+  // 見出しのステッカーの色: 税金の計算機は「税」の橙(css/style.css の .cat-zei)、ほかは緑(表示だけ。計算には使わない)
+  const TAX_CALC_IDS = [`registration`, `acquisition`, `stamp`, `property-tax`, `transfer`, `inherit`];
+
   function cardHtml(title, body, extraCls) {
     return `<section class="card calc-result-card${extraCls ? ` ${extraCls}` : ``}"><h4 class="calc-result-title">${title}</h4>${body}</section>`;
   }
@@ -1599,7 +1602,7 @@ window.Views.calculators = (function () {
           </div>
           ${from ? `<button type="button" class="btn back-btn calc-back" data-role="back">${UI.icon(`chevron-left`, { size: 18 })}${from.label}に戻る</button>` : ``}
           <header class="calc-head">
-            <span class="calc-head-icon">${UI.icon(def.icon, { size: 22 })}</span>
+            <span class="calc-head-icon sticker sticker-lg${TAX_CALC_IDS.includes(def.id) ? ` cat-zei` : ``}" aria-hidden="true">${UI.icon(def.icon, { size: 26 })}</span>
             <div class="calc-head-text">
               <h3 id="calc-title" class="calc-title" tabindex="-1">${def.title}</h3>
               <p class="calc-desc" id="calc-desc">${def.desc}</p>

@@ -7,6 +7,29 @@ window.Views.plan = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 20 });
   const esc = (s) => UI.escapeHtml(s);
   const ICONS = { exam: `timer`, drill: `repeat`, 'ox-weak': `o-x`, review: `layers`, basic: `book-open`, quiz: `pencil-check`, ox: `o-x` };
+  // 分野の色(ホーム・進捗と同じ)。税理士の「不動産税務」は税の色。分からない分野は既定の緑
+  const CAT_IDS = [`gyoho`, `kenri`, `horei`, `zei`, `menjo`, `shohi`];
+  const CAT_ICON = { gyoho: `scale`, kenri: `gavel`, horei: `ruler`, zei: `receipt`, menjo: `mountain`, shohi: `percent`, shisan: `receipt` };
+  function catCls(id) {
+    if (id === `shisan`) return `cat-zei`;
+    return CAT_IDS.includes(id) ? `cat-${id}` : ``;
+  }
+
+  // 丸いステッカー(色の面+白いアイコン。飾りなので読み上げない)
+  function sticker(icon, cls, size) {
+    return `<span class="sticker${cls ? ` ${cls}` : ``}" aria-hidden="true">${ic(icon || `lightbulb`, size || 18)}</span>`;
+  }
+
+  // カードの見出し: 左にステッカー
+  function titleHtml(icon, text) {
+    return `<h3 class="card-title prog-title">${sticker(icon, `sticker-sm`, 18)}<span>${text}</span></h3>`;
+  }
+
+  // マスコットと吹き出し(マスコットは飾り。吹き出しの中身は読み上げる)
+  function mascotSay(expr, inner) {
+    const m = window.Mascot && typeof Mascot.svg === `function` ? Mascot.svg(expr, 64, { className: `plan-mascot` }) : ``;
+    return `<div class="plan-say${m ? `` : ` no-mascot`}">${m}<div class="plan-bubble">${inner}</div></div>`;
+  }
 
   function rerender() {
     if (window.Router) Router.navigate(`#plan`);
@@ -61,8 +84,9 @@ window.Views.plan = (function () {
     const expected = !official.length && Stats.expectedDates ? Stats.expectedDates(typeId) : [];
     const picks = official.concat(expected).slice(0, 2);
     const el = card(`plan-none`, `
-      <h3 class="card-title">${ic(`calendar`)}試験日を登録してください</h3>
-      <p class="prog-note">試験日を登録すると、残り日数から学習の時期(基礎固め → 演習 → 実戦 → 直前)と、今週やることの目安を作ります。</p>
+      ${mascotSay(`normal`, `
+        <h3 class="card-title">試験日を登録してください</h3>
+        <p class="prog-note">試験日を登録すると、残り日数から学習の時期(基礎固め → 演習 → 実戦 → 直前)と、今週やることの目安を作ります。</p>`)}
       ${picks.length ? `<div class="plan-picks">${picks.map((o, i) => `
         <button type="button" class="btn btn-secondary after-next" data-pick="${i}">
           ${ic(`calendar`, 18)}
@@ -97,14 +121,26 @@ window.Views.plan = (function () {
     if (plan.compressed && plan.state === `before`) {
       notes.push(`<p class="hero-note">${ic(`timer`, 16)}<span>試験日の${plan.runway}日前に登録したため、各時期を短くしています。</span></p>`);
     }
-    return card(`plan-head`, `
-      <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(t.name)}</span>${tentTag(t)}</p>
-      ${days}
-      <p class="hero2-sub">${DateUtil.toJapanese(t.date, true)}${t.tentative === true ? `(見込み)` : ``}</p>
+    // 試験の前は緑の面に白い大きな数字、試験日の当日は金色の面(ホームの残り日数のカードと同じ形)。
+    // いまの時期は白い札(時期のステッカー+名前+説明)
+    const today = plan.state === `today`;
+    const mascot = today && window.Mascot && typeof Mascot.svg === `function` ? Mascot.svg(`cheer`, 72, { className: `plan-head-mascot` }) : ``;
+    return card(`plan-head ${today ? `is-today` : `is-count`}`, `
+      <p class="plan-head-eyebrow">${ic(`target`, 16)}<span>${esc(t.name)}</span>${tentTag(t)}</p>
+      <div class="plan-head-row">
+        <div class="plan-head-main">
+          ${days}
+          <p class="plan-head-date">${DateUtil.toJapanese(t.date, true)}${t.tentative === true ? `(見込み)` : ``}</p>
+        </div>
+        ${mascot}
+      </div>
       ${plan.phase ? `
         <div class="plan-phase">
-          <span class="plan-phase-tag">${ic(plan.phase.icon || `flag`, 16)}いまは<strong>${esc(plan.phase.name)}</strong>${plan.phase.id === `day` ? `` : `の時期`}</span>
-          <p>${esc(plan.phase.desc)}</p>
+          ${sticker(plan.phase.icon || `flag`, `plan-phase-icon`, 20)}
+          <div class="plan-phase-main">
+            <span class="plan-phase-tag">いまは<strong>${esc(plan.phase.name)}</strong>${plan.phase.id === `day` ? `` : `の時期`}</span>
+            <p>${esc(plan.phase.desc)}</p>
+          </div>
         </div>` : ``}
       ${notes.length ? `<div class="hero2-notes">${notes.join(``)}</div>` : ``}`, `目標の試験`);
   }
@@ -112,15 +148,16 @@ window.Views.plan = (function () {
   // ---- 試験までの流れ ----
   function stepsCard(plan) {
     const rows = plan.phases.filter((p) => p.id !== `day`);
+    // ホームの今日のメニューと同じ「道」: 終わった時期は金色の節(✓)、いまの時期は大きな緑の節と吹き出し、これからは灰色の節、最後に試験日
     return card(`plan-steps-card`, `
-      <h3 class="card-title">${ic(`flag`)}試験までの流れ</h3>
+      ${titleHtml(`flag`, `試験までの流れ`)}
       <ol class="plan-steps">
         ${rows.map((p) => {
           const range = p.startDate ? `${mdw(p.startDate)}〜${mdw(p.endDate)}` : `〜${mdw(p.endDate)}`;
           const cls = [`plan-step`, p.current ? `is-current` : ``, p.past ? `is-past` : ``].filter(Boolean).join(` `);
           return `
             <li class="${cls}"${p.current ? ` aria-current="step"` : ``}>
-              <span class="plan-step-mark" aria-hidden="true">${p.past ? ic(`check`, 14) : ic(p.icon || `flag`, 14)}</span>
+              <span class="plan-step-mark" aria-hidden="true">${p.past ? ic(`check`, 20) : ic(p.icon || `flag`, p.current ? 26 : 20)}</span>
               <span class="plan-step-main">
                 <span class="plan-step-name">${esc(p.name)}${p.current ? `<span class="plan-step-now">いまここ</span>` : ``}${p.past ? `<span class="sr-only">(終了)</span>` : ``}</span>
                 <span class="plan-step-date">${range}${p.days ? `・${p.days}日` : ``}</span>
@@ -129,7 +166,7 @@ window.Views.plan = (function () {
             </li>`;
         }).join(``)}
         <li class="plan-step is-exam">
-          <span class="plan-step-mark" aria-hidden="true">${ic(`target`, 14)}</span>
+          <span class="plan-step-mark" aria-hidden="true">${ic(`trophy`, 22)}</span>
           <span class="plan-step-main"><span class="plan-step-name">試験日</span><span class="plan-step-date">${mdw(plan.examDate)}${plan.tentative ? `(見込み)` : ``}</span></span>
         </li>
       </ol>`);
@@ -141,23 +178,27 @@ window.Views.plan = (function () {
     const goalText = b.source === `minutes` ? `1日の目標 ${b.goal.value}分` : `1日の目標 ${b.goal.value}回(1回 約1分として計算)`;
     const items = plan.week;
     const total = items.reduce((s, x) => s + x.minutes, 0);
+    // 作業はホームの「今週やること」と同じ、分野の色のタイル(分野のステッカー。解き直しは要注意の色)。数が奇数なら最初のタイルを横いっぱいに
     return card(`plan-week span-all`, `
       <div class="recommend-head">
-        <h3 class="card-title">${ic(`list`)}今週やること</h3>
+        ${titleHtml(`list`, `今週やること`)}
         ${total > 0 ? `<span class="plan-budget num">約${esc(hours(total))}</span>` : ``}
       </div>
       <p class="prog-note">${b.days < 7 ? `試験日までの${b.days}日分` : `1週間`}の目安: 約${esc(hours(b.week))}(${esc(goalText)} × ${b.days}日)。<a href="#settings/goal">1日の目標を変える</a></p>
       ${items.length ? `
-        <ul class="plan-items">
-          ${items.map((it) => `
+        <ul class="plan-items${items.length % 2 ? ` is-odd` : ``}">
+          ${items.map((it) => {
+            const cat = catCls(it.cat);
+            const warn = it.kind === `drill` || it.kind === `ox-weak`;
+            return `
             <li>
-              <a class="plan-item" href="${esc(it.href)}">
-                <span class="plan-item-icon" aria-hidden="true">${ic(ICONS[it.kind] || `lightbulb`, 18)}</span>
+              <a class="plan-item${cat ? ` ${cat}` : ``}" href="${esc(it.href)}">
+                ${sticker(ICONS[it.kind] || `lightbulb`, `sticker-sm${warn ? ` sticker-warn` : ``}`, 18)}
                 <span class="plan-item-main"><span class="plan-item-title">${esc(it.label)}</span>${it.sub ? `<span class="plan-item-sub">${esc(it.sub)}</span>` : ``}</span>
                 <span class="plan-item-min num">約${esc(hours(it.minutes))}</span>
-                ${ic(`chevron-right`, 18)}
               </a>
-            </li>`).join(``)}
+            </li>`;
+          }).join(``)}
         </ul>` : `<p class="prog-note prog-note-flush">今週の目安の時間が少ないため、作業を割り当てられませんでした。<a href="#settings/goal">1日の目標</a>を増やすと表示されます。</p>`}`);
   }
 
@@ -166,15 +207,21 @@ window.Views.plan = (function () {
     if (!plan.alloc.length) return null;
     const max = Math.max(...plan.alloc.map((a) => a.weight)) || 1;
     return card(`plan-alloc`, `
-      <h3 class="card-title">${ic(`chart`)}分野の配分</h3>
+      ${titleHtml(`chart`, `分野の配分`)}
       <p class="prog-note">配点が大きく、習熟度が低い分野ほど多く時間を回します。${snap ? `` : `(弱点分析を使えないため、習熟度は50として計算しています)`}</p>
       <ul class="plan-alloc-list">
-        ${plan.alloc.slice().sort((x, y) => y.weight - x.weight).map((a) => `
-          <li class="plan-alloc-row">
-            <div class="mini-bar-head"><b>${esc(a.label)}</b><span class="num">${Math.round(a.weight * 100)}%${a.minutes ? `・今週 約${esc(hours(a.minutes))}` : ``}</span></div>
-            <div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill" style="width:${Math.max(2, Math.round((a.weight / max) * 100))}%"></div></div>
-            <p class="plan-alloc-meta">配点の割合 ${Math.round(a.share * 100)}%・習熟度 ${a.mastery}/100</p>
-          </li>`).join(``)}
+        ${plan.alloc.slice().sort((x, y) => y.weight - x.weight).map((a) => {
+          const cat = catCls(a.cat);
+          return `
+          <li class="plan-alloc-row${cat ? ` ${cat}` : ``}">
+            ${sticker(CAT_ICON[a.cat] || `target`, `sticker-sm`, 18)}
+            <div class="plan-alloc-main">
+              <div class="mini-bar-head"><b>${esc(a.label)}</b><span class="num">${Math.round(a.weight * 100)}%${a.minutes ? `・今週 約${esc(hours(a.minutes))}` : ``}</span></div>
+              <div class="progress-bar" aria-hidden="true"><div class="progress-bar-fill" style="width:${Math.max(2, Math.round((a.weight / max) * 100))}%"></div></div>
+              <p class="plan-alloc-meta">配点の割合 ${Math.round(a.share * 100)}%・習熟度 ${a.mastery}/100</p>
+            </div>
+          </li>`;
+        }).join(``)}
       </ul>
       <details class="ana-how">
         <summary>${ic(`info`, 16)}<span>計画の決め方</span>${ic(`chevron-down`, 16)}</summary>
@@ -197,9 +244,9 @@ window.Views.plan = (function () {
   function render(root) {
     const wrap = document.createElement(`div`);
     wrap.className = `view plan-view`;
+    // 見出しの下の説明は置かない(すぐ下の残り日数のカードから始める)
     wrap.innerHTML = `
       <h2>学習計画</h2>
-      <p class="view-desc">試験日までの残り日数から、いまの時期と今週やることの目安を出します。</p>
       <div class="prog-grid plan-grid" data-role="grid"></div>`;
     root.appendChild(wrap);
     const grid = wrap.querySelector(`[data-role="grid"]`);
@@ -216,10 +263,12 @@ window.Views.plan = (function () {
     } else if (plan.state === `after`) {
       const h = home();
       const t = plan.target;
+      // マスコットの吹き出しで「お疲れさまでした」。合格発表の案内・次の目標はホームと同じ部品(Views.home.afterHtml)
       const el = card(`plan-after span-all`, `
-        <p class="hero2-eyebrow">${ic(`target`, 14)}<span>${esc(t.name)}</span>${tentTag(t)}</p>
-        <p class="plan-days"><strong>お疲れさまでした</strong></p>
-        <p class="hero2-sub">${DateUtil.toJapanese(t.date, true)}の試験から${plan.after ? plan.after.daysSince : -plan.daysLeft}日</p>
+        <p class="plan-head-eyebrow">${ic(`target`, 16)}<span>${esc(t.name)}</span>${tentTag(t)}</p>
+        ${mascotSay(`happy`, `
+          <p class="plan-days"><strong>お疲れさまでした</strong></p>
+          <p class="hero2-sub">${DateUtil.toJapanese(t.date, true)}の試験から${plan.after ? plan.after.daysSince : -plan.daysLeft}日</p>`)}
         ${h && h.afterHtml ? h.afterHtml(plan) : ``}
         <a class="link-btn" href="#progress">${ic(`chart`, 16)}これまでの学習の記録を見る${ic(`chevron-right`, 16)}</a>`, `試験の後`);
       if (h && h.wireAfter) h.wireAfter(el, plan, rerender);

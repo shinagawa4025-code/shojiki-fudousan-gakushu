@@ -112,7 +112,7 @@ window.Views.glossary = (function () {
           <button type="button" class="btn btn-secondary gl-filter-btn" data-role="filter-btn" aria-haspopup="dialog">${ic(`list`, 18)}<span>絞り込み</span><span class="gl-filter-badge num" data-role="filter-badge" hidden></span></button>
         </div>
         <div class="chip-row gl-active-filters" data-role="active-filters" hidden></div>
-        <div class="segmented glossary-status" data-role="status-seg" role="group" aria-label="学習状況で絞り込み"></div>
+        <div class="segmented seg-bold glossary-status" data-role="status-seg" role="group" aria-label="学習状況で絞り込み"></div>
       </div>
       <p class="progress-text" data-role="progress-text" aria-live="polite"></p>
       <div class="card-grid" data-role="card-grid"></div>
@@ -312,16 +312,17 @@ window.Views.glossary = (function () {
     let currentTerms = [];
     let shownCount = 0;
 
+    // 「表示中 n件・★記憶済み n/全体語」(記憶済みはごほうびの金色の星。星は飾りなので読み上げない)
     function progressLabel() {
       const knownCount = allTerms.filter((t) => known[t.id]).length;
-      return `表示中 ${currentTerms.length}件・記憶済み ${knownCount}/${allTerms.length}語`;
+      return `<span>表示中 <b>${currentTerms.length}</b>件・</span><span>${ic(`star-fill`, 14)}記憶済み <b>${knownCount}</b>/${allTerms.length}語</span>`;
     }
 
     // 件数と記憶済み数だけ更新する(カードは作り直さない)
     function refreshMeta() {
       computeStatuses();
       updateStatusCounts(baseList());
-      progressText.textContent = progressLabel();
+      progressText.innerHTML = progressLabel();
     }
 
     // 絞り込みの条件から外れたカードは、その場では消さずに薄く表示する(消すと一覧がずれて位置が飛ぶため)
@@ -371,7 +372,7 @@ window.Views.glossary = (function () {
       const baseTerms = baseList();
       updateStatusCounts(baseTerms);
       currentTerms = baseTerms.filter(matchesStatus);
-      progressText.textContent = progressLabel();
+      progressText.innerHTML = progressLabel();
 
       const targetIdx = scrollTermId ? currentTerms.findIndex((t) => t.id === scrollTermId) : -1;
       // 直リンクの対象が最初のページより後ろにあるときは、その用語まで描く

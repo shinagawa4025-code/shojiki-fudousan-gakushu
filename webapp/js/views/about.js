@@ -33,10 +33,11 @@ window.Views.about = (function () {
     return `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(label)}${ic(`external`, 14)}</a>`;
   }
 
+  // 見出しの左は丸いステッカー(色の面+白いアイコン。飾りなので読み上げない)
   function section(id, title, icon, body) {
     return `
       <section class="card about-section" id="about-${id}" aria-labelledby="about-${id}-title">
-        <h3 class="card-title about-section-title" id="about-${id}-title">${ic(icon, 20)}<span>${title}</span></h3>
+        <h3 class="card-title about-section-title" id="about-${id}-title"><span class="sticker sticker-sm" aria-hidden="true">${ic(icon, 18)}</span><span>${title}</span></h3>
         ${body}
       </section>`;
   }
@@ -106,7 +107,10 @@ window.Views.about = (function () {
 
       <section class="card about-section about-intro" id="about-intro" aria-labelledby="about-intro-title">
         <h3 class="sr-only" id="about-intro-title">概要</h3>
-        <p class="about-lead">${esc(name)}は、不動産の基礎知識から宅地建物取引士(宅建士)試験の対策までを、1日数分ずつ学べる無料の学習アプリです。</p>
+        <div class="about-hello">
+          ${window.Mascot && typeof Mascot.svg === `function` ? Mascot.svg(`happy`, 64, { className: `about-mascot` }) : ``}
+          <p class="about-lead">${esc(name)}は、不動産の基礎知識から宅地建物取引士(宅建士)試験の対策までを、1日数分ずつ学べる無料の学習アプリです。</p>
+        </div>
         <h4 class="about-sub">こんな人に</h4>
         <ul>
           <li>宅建士試験の合格を目指す人</li>
