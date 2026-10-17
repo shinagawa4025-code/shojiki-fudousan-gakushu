@@ -1,5 +1,5 @@
 // ○×一問一答: 正誤判定型の4択問題(ask: correct / incorrect)の選択肢を1文ずつ「正しい/誤り」で判定する
-// ルート: #ox(条件を選ぶトップ) / #ox/cat/<分野ID>(宅建士の分野ID または shohi) / #ox/topic/<topicId> / #ox/weak(間違えた文)
+// ルート: #ox(条件を選ぶトップ) / #ox/cat/<分野ID>(宅建士の分野ID または shohi・shohiho) / #ox/topic/<topicId> / #ox/weak(間違えた文)
 //         末尾に /<問題数>(10・20・50)を付けると、その問題数で出題する(例: #ox/cat/gyoho/20)
 //         #ox/weak/<文ID>(例: quiz-K-01%232)は、間違えた文のうちその文を最初に出題する
 //         #ox/quiz/<問題ID,問題ID,…>(模擬試験・解き直しの結果から)は、その4択問題の文だけを出題する(問題は12問まで・文は40問まで)
@@ -25,7 +25,8 @@ window.Views.ox = (function () {
     { id: `wrong`, label: `間違えたことがある` },
     { id: `all`, label: `すべて` },
   ];
-  const SHOHI = `shohi`;
+  // 分野の札にする税理士試験の分野(不動産と消費税・消費税法。不動産税務は宅建士の「税・価格評定」と同じトピックなので出さない)
+  const ZEI_CATS = [`shohi`, `shohiho`];
   const PASS_PCT = 70; // 合格の目安(自動生成クイズと共通)
   const AUTO_NEXT_MS = 1200;
   const QUIZ_SCOPE_MAX = 12; // #ox/quiz/<問題ID,…> で受け付ける問題の数
@@ -57,11 +58,10 @@ window.Views.ox = (function () {
     return t && Array.isArray(t.categories) ? t.categories : [];
   }
 
-  // 分野チップの並び: 宅建士の分野 + 不動産と消費税(税理士試験)
+  // 分野チップの並び: 宅建士の分野 + 不動産と消費税・消費税法(税理士試験。data/exams.js の順)
   function scopeCategories() {
     const list = categoriesOf(`takken`).map((c) => ({ id: c.id, name: c.name }));
-    const shohi = categoriesOf(`zeirishi`).find((c) => c.id === SHOHI);
-    if (shohi) list.push({ id: shohi.id, name: shohi.name });
+    categoriesOf(`zeirishi`).filter((c) => ZEI_CATS.includes(c.id)).forEach((c) => list.push({ id: c.id, name: c.name }));
     return list;
   }
 
@@ -70,17 +70,18 @@ window.Views.ox = (function () {
     return c ? c.name : `その他`;
   }
 
-  // 文に分野を付ける。cats: 該当する分野ID(宅建士の分野と shohi の両方に入ることもある) / cat: 表示・集計用の代表分野
+  // 文に分野を付ける。cats: 該当する分野ID(宅建士の分野と shohi・shohiho の両方に入ることもある) / cat: 表示・集計用の代表分野
   // quiz: 文の元の4択問題(試験分野が明示されていれば examCats を優先する。null は「その試験の範囲外」)
   function withCategory(s, quiz) {
     const probe = { relatedTermId: s.termId, topicIds: s.topicIds };
     if (quiz && quiz.examCats) probe.examCats = quiz.examCats;
     const t = Stats.categoryOf(probe, `takken`);
     const z = Stats.categoryOf(probe, `zeirishi`);
+    const zid = z && ZEI_CATS.includes(z.id) ? z.id : null;
     const cats = [];
     if (t) cats.push(t.id);
-    if (z && z.id === SHOHI) cats.push(SHOHI);
-    return Object.assign({}, s, { cats, cat: cats.includes(SHOHI) ? SHOHI : (t ? t.id : null) });
+    if (zid) cats.push(zid);
+    return Object.assign({}, s, { cats, cat: zid || (t ? t.id : null) });
   }
 
   // 分野を付けた文の一覧(画面を開くたびに何度も使うので覚えておく)。
@@ -638,9 +639,11 @@ window.Views.ox = (function () {
   // ===== 描画の部品(v13 デザイン刷新) =====
 
   // 分野の色とアイコン(丸いステッカー・進捗バー。css/style.css の .cat-*)。分からない分野は緑
+  // 消費税法(shohiho)は不動産と消費税と同じ色
   const CAT_IDS = [`gyoho`, `kenri`, `horei`, `zei`, `menjo`, `shohi`];
-  const CAT_ICONS = { gyoho: `scale`, kenri: `gavel`, horei: `ruler`, zei: `receipt`, menjo: `mountain`, shohi: `percent` };
+  const CAT_ICONS = { gyoho: `scale`, kenri: `gavel`, horei: `ruler`, zei: `receipt`, menjo: `mountain`, shohi: `percent`, shohiho: `calculator` };
   function catCls(id) {
+    if (id === `shohiho`) return `cat-shohi`;
     return CAT_IDS.includes(id) ? `cat-${id}` : `cat-life`;
   }
   function catSticker(id, cls, size) {

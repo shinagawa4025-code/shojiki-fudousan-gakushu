@@ -459,12 +459,13 @@ function main() {
     const takken = examType(`takken`);
     const cats = takken && Array.isArray(takken.categories) ? takken.categories : [];
     const zei = examType(`zeirishi`);
-    const zeiIds = zei && Array.isArray(zei.categories) ? zei.categories.flatMap((c) => c.topicIds || []) : [];
+    const zeiCats = zei && Array.isArray(zei.categories) ? zei.categories : [];
+    const zeiIds = zeiCats.flatMap((c) => c.topicIds || []);
     const used = new Set();
     const pick = (ids) => (ids || []).filter((id) => topicById.has(id) && !used.has(id)).map((id) => { used.add(id); return topicById.get(id); });
     let groups;
     if (track === `takken`) groups = cats.map((c) => ({ id: c.id, name: c.name, meta: c.questions ? `例年${c.questions}問` : ``, topics: pick(c.topicIds) }));
-    else if (track === `zeirishi`) groups = [{ id: `zeirishi`, name: `不動産の税金と消費税`, meta: ``, topics: pick(zeiIds) }];
+    else if (track === `zeirishi`) groups = zeiCats.map((c) => ({ id: c.id, name: c.name, meta: ``, topics: pick(c.topicIds) }));
     else {
       groups = LIFE_GROUPS.map((g) => ({ id: g.id, name: g.name, meta: ``, topics: pick(g.ids) }));
       const elsewhere = new Set(cats.flatMap((c) => c.topicIds || []).concat(zeiIds));

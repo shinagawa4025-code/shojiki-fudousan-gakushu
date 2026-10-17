@@ -90,7 +90,7 @@ window.Views.review = (function () {
 
   // 完了の画面の「○×で仕上げる(10問)」の行き先(ホームの「○×で10問」と同じ考え方)
   // 暮らし・仕事(試験の登録なし)で気になるテーマがあれば → そのテーマ。それ以外はホーム側に関数があればそれを使い、なければ:
-  // 税理士 → 不動産と消費税 / 宅建士・未登録 → 優先して伸ばしたい分野(なければ文の多い分野)。出せる文が少なければ ○× のトップ
+  // 税理士 → 消費税法(文がなければ不動産と消費税) / 宅建士・未登録 → 優先して伸ばしたい分野(なければ文の多い分野)。出せる文が少なければ ○× のトップ
   function oxFinishNav() {
     const O = window.Views && Views.ox && Views.ox._internal;
     let st = null;
@@ -117,7 +117,11 @@ window.Views.review = (function () {
     } catch (e) { /* 下の考え方で決める */ }
     if (!statements().length) return `#ox`;
     const byCat = (id) => statements().filter((s) => (s.cats || []).includes(id)).length;
-    if (typeId === `zeirishi`) return byCat(`shohi`) ? `#ox/cat/shohi/10` : `#ox`;
+    if (typeId === `zeirishi`) {
+      // 消費税法の文があればそれ、なければ不動産と消費税
+      const zid = [`shohiho`, `shohi`].find((id) => byCat(id) > 0);
+      return zid ? `#ox/cat/${zid}/10` : `#ox`;
+    }
     if (typeId && typeId !== `takken`) return `#ox`;
     const type = window.Stats && Stats.examType ? Stats.examType(`takken`) : null;
     const cats = type && Array.isArray(type.categories) ? type.categories : [];

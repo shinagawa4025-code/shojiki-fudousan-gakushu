@@ -1,5 +1,7 @@
 // 学習トピック: ふどまなの学習の軸になるトピック(一人暮らしの実践ガイド・暮らしと取引のA〜G・P・Q、
-// 宅建士試験の各分野(H・J・K・L・N)、不動産と消費税(O))
+// 宅建士試験の各分野(H・J・K・L・N)、不動産と消費税(O)、税理士試験の消費税法(R・S・T))
+// draft: true … 執筆中のトピック(基礎知識が0件でも js/dataIndex.js の整合性チェックで警告にしない)。
+//   基礎知識が入ったら警告が出るので、そのときに draft を外す
 // sections: 基礎知識チェックリストの小見出し(表示順)。basicIds の全項目をちょうど1回ずつ含める
 // (どの小見出しにも入っていない項目は末尾の「その他」に表示され、js/dataIndex.js が警告を出す)
 // sections のないトピックは basicIds の順に表示する。data/content/*.js の ContentPack が basicIds を末尾に追加するので、
@@ -137,7 +139,7 @@ window.APP_DATA.topics = [
       { name: `建物`, ids: [`basicN16`, `basicN17`, `basicN19`, `basicN22`, `basicD08`] },
     ] },
   { id: `topicO`, icon: `percent`, name: `不動産と消費税`, level: `上級`,
-    description: `土地の譲渡・住宅の貸付けの非課税、土地建物の一括譲渡の按分、居住用賃貸建物の仕入税額控除の制限、課税売上割合など、不動産取引に関わる消費税の論点。税理士試験(消費税法)の対策にも役立つ`,
+    description: `土地の譲渡・住宅の貸付けの非課税、土地建物の一括譲渡の按分、居住用賃貸建物の仕入税額控除の制限、課税売上割合など、不動産取引に関する消費税の論点を集めたテーマ。消費税法の全体は「消費税法①〜③」で学べる`,
     episodes: [],
     basicIds: [],
     sections: [
@@ -146,5 +148,37 @@ window.APP_DATA.topics = [
       { name: `課税売上割合と仕入税額控除`, ids: [`basicO11`, `basicO12`, `basicO13`, `basicO33`, `basicO14`, `basicO15`, `basicO16`, `basicO28`] },
       { name: `納税義務・簡易課税・インボイス`, ids: [`basicO26`, `basicO35`, `basicO27`, `basicO17`, `basicO18`, `basicO19`, `basicO20`, `basicO29`] },
       { name: `時期・税額控除・申告と価格表示`, ids: [`basicO21`, `basicO36`, `basicO30`, `basicO34`, `basicO31`, `basicO32`] },
+    ] },
+  // 税理士試験の消費税法(科目の全体)。基礎知識・問題は data/content/q5_shohi_a.js(R)・q5_shohi_b.js(S)・q5_shohi_c.js(T)から ContentPack で追加される。
+  // 小見出しの ids は、各パックの見出しのコメント(sections:)に書かれた置き場所に従ってここに書く
+  { id: `topicR`, icon: `library`, name: `消費税法① 課税の対象・納税義務`, level: `上級`,
+    description: `国内取引・輸入取引の判定と不課税・非課税・輸出免税の区別、納税義務者と小規模事業者の納税義務の免除(基準期間・特定期間・新設法人など)、納税地と課税期間。税理士試験(消費税法)の対策`,
+    episodes: [],
+    basicIds: [],
+    sections: [
+      { name: `課税の対象・不課税`, ids: [`basicR01`, `basicR02`] },
+      { name: `非課税・輸出免税`, ids: [`basicR03`, `basicR04`, `basicR05`] },
+      { name: `納税義務者・納税義務の免除`, ids: [`basicR06`, `basicR07`, `basicR08`] },
+      { name: `納税地・課税期間・取引の時期`, ids: [`basicR09`, `basicR10`] },
+    ] },
+  { id: `topicS`, icon: `calculator`, name: `消費税法② 税額の計算`, level: `上級`,
+    description: `課税標準と税率、仕入税額控除(全額控除・個別対応方式・一括比例配分方式・課税売上割合)、対価の返還等と貸倒れ、仕入税額の調整、特定収入の扱いなど、納付税額の計算。税理士試験(消費税法)の対策`,
+    episodes: [],
+    basicIds: [],
+    sections: [
+      { name: `課税標準と税率`, ids: [`basicS01`, `basicS02`, `basicS03`] },
+      { name: `仕入税額控除`, ids: [`basicS04`, `basicS05`, `basicS06`] },
+      { name: `対価の返還等・貸倒れ`, ids: [`basicS07`, `basicS08`] },
+      { name: `仕入税額の調整・特定収入`, ids: [`basicS09`, `basicS10`] },
+    ] },
+  { id: `topicT`, icon: `receipt`, name: `消費税法③ 簡易課税・申告・インボイス`, level: `上級`,
+    description: `簡易課税制度と2割特例・3割特例、中間申告・確定申告と届出の期限、適格請求書等保存方式(インボイス制度)と帳簿の保存、国境を越えた役務の提供など。税理士試験(消費税法)の対策`,
+    episodes: [],
+    basicIds: [],
+    sections: [
+      { name: `簡易課税・2割特例・3割特例`, ids: [`basicT01`, `basicT02`, `basicT03`] },
+      { name: `申告・納付・届出`, ids: [`basicT04`, `basicT05`, `basicT10`] },
+      { name: `インボイス・帳簿等の保存`, ids: [`basicT06`, `basicT07`, `basicT08`] },
+      { name: `国境を越えた役務の提供`, ids: [`basicT09`] },
     ] },
 ];

@@ -448,7 +448,7 @@ window.Stats = (function () {
     { id: `takken`, icon: `target`, title: `宅建士試験に合格したい`, desc: `4択・○×・本番形式の模擬試験で対策`, examTypeId: `takken` },
     { id: `life`, icon: `home`, title: `暮らしや取引に役立てたい`, desc: `部屋を借りる・家を買う・売る・相続する前に`, examTypeId: null },
     { id: `work`, icon: `briefcase`, title: `仕事で使いたい`, desc: `不動産・金融・保険・士業などの基礎として`, examTypeId: null },
-    { id: `zeirishi`, icon: `receipt`, title: `税理士試験(消費税法など)の対策`, desc: `不動産と消費税・不動産の税金`, examTypeId: `zeirishi` },
+    { id: `zeirishi`, icon: `receipt`, title: `税理士試験(消費税法など)の対策`, desc: `消費税法・不動産と消費税・不動産の税金`, examTypeId: `zeirishi` },
   ];
   // 気になるテーマ → トピック(先頭ほど優先。まだないトピックは使うときに除く)
   const INTEREST_TOPIC_MAP = Object.freeze({

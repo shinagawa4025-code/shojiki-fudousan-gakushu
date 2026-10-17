@@ -109,14 +109,14 @@ window.Views.about = (function () {
         <h3 class="sr-only" id="about-intro-title">概要</h3>
         <div class="about-hello">
           ${window.Mascot && typeof Mascot.svg === `function` ? Mascot.svg(`happy`, 64, { className: `about-mascot` }) : ``}
-          <p class="about-lead">${esc(name)}は、不動産の基礎知識から宅地建物取引士(宅建士)試験の対策までを、1日数分ずつ学べる無料の学習アプリです。</p>
+          <p class="about-lead">${esc(name)}は、不動産の基礎知識から宅地建物取引士(宅建士)試験・税理士試験(消費税法)の対策までを、1日数分ずつ学べる無料の学習アプリです。</p>
         </div>
         <h4 class="about-sub">こんな人に</h4>
         <ul>
           <li>宅建士試験の合格を目指す人</li>
           <li>はじめて部屋を借りる・家を買う・売る・相続する人</li>
           <li>不動産・金融・保険などの仕事で基礎が必要な人</li>
-          <li>税理士試験で不動産と消費税を学ぶ人</li>
+          <li>税理士試験で消費税法を学ぶ人</li>
         </ul>
         <h4 class="about-sub">できること</h4>
         <ul>

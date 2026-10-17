@@ -57,6 +57,8 @@ window.APP_DATA.exams = {
       categories: [
         { id: `shisan`, name: `不動産税務`, questions: null, topicIds: [`topicH`], termIds: [`basicB04`, `basicB05`, `basicB06`, `basicB08`, `basicC05`] },
         { id: `shohi`, name: `不動産と消費税`, questions: null, topicIds: [`topicO`], termIds: [`basicH13`] },
+        // 消費税法の全体(税理士試験の科目としての消費税法。不動産取引に限らない)。問題・基礎知識は examCats: { zeirishi: 'shohiho' } を付ける
+        { id: `shohiho`, name: `消費税法`, questions: null, topicIds: [`topicR`, `topicS`, `topicT`], termIds: [] },
       ],
     },
     {

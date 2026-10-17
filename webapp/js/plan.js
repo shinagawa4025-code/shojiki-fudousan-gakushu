@@ -110,9 +110,10 @@ window.Plan = (function () {
 
   // [{ cat, label, share, mastery, weight, topicIds }](weight は合計1)
   function allocation(type, snap) {
-    const cats = categoriesOf(type);
-    if (!cats.length) return [];
     const rows = snapRows(snap, type.id);
+    // 弱点分析で用語も回答も1つもない分野(執筆中で中身のまだない分野)は配分しない(空のトピックへ案内しないため)
+    const cats = categoriesOf(type).filter((c) => !rows || !rows[c.id] || rows[c.id].available !== false);
+    if (!cats.length) return [];
     const qs = cats.map((c) => (typeof c.questions === `number` && c.questions > 0 ? c.questions : 0));
     const qsum = qs.reduce((s, n) => s + n, 0);
     const list = cats.map((c, i) => {
@@ -168,8 +169,8 @@ window.Plan = (function () {
     return best ? best.id : ids[0];
   }
 
-  // ○×: 分野で出せる(宅建士の5分野と「不動産と消費税」)なら分野、ほかはトピック
-  const OX_CATS = [`kenri`, `horei`, `zei`, `gyoho`, `menjo`, `shohi`];
+  // ○×: 分野で出せる(宅建士の5分野と「不動産と消費税」「消費税法」)なら分野、ほかはトピック
+  const OX_CATS = [`kenri`, `horei`, `zei`, `gyoho`, `menjo`, `shohi`, `shohiho`];
   function oxHref(a) {
     if (OX_CATS.includes(a.cat)) return `#ox/cat/${a.cat}/20`;
     const tid = a.topicIds.find(topicExists);

@@ -574,10 +574,10 @@ window.Analysis = (function () {
 
   function categoryAction(r, ctx) {
     const q = r.questions ? `例年${r.questions}問` : ``;
-    // ○×の分野リンク(#ox/cat/…)は宅建士の分野と shohi だけ。それ以外はトピック単位(#ox/topic/…)で案内する
+    // ○×の分野リンク(#ox/cat/…)は宅建士の分野と shohi・shohiho だけ(js/views/ox.js の分野の札)。それ以外はトピック単位(#ox/topic/…)で案内する
     let oxCount = 0;
     let oxNav = ``;
-    if (ctx.examTypeId === `takken` || r.id === `shohi`) {
+    if (ctx.examTypeId === `takken` || r.id === `shohi` || r.id === `shohiho`) {
       oxCount = ctx.statementsByCat[r.id] || 0;
       oxNav = `#ox/cat/${r.id}`;
     } else {

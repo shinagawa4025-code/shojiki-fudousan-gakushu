@@ -116,6 +116,7 @@ window.AppIndex = (function () {
 
   // トピックの小見出し: topicId -> [{ name, ids }](basicIds にある項目だけ・各項目は最初の小見出しに1回だけ)
   // 小見出しのないトピックは null。どの小見出しにも入っていない項目は末尾の「その他」にまとめる
+  // 項目が1つもない小見出しは出さない(執筆中のトピックは ids: [] の小見出しだけを先に置ける。全部空なら null と同じ扱い)
   const topicSections = dict();
   // トピックID -> 基礎知識の表示順(小見出し順。なければ basicIds の順)
   const topicBasicOrder = dict();
@@ -142,7 +143,7 @@ window.AppIndex = (function () {
       issues.push(`${tp.id}: どの小見出しにも入っていない基礎知識 ${rest.join(`, `)}`);
       secs.push({ name: `その他`, ids: rest });
     }
-    topicSections[tp.id] = secs;
+    topicSections[tp.id] = secs.length ? secs : null;
     topicBasicOrder[tp.id] = secs.flatMap((s) => s.ids);
   });
   function dupCheck(label, ids) {
@@ -292,9 +293,11 @@ window.AppIndex = (function () {
     const packNote = packs.map((p) => p.patched != null ? `${p.id}(上書き${p.patched})` : `${p.id}(基礎${p.basics}・問題${p.quiz})`).join(` `) || `なし`;
     const mcCount = data.quiz.filter((q) => q.format === `mc`).length;
     const styledCount = data.quiz.filter((q) => q.style != null).length;
-    const emptyTopics = data.topics.filter((t) => !t.basicIds.length).map((t) => t.id);
+    // 執筆中のトピック(data/topics.js の draft: true)は0件でもよい。基礎知識が入ったら draft を外すよう知らせる
+    const emptyTopics = data.topics.filter((t) => !t.basicIds.length && t.draft !== true).map((t) => t.id);
     if (emptyTopics.length) issues.push(`基礎知識が0件のトピック: ${emptyTopics.join(`, `)}`);
-    console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length}, topics=${data.topics.length} (期待値16), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length}(うち4択${mcCount}・個数/組合せ${styledCount}・廃止${retiredQuizIds.size - retiredQuizMissing.length}), sources=${data.sources.length}, 試験種別=${examTypeCount} (期待値3), 追加パック=${packNote}, 見直し期限切れ=${reviewDue.length}件, 警告=${issues.length}件`);
+    data.topics.filter((t) => t.draft === true && t.basicIds.length).forEach((t) => issues.push(`${t.id}: 基礎知識が入ったので data/topics.js の draft: true(執筆中)を外す`));
+    console.log(`[データ整合性チェック] episodes=${data.episodes.length} (期待値56), specials=${data.specials.length} (期待値7), terms=${data.terms.length} (期待値43), basics=${data.basics.length}, topics=${data.topics.length} (期待値19), laws=${data.laws.laws.length} (期待値6), quiz=${data.quiz.length}(うち4択${mcCount}・個数/組合せ${styledCount}・廃止${retiredQuizIds.size - retiredQuizMissing.length}), sources=${data.sources.length}, 試験種別=${examTypeCount} (期待値3), 追加パック=${packNote}, 見直し期限切れ=${reviewDue.length}件, 警告=${issues.length}件`);
     issues.forEach((msg) => console.warn(`[データ整合性チェック] ${msg}`));
     if (reviewDue.length) console.warn(`[見直し時期] reviewBy を過ぎた項目 ${reviewDue.length}件(法改正・統計の更新を確認して、内容と reviewBy を直す): ${reviewDue.join(`, `)}`);
   } // if (CHECK)

@@ -7,7 +7,7 @@ window.Views.figures = (function () {
   const APP_GROUP = `app`;
   const APP_HELP_IDS = [`srs-cycle`];
   // 一覧の見出しのステッカーの色(Diagrams.groups の id → 分野の色。css/style.css の .cat-*)。ないものは緑
-  const GROUP_CAT = { takken: `cat-gyoho`, gyoho: `cat-gyoho`, kenri: `cat-kenri`, horei: `cat-horei`, zei: `cat-zei`, menjo: `cat-menjo`, shohi: `cat-shohi`, life: `cat-life` };
+  const GROUP_CAT = { takken: `cat-gyoho`, gyoho: `cat-gyoho`, kenri: `cat-kenri`, horei: `cat-horei`, zei: `cat-zei`, menjo: `cat-menjo`, shohi: `cat-shohi`, shohiho: `cat-shohi`, life: `cat-life` };
 
   // 一覧の見出しごとの図: [{ id, label, ids }](学習内容の分野 → その他 → アプリの使い方。詳細画面の前後移動も同じ順)
   // Diagrams.groups がなければ、学習内容の図をまとめて1つ・アプリの使い方の図を1つ
@@ -56,7 +56,7 @@ window.Views.figures = (function () {
   // 用語が基礎知識として載っているトピック(基礎知識の一覧 basicIds か、小見出し sections[].ids に入っているもの)
   // 複数のトピックに載っているときは、検索(search.js)の案内先と同じ考え方で選ぶ:
   // ①主目標の試験でその項目が属する分野のトピック ②宅建士・税理士の分野で個別指定(termIds)されたトピック ③試験向けトピック ④データの先頭
-  const TOPIC_RANK = [`topicO`, `topicN`, `topicL`, `topicK`, `topicJ`, `topicH`];
+  const TOPIC_RANK = [`topicO`, `topicR`, `topicS`, `topicT`, `topicN`, `topicL`, `topicK`, `topicJ`, `topicH`];
   function topicHas(topic, termId) {
     if (Array.isArray(topic.basicIds) && topic.basicIds.includes(termId)) return true;
     return Array.isArray(topic.sections) && topic.sections.some((s) => s && Array.isArray(s.ids) && s.ids.includes(termId));

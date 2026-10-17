@@ -7,11 +7,12 @@ window.Views.plan = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 20 });
   const esc = (s) => UI.escapeHtml(s);
   const ICONS = { exam: `timer`, drill: `repeat`, 'ox-weak': `o-x`, review: `layers`, basic: `book-open`, quiz: `pencil-check`, ox: `o-x` };
-  // 分野の色(ホーム・進捗と同じ)。税理士の「不動産税務」は税の色。分からない分野は既定の緑
+  // 分野の色(ホーム・進捗と同じ)。税理士の「不動産税務」は税の色、「消費税法」は消費税の色。分からない分野は既定の緑
   const CAT_IDS = [`gyoho`, `kenri`, `horei`, `zei`, `menjo`, `shohi`];
-  const CAT_ICON = { gyoho: `scale`, kenri: `gavel`, horei: `ruler`, zei: `receipt`, menjo: `mountain`, shohi: `percent`, shisan: `receipt` };
+  const CAT_ICON = { gyoho: `scale`, kenri: `gavel`, horei: `ruler`, zei: `receipt`, menjo: `mountain`, shohi: `percent`, shisan: `receipt`, shohiho: `calculator` };
   function catCls(id) {
     if (id === `shisan`) return `cat-zei`;
+    if (id === `shohiho`) return `cat-shohi`;
     return CAT_IDS.includes(id) ? `cat-${id}` : ``;
   }
 

@@ -23,9 +23,9 @@ window.Views.exam = (function () {
   const SHORT_QUOTAS = { kenri: 6, horei: 3, zei: 1, gyoho: 8, menjo: 2 };
   const SHORT_TOTAL = 20;
   // 個数問題・組合せ問題(style: count / combo)を各分野に入れる数(このアプリの目安。上限も兼ねる)。
-  // 本試験でも業法を中心に出るので、フルは業法4・権利関係1・法令上の制限1、ショートは業法2。ほかの分野には入れない
+  // 本試験でも業法を中心に出るので、フルは業法6・権利関係1・法令上の制限2、ショートは業法3・法令上の制限1。ほかの分野には入れない
   // (直近の模擬試験に出した問題を後回しにする決まりのほうを優先するので、収録数が少ないうちは枠より少なくなることがある)
-  const STYLED_QUOTAS = { full: { gyoho: 4, kenri: 1, horei: 1 }, short: { gyoho: 2 } };
+  const STYLED_QUOTAS = { full: { gyoho: 6, kenri: 1, horei: 2 }, short: { gyoho: 3, horei: 1 } };
   const ANNOUNCE_MINUTES = [10, 5, 1];
   const PACE_INTERVAL = 15000; // ペース表示の更新間隔
   const GOOD_PCT = 70; // 分野の正答率がこれ未満なら「次にやること」に挙げる
@@ -878,7 +878,7 @@ window.Views.exam = (function () {
     cats.forEach((c) => { mcByCat[c.id] = mcItemsIn(c.id); });
     const mcTotal = cats.reduce((n, c) => n + mcByCat[c.id].length, 0);
     const hist = readHistory();
-    // 個数・組合せの問題を出す数(分野ごとに 枠と収録数の小さいほう。多い順): 「宅建業法4問・権利関係1問」など。出さなければ ``
+    // 個数・組合せの問題を出す数(分野ごとに 枠と収録数の小さいほう。多い順): 「宅建業法6問・法令上の制限2問・権利関係1問」など。出さなければ ``
     const styledCount = {};
     cats.forEach((c) => { styledCount[c.id] = mcByCat[c.id].filter((q) => QuizEngine.styleOf(q)).length; });
     function styledParts(mode) {

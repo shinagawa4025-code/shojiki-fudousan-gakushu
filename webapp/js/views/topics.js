@@ -59,7 +59,8 @@ window.Views.topics = (function () {
     const takken = Stats.examType(`takken`);
     const cats = takken && Array.isArray(takken.categories) ? takken.categories : [];
     const zei = Stats.examType(`zeirishi`);
-    const zeiIds = zei && Array.isArray(zei.categories) ? zei.categories.flatMap((c) => c.topicIds || []) : [];
+    const zeiCats = zei && Array.isArray(zei.categories) ? zei.categories : [];
+    const zeiIds = zeiCats.flatMap((c) => c.topicIds || []);
     const used = new Set();
     const pick = (ids) => ids.filter((id) => byId[id] && !used.has(id)).map((id) => { used.add(id); return byId[id]; });
     let groups;
@@ -67,7 +68,8 @@ window.Views.topics = (function () {
       // 宅建士の出題分野ごと(分野の中は試験設定 data/exams.js の topicIds の順)
       groups = cats.map((c) => ({ id: c.id, name: c.name, meta: c.questions ? `例年${c.questions}問` : ``, topics: pick(c.topicIds || []) }));
     } else if (track === `zeirishi`) {
-      groups = [{ id: `zeirishi`, name: `不動産の税金と消費税`, meta: ``, topics: pick(zeiIds) }];
+      // 税理士試験の分野ごと(不動産税務 / 不動産と消費税 / 消費税法。data/exams.js の順)
+      groups = zeiCats.map((c) => ({ id: c.id, name: c.name, meta: ``, topics: pick(c.topicIds || []) }));
     } else {
       groups = LIFE_GROUPS.map((g) => ({ id: g.id, name: g.name, meta: ``, topics: pick(g.ids) }));
       // どの一覧にも入っていないトピック(新しく追加したものなど)は、暮らし・取引の最後にまとめる
@@ -88,7 +90,8 @@ window.Views.topics = (function () {
     const basicsCount = topic.basicIds.filter((id) => AppIndex.termsById[id]).length;
     const quizCount = (AppIndex.topicQuizIndex[topic.id] || []).length;
     const done = stat.total > 0 && stat.done >= stat.total;
-    const meta = [esc(topic.level), basicsCount ? `基礎知識 ${basicsCount}` : ``, quizCount ? `問題 ${quizCount}` : ``].filter(Boolean).join(`・`);
+    // 基礎知識も問題もまだないトピック(執筆中)は「準備中」と添える
+    const meta = [esc(topic.level), basicsCount ? `基礎知識 ${basicsCount}` : ``, quizCount ? `問題 ${quizCount}` : ``, !basicsCount && !quizCount ? `準備中` : ``].filter(Boolean).join(`・`);
     return `
       <a class="card card-interactive topic-card cat-${topicCat(topic.id).id}${done ? ` is-done` : ``}" href="#topics/${topic.id}">
         <div class="topic-card-head">
@@ -207,6 +210,13 @@ window.Views.topics = (function () {
     // 用語カードは基礎知識チェックリストにない用語だけ(同じ内容を2回並べない)。
     // 作品由来の俗語(worksOnly)は「作品で学ぶ」コーナー用なので出さない
     const extraTerms = termIds.filter((id) => !topic.basicIds.includes(id)).map((id) => AppIndex.termsById[id]).filter((t) => t && t.worksOnly !== true);
+    // 基礎知識も用語もまだないトピック(執筆中)では、自動生成クイズ(用語から作る)と用語集への案内を出さない
+    const hasTerms = order.length > 0 || extraTerms.length > 0;
+    const practiceHtml = [
+      quizzes.length ? `<a class="btn btn-lg topic-practice-main" href="#quiz/${topic.id}">${ic(`pencil-check`, 24)}<span class="topic-practice-text"><span>${quizLabel}</span><span class="topic-practice-count">${quizzes.length}問</span></span>${ic(`arrow-right`, 20)}</a>` : ``,
+      oxCount ? `<a class="btn btn-secondary btn-lg" href="#ox/topic/${topic.id}">${ic(`o-x`, 24)}<span class="topic-practice-text"><span><span class="sr-only">○×</span>一問一答</span><span class="topic-practice-count">${oxCount}問</span></span></a>` : ``,
+      !quizzes.length && hasTerms ? `<a class="btn btn-secondary btn-lg" href="#quiz/auto/${topic.id}">${ic(`sparkles`, 24)}<span class="topic-practice-text"><span>自動生成クイズ</span></span></a>` : ``,
+    ].join(``);
 
     // 戻る/再読み込みで帰ってきたときは、開いていた項目・表示件数・絞り込みを元に戻す(履歴エントリごとに保存)
     // (Router は描画の直後に保存位置へスクロールするので、ここで同期的に元の高さまで作っておく)
@@ -242,11 +252,7 @@ window.Views.topics = (function () {
         <span class="topic-hero-pct num" data-role="hero-pct"><span class="sr-only">このトピックの進捗(記憶済み・学習済み)</span>${stat.pct}%</span>
       </div>
       <p class="view-desc topic-desc">${esc(topic.description)}</p>
-      <div class="topic-practice">
-        ${quizzes.length ? `<a class="btn btn-lg topic-practice-main" href="#quiz/${topic.id}">${ic(`pencil-check`, 24)}<span class="topic-practice-text"><span>${quizLabel}</span><span class="topic-practice-count">${quizzes.length}問</span></span>${ic(`arrow-right`, 20)}</a>` : ``}
-        ${oxCount ? `<a class="btn btn-secondary btn-lg" href="#ox/topic/${topic.id}">${ic(`o-x`, 24)}<span class="topic-practice-text"><span><span class="sr-only">○×</span>一問一答</span><span class="topic-practice-count">${oxCount}問</span></span></a>` : ``}
-        ${!quizzes.length ? `<a class="btn btn-secondary btn-lg" href="#quiz/auto/${topic.id}">${ic(`sparkles`, 24)}<span class="topic-practice-text"><span>自動生成クイズ</span></span></a>` : ``}
-      </div>
+      ${practiceHtml ? `<div class="topic-practice">${practiceHtml}</div>` : ``}
       <div class="topic-detail-layout">
         <div class="topic-main">
           <section id="sec-basics" class="topic-sec">
@@ -265,10 +271,10 @@ window.Views.topics = (function () {
           <section id="sec-quiz" class="topic-sec">
             <div class="section-head"><h3>このトピックの問題</h3>${quizzes.length ? `<a class="btn btn-sm" href="#quiz/${topic.id}">${ic(`pencil-check`, 16)}1問ずつ解く<span class="sr-only">(${quizLabel}${quizzes.length}問)</span></a>` : ``}</div>
             <div class="quiz-list" data-role="quiz-list"></div>
-            <div class="card-actions"><a class="btn btn-secondary" href="#quiz/auto/${topic.id}">${ic(`sparkles`)}自動生成クイズに挑戦</a></div>
+            ${hasTerms ? `<div class="card-actions"><a class="btn btn-secondary" href="#quiz/auto/${topic.id}">${ic(`sparkles`)}自動生成クイズに挑戦</a></div>` : ``}
           </section>
           <section id="sec-terms" class="topic-sec">
-            <div class="section-head"><h3>用語カード</h3><a class="link-btn" href="#glossary/topic/${topic.id}">用語集で見る${ic(`chevron-right`, 16)}</a></div>
+            <div class="section-head"><h3>用語カード</h3>${hasTerms ? `<a class="link-btn" href="#glossary/topic/${topic.id}">用語集で見る${ic(`chevron-right`, 16)}</a>` : ``}</div>
             ${order.length ? `<a class="card card-interactive basics-card-hint" href="#glossary/topic/${topic.id}"><span class="sticker sticker-sm" aria-hidden="true">${ic(`layers`, 18)}</span><span>基礎知識(${order.length}項目)もカードで暗記チェック</span>${ic(`chevron-right`, 18)}</a>` : ``}
             <div class="card-grid" data-role="term-grid"></div>
           </section>
@@ -647,7 +653,7 @@ window.Views.topics = (function () {
         quizPager = renderPaged(quizList, quizzes, (q) => Views.quiz.buildFixedCard(q, { history: quizHistory, restoreChoice: answeredMap[q.id], onResult }), 10, `問`, saved && saved.quiz, onMoreQuiz);
       });
     } else {
-      quizList.appendChild(UI.emptyState({ icon: `pencil-check`, title: `確認問題は準備中です`, body: `自動生成クイズで用語の理解を確認できます。` }));
+      quizList.appendChild(UI.emptyState({ icon: `pencil-check`, title: `確認問題は準備中です`, body: hasTerms ? `自動生成クイズで用語の理解を確認できます。` : `このトピックの問題は順次追加します。` }));
     }
 
     // ---- 用語フリップカード(基礎知識チェックリストにない用語) ----

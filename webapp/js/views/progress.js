@@ -29,12 +29,13 @@ window.Views.progress = (function () {
   let selectedType = null;
 
   // ---- 見た目の部品(v3: 丸いステッカー・分野の色。ホームと同じ色の決め方) ----
-  // 分野の色(ステッカー・バー)。税理士の「不動産税務」は税の色。分からない分野は既定の緑
+  // 分野の色(ステッカー・バー)。税理士の「不動産税務」は税の色、「消費税法」は消費税の色。分からない分野は既定の緑
   const CAT_IDS = [`gyoho`, `kenri`, `horei`, `zei`, `menjo`, `shohi`];
-  // 分野のアイコン(各分野の代表のトピックと同じ絵)
-  const CAT_ICON = { gyoho: `scale`, kenri: `gavel`, horei: `ruler`, zei: `receipt`, menjo: `mountain`, shohi: `percent`, shisan: `receipt` };
+  // 分野のアイコン(各分野の代表のトピックと同じ絵。消費税法は税額の計算(topicS)の絵)
+  const CAT_ICON = { gyoho: `scale`, kenri: `gavel`, horei: `ruler`, zei: `receipt`, menjo: `mountain`, shohi: `percent`, shisan: `receipt`, shohiho: `calculator` };
   function catCls(id) {
     if (id === `shisan`) return `cat-zei`;
+    if (id === `shohiho`) return `cat-shohi`;
     return CAT_IDS.includes(id) ? `cat-${id}` : ``;
   }
 

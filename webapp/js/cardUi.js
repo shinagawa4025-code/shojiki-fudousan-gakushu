@@ -3,14 +3,15 @@ window.CardUi = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 20 });
 
   // 試験対策のトピック(深掘りの見出しを「試験のポイント」にする)
-  const EXAM_TOPIC_IDS = [`topicH`, `topicJ`, `topicK`, `topicL`, `topicN`, `topicO`];
+  const EXAM_TOPIC_IDS = [`topicH`, `topicJ`, `topicK`, `topicL`, `topicN`, `topicO`, `topicR`, `topicS`, `topicT`];
 
   // ---- 分野の色(ステッカー・カードの上の帯・進捗バー。css/style.css の .cat-*) ----
-  // 宅建士の分野(業法・権利・法令・税・免除)→ 税理士の分野(消費税、不動産税務は税の色)→ どれでもなければ暮らし(緑)
+  // 宅建士の分野(業法・権利・法令・税・免除)→ 税理士の分野(消費税。消費税法も同じ色、不動産税務は税の色)→ どれでもなければ暮らし(緑)
   const CAT_IDS = [`gyoho`, `kenri`, `horei`, `zei`, `menjo`, `shohi`];
   const CAT_TYPES = [`takken`, `zeirishi`];
   function catIdOf(id) {
     if (id === `shisan`) return `zei`;
+    if (id === `shohiho`) return `shohi`;
     return CAT_IDS.includes(id) ? id : null;
   }
   // 用語・基礎知識の分野の id(gyoho など。分からなければ life)

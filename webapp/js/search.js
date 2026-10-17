@@ -103,7 +103,7 @@ window.GlobalSearch = (function () {
   // 複数トピックに入っている基礎知識は、より試験に近い・具体的なトピックへ案内する
   // ①主目標の試験でその項目が属する分野のトピック ②宅建士・税理士の分野で個別指定(termIds)されたトピック
   // ③試験向けトピック(具体的なものから) ④データの先頭
-  const EXAM_TOPIC_RANK = [`topicO`, `topicN`, `topicL`, `topicK`, `topicJ`, `topicH`];
+  const EXAM_TOPIC_RANK = [`topicO`, `topicR`, `topicS`, `topicT`, `topicN`, `topicL`, `topicK`, `topicJ`, `topicH`];
   function basicTopicOf(term, primaryId) {
     const cands = window.APP_DATA.topics.filter((t) => topicHas(t, term.id));
     if (cands.length <= 1) return cands.length ? cands[0].id : null;

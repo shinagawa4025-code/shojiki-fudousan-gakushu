@@ -359,7 +359,7 @@ window.Views.home = (function () {
     return false;
   }
 
-  // ヒーローの「○×で10問」: 税理士は不動産と消費税、宅建士(または未登録)は優先して伸ばしたい分野
+  // ヒーローの「○×で10問」: 税理士は消費税法(文がなければ不動産と消費税)、宅建士(または未登録)は優先して伸ばしたい分野
   function oxLink(ctx) {
     const typeId = ctx.typeId;
     const c = snapCtx(ctx);
@@ -370,8 +370,10 @@ window.Views.home = (function () {
       return n || 10;
     };
     if (typeId === `zeirishi`) {
-      if (!have(`shohi`, 1)) return { nav: `#ox`, label: `○×一問一答`, scope: `1問数秒` };
-      return { nav: `#ox/cat/shohi/10`, label: `○×で${sized(`shohi`)}問`, scope: categoryName(ctx, `shohi`) || `不動産と消費税` };
+      // 分析がまだない(文の数が分からない)ときは、これまでどおり不動産と消費税
+      const zid = byCat ? [`shohiho`, `shohi`].find((id) => have(id, 1)) : `shohi`;
+      if (!zid) return { nav: `#ox`, label: `○×一問一答`, scope: `1問数秒` };
+      return { nav: `#ox/cat/${zid}/10`, label: `○×で${sized(zid)}問`, scope: categoryName(ctx, zid) || (zid === `shohi` ? `不動産と消費税` : `消費税法`) };
     }
     if (typeId && typeId !== `takken`) return { nav: `#ox`, label: `○×一問一答`, scope: `1問数秒` };
     const takken = Stats.examType(`takken`);
@@ -397,10 +399,11 @@ window.Views.home = (function () {
     return e;
   }
 
-  // 分野の色(ステッカー・バー)。税理士の「不動産税務」は税の色。分からない分野は既定の緑
+  // 分野の色(ステッカー・バー)。税理士の「不動産税務」は税の色、「消費税法」は消費税の色。分からない分野は既定の緑
   const CAT_IDS = [`gyoho`, `kenri`, `horei`, `zei`, `menjo`, `shohi`];
   function catCls(id) {
     if (id === `shisan`) return `cat-zei`;
+    if (id === `shohiho`) return `cat-shohi`;
     return CAT_IDS.includes(id) ? `cat-${id}` : ``;
   }
 
