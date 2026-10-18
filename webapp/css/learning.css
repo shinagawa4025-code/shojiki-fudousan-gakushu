@@ -568,4 +568,4 @@
 }
 
 /* ---------- 文中のリンクボタン(行の高さを乱さない) ---------- */
-.view-desc .link-btn, .episode-empty-state .link-btn { display: inline; min-height: 0; vertical-align: baseline; }
+.view-desc .link-btn { display: inline; min-height: 0; vertical-align: baseline; }

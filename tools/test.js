@@ -75,11 +75,12 @@ async function runAll(files, jobs, makeArgs, timeoutMs) {
 }
 
 function browserAvailable() {
-  const { findBrowser } = require('./tests/lib/browser.js');
-  const exe = findBrowser();
-  if (!exe) return { ok: false, why: 'Chrome / Edge が見つかりません' };
+  const { findBrowsers } = require('./tests/lib/browser.js');
+  const list = findBrowsers();
+  if (!list.length) return { ok: false, why: 'Chrome / Edge が見つかりません' };
   if (typeof WebSocket === 'undefined') return { ok: false, why: 'この Node には WebSocket がありません(Node 22 以上が必要)' };
-  return { ok: true, exe };
+  // 最初の候補が起動できなければ次の候補を使う(tools/tests/lib/browser.js の launchAny)
+  return { ok: true, exe: list.join(' → ') };
 }
 
 async function main() {

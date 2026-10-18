@@ -98,14 +98,18 @@ function startServer(root, port) {
 }
 
 // ---- ブラウザ(tools/smoke.js と同じ探し方: --browser-path・CHROME_PATH・CHROME_BIN・GitHub のランナー・Windows・Mac の順。--browser は tools/test.js の「ブラウザのテストだけ」なので別の名前) ----
-function findBrowser() {
+// Windows・Mac は Edge を先に、次に Chrome。Edge のヘッドレスが起動しない版があるので、起動できなければ次の候補を使う(launchAny)
+function findBrowsers() {
+  const local = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe') : null;
   const c = [H.opt('--browser-path'), process.env.CHROME_PATH, process.env.CHROME_BIN,
     '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/opt/google/chrome/chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium',
     '/usr/bin/microsoft-edge', '/usr/bin/microsoft-edge-stable',
-    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
-  return c.find((p) => p && fs.existsSync(p)) || null;
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', local,
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
+  return [...new Set(c.filter((p) => p && fs.existsSync(p)))];
 }
+function findBrowser() { return findBrowsers()[0] || null; }
 
 class CDP {
   static connect(url) {
@@ -161,10 +165,16 @@ async function launch(exe) {
     '--disable-hang-monitor', '--disable-breakpad', '--disable-client-side-phishing-detection', '--disable-search-engine-choice-screen', '--metrics-recording-only',
     '--password-store=basic', '--use-mock-keychain', '--hide-scrollbars', '--mute-audio', '--force-color-profile=srgb', '--lang=ja-JP', '--window-size=1280,900'];
   if (process.platform === 'linux') flags.push('--no-sandbox', '--disable-dev-shm-usage');
+  // Edge 155 以降の Windows 版は、起動し直す仕組み(互換レイヤー)のせいでヘッドレスだとすぐ終わる(終了コード 0)。起動し直さないようにする
+  if (/msedge(\.exe)?$|Microsoft Edge$/i.test(exe)) flags.push('--edge-skip-compat-layer-relaunch');
   const proc = spawn(exe, [...flags, 'about:blank'], { stdio: 'ignore' });
+  // すぐ終わったら(起動できない版など)待たずに失敗にして、次の候補へ(launchAny)
+  let exited = null;
+  proc.on('exit', (code, signal) => { exited = `終了コード ${code}${signal ? `・${signal}` : ''}`; });
+  proc.on('error', (e) => { exited = e.message; });
   const portFile = path.join(dir, 'DevToolsActivePort');
-  for (let i = 0; i < 300 && !fs.existsSync(portFile); i++) await sleep(100);
-  if (!fs.existsSync(portFile)) { proc.kill(); await sleep(300); try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* 使用中 */ } throw new Error('ブラウザが起動しませんでした(DevToolsActivePort がない)'); }
+  for (let i = 0; i < 300 && !fs.existsSync(portFile) && !exited; i++) await sleep(100);
+  if (!fs.existsSync(portFile)) { try { proc.kill(); } catch (e) { /* 終了済み */ } await sleep(300); try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* 使用中 */ } throw new Error(exited ? `ブラウザがすぐに終了しました(${exited})` : 'ブラウザが起動しませんでした(DevToolsActivePort がない)'); }
   let lines = [];
   // (Windows では書き込み中のファイルを開くと EBUSY になることがあるので、読めるまで待つ)
   for (let i = 0; i < 50; i++) {
@@ -184,6 +194,20 @@ async function launch(exe) {
       for (let i = 0; i < 10; i++) { try { fs.rmSync(dir, { recursive: true, force: true }); break; } catch (e) { await sleep(200); } }
     },
   };
+}
+
+// 候補を順に起動して、最初に動いたものを使う(Edge が起動しなければ Chrome など。どれも起動できなければ最後の理由で失敗)
+async function launchAny(list) {
+  let last = null;
+  for (let i = 0; i < list.length; i++) {
+    try {
+      return await launch(list[i]);
+    } catch (e) {
+      last = e;
+      if (i < list.length - 1) console.log(`  (ブラウザ ${list[i]} を起動できませんでした: ${e.message}。次の候補 ${list[i + 1]} を使います)`);
+    }
+  }
+  throw last || new Error('NO_BROWSER');
 }
 
 // ---- キー(Input.dispatchKeyEvent) ----
@@ -491,12 +515,12 @@ async function ensure() {
   if (env.browser) return env;
   if (!launching) {
     launching = (async () => {
-      const exe = findBrowser();
-      if (!exe) throw new Error('NO_BROWSER');
+      const list = findBrowsers();
+      if (!list.length) throw new Error('NO_BROWSER');
       if (typeof WebSocket === 'undefined') throw new Error('この Node には WebSocket がありません(Node 22 以上が必要)');
       const port = Number(H.opt('--port')) || 0;
       env.server = await startServer(H.SITE, port);
-      env.browser = await launch(exe);
+      env.browser = await launchAny(list);
       env.info = siteInfo();
       return env;
     })();
@@ -598,4 +622,4 @@ function contrastOf(selectors) {
 
 function run() { return H.run({ after: closeAll, timeout: 120000 }); }
 
-module.exports = { test, run, env, ensure, newContext, startServer, findBrowser, launch, contrastOf, sleep, P, DEVICES, DEFAULT_DATE, BASE_PATH };
+module.exports = { test, run, env, ensure, newContext, startServer, findBrowser, findBrowsers, launch, launchAny, contrastOf, sleep, P, DEVICES, DEFAULT_DATE, BASE_PATH };

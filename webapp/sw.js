@@ -2,7 +2,8 @@
 //
 // 公開時は GitHub Actions(tools/build.js)が、このファイルを元に次の3つを自動で書き換えた sw.js を作る:
 //   CACHE_NAME(内容のハッシュ)・BUILD_ID(index.html と組で確かめる目印)・PRECACHE_URLS(まとめたファイルの一覧。
-//   ホームを描いたあとに読み込む「詳細」の束 assets/detail.*.js と、CSS が使う見出し用の書体 fonts/*.woff2 も入れる。js/appData.js)
+//   ホームを描いたあとに読み込む「詳細」の束 assets/detail.*.js・assets/detail.*.css と、CSS が使う見出し用の書体 fonts/*.woff2 も入れる。
+//   js/appData.js)
 // 下の一覧は、ビルドに失敗して元のファイルのまま公開するとき(とローカルでの確認)に使う。
 // ファイルを追加・削除したら、この一覧も直す(node tools/check.js webapp が index.html との食い違いを知らせる)。
 //

@@ -444,7 +444,7 @@ h2, .card-title, .empty-state-title, .todo-title, .hero-primary-title, .sheet-ti
 /* 見出しは語の途中(「用語/集」「上/限」)で折り返さず、文節の切れ目で折り返す(Chrome系のみ。ほかのブラウザでは無視される) */
 h2, .card-title, .sheet-title { word-break: auto-phrase; }
 /* 行の中の短い説明(メニュー・設定の選択肢・ホームの行)も「バックア/ップ」のように語の途中で切らない */
-:is(.list-row-sub, .more-row-desc, .profile-option-desc, .todo-sub, .tile-desc) { word-break: auto-phrase; }
+:is(.list-row-sub, .more-row-desc, .profile-option-desc, .todo-sub) { word-break: auto-phrase; }
 /* カード・行・タイルの短い題名も同じ(語の途中で2行に分けない)。用語名・法令名・基礎知識の項目名のような長い複合語は、
    1つの語が1行に収まらないと「…マンショ/ン」のように最後の1字だけ落ちるので対象にしない */
 :is(.topic-card-title, .basics-section-name, .fig-card-title, .more-row-title, .settings-card-title, .profile-option-title, .empty-state-title, .calc-title, .continue-title, .prog-topic-name, .ana-cat-name, .source-category) { word-break: auto-phrase; }
@@ -766,14 +766,14 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 .card-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-2); margin-top: var(--sp-3); }
 
 /* カードを並べるリスト: 余白は gap で管理する */
-.quiz-list, .card-list, .law-row-grid, .source-row-grid, .basics-checklist, .episode-checklist,
-.card-grid, .topic-grid, .stat-grid, .home-grid, .tile-grid {
+.quiz-list, .card-list, .law-row-grid, .source-row-grid, .basics-checklist,
+.card-grid, .topic-grid, .stat-grid {
   display: grid;
   gap: var(--sp-3);
 }
-:is(.quiz-list, .card-list, .law-row-grid, .source-row-grid, .basics-checklist, .episode-checklist,
-.card-grid, .topic-grid, .stat-grid, .home-grid, .tile-grid) > * { margin: 0; }
-.basics-checklist, .episode-checklist { list-style: none; padding: 0; margin: 0 0 var(--sp-5); }
+:is(.quiz-list, .card-list, .law-row-grid, .source-row-grid, .basics-checklist,
+.card-grid, .topic-grid, .stat-grid) > * { margin: 0; }
+.basics-checklist { list-style: none; padding: 0; margin: 0 0 var(--sp-5); }
 
 /* ボタン
    塗りの下に濃い同系色の「ふち」(--btn-lip、厚さ --lip-h)があり、押すとその分だけ沈む。
@@ -865,8 +865,8 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 /* 文中のリンクボタンは行の高さを広げない(押せる範囲は ::after で上下に広げる) */
 @media (hover: hover) { .link-btn:hover { text-decoration: underline; } }
 /* 文中のリンクボタンは文中のリンクと同じく下線付き */
-:is(.view-desc, .episode-empty-state, p) > .link-btn { display: inline; min-height: 0; padding: 0; vertical-align: baseline; position: relative; text-decoration: underline; text-decoration-thickness: 1px; }
-:is(.view-desc, .episode-empty-state, p) > .link-btn::after { content: ""; position: absolute; inset: -10px -2px; }
+:is(.view-desc, p) > .link-btn { display: inline; min-height: 0; padding: 0; vertical-align: baseline; position: relative; text-decoration: underline; text-decoration-thickness: 1px; }
+:is(.view-desc, p) > .link-btn::after { content: ""; position: absolute; inset: -10px -2px; }
 
 /* チップ(絞り込みの切り替え)。錠剤型をやめ、角の丸い札に。選択中は淡い緑の面+緑の枠と文字(塗りつぶさない) */
 .chip-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
@@ -1001,8 +1001,6 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 .progress-bar { flex: 1; height: 12px; background: var(--color-surface-muted); border-radius: var(--radius-pill); overflow: hidden; }
 .progress-bar-lg { height: 16px; }
 .progress-bar-fill { height: 100%; background: var(--cat, var(--color-primary-fill)); width: 0%; border-radius: inherit; transition: width var(--dur-3) var(--ease-out); }
-.progress-bar-fill.fill-understood, .progress-bar-fill.fill-accent { background: var(--color-accent); }
-.progress-bar-fill.fill-video { background: var(--color-video); }
 .progress-bar-fill.fill-success { background: var(--gold); }
 
 /* 統計タイル */
@@ -1314,23 +1312,6 @@ a.topic-card { text-decoration: none; color: inherit; }
 .video-links { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); flex-wrap: wrap; }
 .specials-section { margin-top: var(--sp-5); }
 .specials-section summary { cursor: pointer; font-weight: 700; padding: var(--sp-2) 0; color: var(--color-heading); min-height: 44px; display: flex; align-items: center; gap: var(--sp-2); }
-.ep-link {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  text-decoration: none;
-  cursor: pointer;
-  font-size: var(--fs-md);
-  font-weight: 600;
-  flex: 1 0 160px;
-  text-align: left;
-  padding: var(--sp-2) 0;
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
-@media (hover: hover) { .ep-link:hover { text-decoration: underline; } }
 .law-row { padding: var(--sp-3) var(--sp-4); }
 .law-name { font-weight: 700; color: var(--color-heading); display: flex; align-items: center; gap: var(--sp-2); }
 .law-desc { font-size: var(--fs-md); margin: var(--sp-1) 0; line-height: var(--lh-snug); }
@@ -1516,7 +1497,6 @@ a.topic-card { text-decoration: none; color: inherit; }
 /* 正解のチェック・ステッカーが「ぽん」と出る動き(0.6 → 1.15 → 1。.anim-pop で使える) */
 @keyframes pop-check { 0% { transform: scale(.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
 .anim-pop { animation: pop-check 250ms var(--ease-out); }
-.anim-shake { animation: shake-x 300ms var(--ease-std); }
 
 /* シートの閉じる動き・つまみで引いて閉じる操作・下端に固定する操作欄(.sheet-foot)は css/shell.css */
 
@@ -1576,7 +1556,7 @@ a.topic-card { text-decoration: none; color: inherit; }
   h2 { font-size: var(--fs-3xl); }
   h3 { font-size: var(--fs-xl); }
 
-  .card-list, .quiz-list, .basics-checklist, .episode-checklist, .law-row-grid, .source-row-grid {
+  .card-list, .quiz-list, .basics-checklist, .law-row-grid, .source-row-grid {
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     align-items: start;
   }
@@ -1659,7 +1639,7 @@ a.topic-card { text-decoration: none; color: inherit; }
 .recommend-head .link-btn { font-size: var(--fs-sm); }
 
 /* 説明文の最後の行に1〜2文字だけ残る改行を避ける(対応ブラウザのみ) */
-.todo-sub, .view-desc, .calc-note, .empty-state-body, .tile-desc, .quiz-explanation { text-wrap: pretty; }
+.todo-sub, .view-desc, .calc-note, .empty-state-body, .quiz-explanation { text-wrap: pretty; }
 
 /* タップの手応え(iPhoneでは app.js の touchstart 登録で :active が効く)。
    どの塗りの上にも重ねられるよう、半透明の影を背景画像として重ねる */
@@ -1840,7 +1820,6 @@ a.topic-card { text-decoration: none; color: inherit; }
 .sticker { width: 44px; height: 44px; flex-shrink: 0; display: inline-grid; place-items: center; border-radius: 50%; background: var(--sticker-bg, var(--cat, var(--sticker-primary))); color: var(--sticker-fg); }
 .sticker-sm { width: 32px; height: 32px; }
 .sticker-lg { width: 56px; height: 56px; }
-.sticker-xl { width: 72px; height: 72px; }
 .sticker-gold { --sticker-bg: var(--gold); color: var(--gold-ink); }
 .sticker-warn { --sticker-bg: var(--sticker-warn); }
 /* 塗りのアイコン(*-fill)をステッカーに入れたときは、中の線をステッカーの色で抜く */
