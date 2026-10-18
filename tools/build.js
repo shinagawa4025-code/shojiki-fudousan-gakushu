@@ -13,7 +13,7 @@
 //    元のファイルとまったく同じになることを Node で確かめる(localhost と公開サイトのホスト名の両方)
 // 4. index.html の範囲を1つの <link> / <script> に置き換え、<meta name="app-build"> を入れる
 // 5. sw.js をひな形から作る: CACHE_NAME = shojiki-gakushu-<ハッシュ>、BUILD_ID、PRECACHE_URLS(index.html・manifest・まとめたファイル・
-//    詳細の束・index.html のアイコン)
+//    詳細の束・CSS が url() で参照するファイル(見出し用の書体 fonts/*.woff2。ハッシュは付けずにコピー)・index.html のアイコン)
 // 6. index.html・manifest が参照するファイルと、プリキャッシュのファイルがすべて出力先にあることを確かめる
 // 7. 大きさの表を出す(初回の表示に要る JS と CSS の gzip 合計が 300KB、詳細を含めた合計が 1,000KB を超えたら警告。下の BUDGET_*)
 // どこかで失敗したら終了コード1で終わり、出力先は作らない(途中までのサイトを残さない)。CI はそのとき元のファイルのまま公開する。
@@ -25,7 +25,7 @@ const zlib = require('zlib');
 const vm = require('vm');
 const { minifyJs, minifyCss, topLevelLexical, countNl } = require('./lib/minify.js');
 const { loadApp, loadBuilt, summarize, scriptList, styleList, ENGINE } = require('./lib/appload.js');
-const { parseBlocks, localRefs, generateSw } = require('./lib/html.js');
+const { parseBlocks, localRefs, generateSw, isLocal } = require('./lib/html.js');
 const split = require('./lib/split.js');
 
 const BUDGET_FIRST = 300 * 1024; // 初回の表示(ホーム)に要る JS+CSS
@@ -68,6 +68,13 @@ function sourceMap(file, lineMap, sources, contents) {
 
 function readSrc(src, rel) {
   return fs.readFileSync(path.join(src, rel), 'utf8').replace(/^﻿/, '');
+}
+
+// CSS の url( ) が指すローカルのファイル(data: と外部の URL・# とクエリは除く)
+function cssUrls(css) {
+  return [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/url\(\s*(['"]?)([^'")]*?)\1\s*\)/gi)]
+    .map((m) => m[2].split('#')[0].split('?')[0].trim())
+    .filter((u) => u && isLocal(u) && !/^data:/i.test(u));
 }
 
 // HTML の中のスクリプト(src なし・JSON-LD などのデータは除く)の中身。CSP のハッシュに使う
@@ -219,9 +226,19 @@ function main() {
     const engine = []; // 確認用: 本体のうち ENGINE のファイル(縮小後・包んだもの)
 
     // ---- CSS ----
+    // CSS が url() で参照するファイル(見出し用の書体 fonts/*.woff2 など)。そのまま出力先へコピーされ、プリキャッシュにも入れる。
+    // まとめた CSS は assets/ に置くので、元の css/ から見た場所と assets/ から見た場所が同じであること
+    const cssRefs = new Set();
     for (const b of blocks.filter((x) => x.kind === 'css')) {
       const code = b.files.map((rel) => {
         const raw = readSrc(SRC, rel);
+        for (const u of cssUrls(raw)) {
+          const fromSrc = path.posix.normalize(path.posix.join(path.posix.dirname(rel), u));
+          const fromAsset = path.posix.normalize(path.posix.join('assets', u));
+          if (fromSrc !== fromAsset || fromSrc.startsWith('../')) throw new Error(`${rel} の url(${u}) は、まとめた CSS(assets/)からだと別の場所を指します`);
+          if (!fs.existsSync(path.join(SRC, fromSrc))) throw new Error(`${rel} の url(${u}) のファイルがありません`);
+          cssRefs.add(fromSrc);
+        }
         const r = minifyCss(raw);
         if (!r.minified) warn(`${rel} は縮小せずにまとめました(${r.reason})`);
         report.push({ file: rel, raw: Buffer.byteLength(raw), out: Buffer.byteLength(r.code), minified: r.minified });
@@ -327,10 +344,11 @@ function main() {
 
     const copied = copyStatic(SRC, TMP);
 
-    // プリキャッシュ: 入口・manifest・まとめたファイル(詳細の束も)・index.html が使うアイコン(起動画面の画像と OGP 画像は除く)
+    // プリキャッシュ: 入口・manifest・まとめたファイル(詳細の束も)・CSS が参照するファイル(見出し用の書体)・
+    // index.html が使うアイコン(起動画面の画像と OGP 画像は除く)
     const refs = localRefs(html);
     const iconRefs = refs.filter((r) => (r.tag === 'img') || (r.tag === 'link' && /(^|\s)(icon|apple-touch-icon|manifest)(\s|$)/.test(r.rel))).map((r) => r.url);
-    const list = [...new Set(['index.html', 'manifest.json', ...assets.map((x) => x.url), detailUrl, ...iconRefs])].map((u) => `./${u}`);
+    const list = [...new Set(['index.html', 'manifest.json', ...assets.map((x) => x.url), detailUrl, ...cssRefs, ...iconRefs])].map((u) => `./${u}`);
     const template = fs.readFileSync(path.join(SRC, 'sw.js'), 'utf8');
     const h = crypto.createHash('sha256').update(template);
     for (const u of list) {
@@ -358,7 +376,7 @@ function main() {
 
     // 大きさ
     const gz = (f) => zlib.gzipSync(fs.readFileSync(path.join(TMP, f)), { level: 9 }).length;
-    const rows = ['index.html', 'sw.js', ...assets.map((x) => x.url), detailUrl].map((f) => ({ f, bytes: fs.statSync(path.join(TMP, f)).size, gzip: gz(f) }));
+    const rows = ['index.html', 'sw.js', ...assets.map((x) => x.url), detailUrl, ...cssRefs].map((f) => ({ f, bytes: fs.statSync(path.join(TMP, f)).size, gzip: gz(f) }));
     const kb = (n) => `${(n / 1024).toFixed(1)}KB`;
     console.log('\nファイル                               大きさ      gzip');
     rows.forEach((r) => console.log(`${r.f.padEnd(38)} ${kb(r.bytes).padStart(9)} ${kb(r.gzip).padStart(9)}`));

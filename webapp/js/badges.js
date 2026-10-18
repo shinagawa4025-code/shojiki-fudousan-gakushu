@@ -175,15 +175,102 @@ window.Badges = (function () {
     return { fresh, silent: !wasSeeded };
   }
 
+  // ---- 獲得の知らせ(v12.2): メダルがぽんと出る小さなダイアログ(css/motion.css の .fd-badge) ----
+  // 一度に複数取ったときは順に(「次へ」)。模擬試験の解答中・初回ガイド・ほかのダイアログ・4択/○×/復習の途中は、
+  // 落ち着くまで待ってから出す(Motion.busy。画面の移動のたびと数秒ごとに確かめる)。「次へ」「OK」で順に、Esc・外側のタップで全部閉じ、
+  // 閉じたら開く前にフォーカスしていた所へ戻す(画面が移ったときは新しい画面の見出しのまま)
+  const shown = [];
+  let showing = false;
+  let waitTimer = null;
+  let waitHash = false;
   function announce(fresh) {
-    if (!fresh.length || !window.UI || typeof UI.toast !== `function`) return;
-    const names = fresh.map((id) => (DEFS.find((d) => d.id === id) || {}).name).filter(Boolean);
-    // 一度に複数取ったときは1つの通知にまとめる
-    const msg = names.length === 1
-      ? `バッジ「${names[0]}」を獲得しました`
-      : `バッジを${names.length}個獲得しました(${names.slice(0, 3).map((n) => `「${n}」`).join(``)}${names.length > 3 ? `ほか` : ``})`;
-    // 画面下の解答ボタン(○×・4択の回答バー)に重ならないよう、上に出す
-    UI.toast(msg, `success`, { duration: 4000, position: `top` });
+    if (!fresh.length || !window.UI) return;
+    // ダイアログを出せない環境(UI の一部が無いとき)は、前と同じ画面の上の通知1つ(複数は「n個」にまとめる)
+    if (typeof UI.trapFocus !== `function`) {
+      if (typeof UI.toast !== `function`) return;
+      const names = fresh.map((id) => (DEFS.find((d) => d.id === id) || {}).name).filter(Boolean);
+      const msg = names.length === 1
+        ? `バッジ「${names[0]}」を獲得しました`
+        : `バッジを${names.length}個獲得しました(${names.slice(0, 3).map((n) => `「${n}」`).join(``)}${names.length > 3 ? `ほか` : ``})`;
+      UI.toast(msg, `success`, { duration: 4000, position: `top` });
+      return;
+    }
+    fresh.forEach((id) => { const d = DEFS.find((x) => x.id === id); if (d && !shown.includes(d)) shown.push(d); });
+    present();
+  }
+
+  function quietNow() {
+    if (window.Motion && typeof Motion.busy === `function`) return !Motion.busy(true);
+    return !busy() && !document.querySelector(`.modal-overlay, .sheet-backdrop`);
+  }
+
+  function present() {
+    if (showing || !shown.length || !document.body) return;
+    if (!quietNow()) {
+      clearTimeout(waitTimer);
+      waitTimer = setTimeout(present, 2500);
+      if (!waitHash) { waitHash = true; window.addEventListener(`hashchange`, () => setTimeout(present, 600)); }
+      return;
+    }
+    clearTimeout(waitTimer);
+    showing = true;
+    const back = document.activeElement;
+    let i = 0;
+    let overlay = null;
+    let release = null;
+    function open() {
+      const d = shown[0];
+      const last = shown.length === 1;
+      const total = i + shown.length;
+      overlay = document.createElement(`div`);
+      overlay.className = `modal-overlay fd-badge-overlay`;
+      overlay.innerHTML = `
+        <div class="modal-box fd-badge" role="dialog" aria-modal="true" aria-labelledby="fd-badge-kicker fd-badge-name" aria-describedby="fd-badge-desc">
+          <p class="fd-badge-kicker" id="fd-badge-kicker">バッジを獲得!</p>
+          <div class="fd-medal" aria-hidden="true">
+            <span class="fd-medal-face">${UI.icon(d.icon, { size: 56 })}</span>
+            <span class="fd-spark s1">${UI.icon(`sparkles`, { size: 28 })}</span><span class="fd-spark s2">${UI.icon(`sparkles`, { size: 22 })}</span>
+          </div>
+          <p class="fd-badge-name" id="fd-badge-name">${UI.escapeHtml(d.name)}</p>
+          <p class="fd-badge-desc" id="fd-badge-desc">${UI.escapeHtml(d.desc)}</p>
+          ${total > 1 ? `<p class="fd-badge-count">${i + 1} / ${total}</p>` : ``}
+          <button type="button" class="btn btn-gold btn-lg btn-block" data-role="ok">${last ? `OK` : `次へ`}</button>
+        </div>`;
+      document.body.appendChild(overlay);
+      // Esc・外側のタップは残りもまとめて閉じる(バッジは獲得済み。一覧は 進捗 › バッジ で見られる)
+      release = UI.trapFocus(overlay, () => next(true));
+      overlay.addEventListener(`click`, (e) => { if (e.target === overlay) next(true); });
+      overlay.querySelector(`[data-role="ok"]`).addEventListener(`click`, () => next());
+      overlay.querySelector(`[data-role="ok"]`).focus({ preventScroll: true });
+      if (window.Motion && Motion.burst) setTimeout(() => { if (overlay && overlay.isConnected) Motion.burst(overlay.querySelector(`.fd-medal`), 14); }, 380);
+    }
+    function shut() {
+      if (release) release(false);
+      release = null;
+      if (overlay) overlay.remove();
+      overlay = null;
+    }
+    // 次のバッジへ(最後・all のときは閉じて、開く前にフォーカスしていた所へ戻す)
+    function next(all) {
+      if (!overlay) return;
+      shut();
+      if (all) shown.length = 0; else shown.shift();
+      i += 1;
+      if (shown.length) { open(); return; }
+      window.removeEventListener(`hashchange`, onNav);
+      showing = false;
+      if (back && back.focus && back.isConnected) back.focus({ preventScroll: true });
+    }
+    // 画面が移ったら(戻る操作など)閉じる。フォーカスは新しい画面の見出しのまま。残りは落ち着いてから出す
+    function onNav() {
+      window.removeEventListener(`hashchange`, onNav);
+      shut();
+      shown.shift();
+      showing = false;
+      if (shown.length) setTimeout(present, 600);
+    }
+    window.addEventListener(`hashchange`, onNav);
+    open();
   }
 
   // 取得済みでないバッジだけ判定し、新しく取ったものを保存して知らせる(初回は知らせずに反映)

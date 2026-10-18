@@ -91,13 +91,14 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
 @media (hover: hover) { .more-row:hover { background: var(--color-surface-muted); } }
 .more-row:active { background: var(--color-press); }
 .more-row-icon { width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: var(--sticker-bg, var(--cat, var(--sticker-primary))); color: var(--sticker-fg); }
-.more-row-icon .icon { stroke-width: 2.1; }
+.more-row-icon .icon { stroke-width: 2.4; }
 .more-view .more-row-icon.sticker-gold { color: var(--gold-ink); }
 .more-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: var(--lh-snug); }
 .more-row-title { font-family: var(--font-display); font-size: .9375rem; font-weight: var(--fw-display); color: var(--color-heading); font-feature-settings: "palt"; }
 .more-row-desc { font-size: var(--fs-xs); line-height: 1.5; color: var(--color-text-muted); }
 .more-row > .icon:last-child { flex-shrink: 0; color: var(--color-text-muted); }
-.more-group-title { margin: var(--sp-6) var(--sp-1) var(--sp-3); font-size: var(--fs-lg); color: var(--color-heading); letter-spacing: .03em; }
+/* 区切りの見出しはほかの画面と同じ 20px(learning.css) */
+.more-group-title { margin: var(--sp-6) var(--sp-1) var(--sp-3); font-size: var(--fs-xl); color: var(--color-heading); letter-spacing: .03em; }
 .more-row .more-row-ext { flex-shrink: 0; color: var(--color-text-muted); }
 .more-row-badge { display: inline-block; margin-left: var(--sp-2); padding: 0 6px; border-radius: 6px; background: var(--color-surface-muted); color: var(--color-text-muted); font-family: var(--font-sans); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.6; vertical-align: 1px; }
 .more-theme-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-3); }
@@ -110,6 +111,8 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
 @media (min-width: 1024px) { .more-group-title { max-width: 640px; } }
 
 /* ---------- 設定(v3: 見出しに丸いステッカー。押せる札は下にふち) ---------- */
+/* PC では1列の幅を「このアプリについて」と同じ 760px までに(説明の文が1行に長く並びすぎないように) */
+.settings-view { max-width: 760px; }
 /* 冒頭の注意(記録はこの端末の中だけ): 淡い面に盾のステッカー */
 .settings-view .settings-intro { display: flex; align-items: flex-start; gap: var(--sp-3); margin: 0 0 var(--sp-5); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-card); background: var(--color-surface-muted); color: var(--color-text); font-size: var(--fs-sm); }
 .settings-intro > .sticker { margin-top: 2px; }
@@ -132,7 +135,7 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
   min-height: 64px;
   padding: var(--sp-3);
   border: 2px solid var(--color-border);
-  border-radius: 18px;
+  border-radius: var(--radius-tile);
   background: var(--color-surface);
   /* 押せる札なので下にふち(選択中は緑のふち) */
   box-shadow: 0 4px 0 var(--lip-neutral, var(--color-border));
@@ -144,7 +147,7 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
 .profile-option input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 /* 目的のアイコン: 丸いステッカー(緑の面+白いアイコン) */
 .profile-option-icon { width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: var(--sticker-primary, var(--color-primary-fill)); color: var(--sticker-fg, #fff); }
-.profile-option-icon .icon { stroke-width: 2.1; }
+.profile-option-icon .icon { stroke-width: 2.4; }
 .profile-option-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .profile-option-title { font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-display); color: var(--color-heading); }
 .profile-option-desc { font-size: var(--fs-xs); color: var(--color-text-muted); }
@@ -168,7 +171,7 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
 
 /* 設定: 目標の試験(白い札の行。ホームに表示中の試験は緑の枠と淡い緑。札は名前の下の1行に) */
 .settings-view .target-list { gap: var(--sp-3); margin: 0 0 var(--sp-4); }
-.settings-view .target-row { gap: var(--sp-1); padding: var(--sp-2) var(--sp-1) var(--sp-2) var(--sp-1); border: 2px solid var(--color-border); border-radius: 18px; background: var(--color-surface); box-shadow: 0 3px 0 var(--color-border); }
+.settings-view .target-row { gap: var(--sp-1); padding: var(--sp-2) var(--sp-1) var(--sp-2) var(--sp-1); border: 2px solid var(--color-border); border-radius: var(--radius-tile); background: var(--color-surface); box-shadow: 0 3px 0 var(--color-border); }
 .settings-view .target-row.is-home { border-color: var(--color-primary); background: var(--color-primary-soft); box-shadow: 0 3px 0 var(--color-primary-line); }
 .settings-view .target-row-name { display: block; font-family: var(--font-display); font-size: var(--fs-base); font-weight: var(--fw-display); line-height: 1.4; word-break: auto-phrase; }
 .target-row-tags { grid-column: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 4px 0 2px; }
@@ -238,7 +241,7 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
 .ask-ai-sheet { display: grid; gap: var(--sp-4); }
 .ask-ai-sheet > p { margin: 0; }
 /* コピーの結果: 丸いステッカー+太い文字の帯(できた = 緑、できない = 注意の色) */
-.ask-ai-status { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: 16px; background: var(--color-surface-muted); font-family: var(--font-display); font-size: var(--fs-base); font-weight: var(--fw-display); color: var(--color-heading); }
+.ask-ai-status { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-btn); background: var(--color-surface-muted); font-family: var(--font-display); font-size: var(--fs-base); font-weight: var(--fw-display); color: var(--color-heading); }
 .ask-ai-status-icon { flex-shrink: 0; }
 .ask-ai-status-icon .icon { stroke-width: 2.6; }
 .ask-ai-status.is-ok { background: var(--color-success-bg); color: var(--color-success); }
@@ -249,7 +252,7 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
 .ask-ai-links { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
 @media (min-width: 480px) { .ask-ai-links { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .ask-ai-link { min-height: 52px; font-size: var(--fs-base); }
-.ask-ai-caution { display: flex; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-3); border-radius: 14px; background: var(--color-warning-bg); font-size: var(--fs-sm); color: var(--color-text); line-height: var(--lh-snug); }
+.ask-ai-caution { display: flex; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius-btn); background: var(--color-warning-bg); font-size: var(--fs-sm); color: var(--color-text); line-height: var(--lh-snug); }
 .ask-ai-caution .icon { flex-shrink: 0; margin-top: 1px; color: var(--color-warning); }
 .ask-ai-preview summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 10px; list-style: none; font-size: var(--fs-md); font-weight: 700; color: var(--color-primary); }
 .ask-ai-preview summary::-webkit-details-marker { display: none; }
@@ -259,6 +262,8 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
 .ask-ai-text { display: block; min-height: 12em; margin-top: var(--sp-2); resize: vertical; font-size: var(--fs-base); line-height: var(--lh-snug); white-space: pre-wrap; }
 .ask-ai-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .ask-ai-actions .btn { min-height: 44px; }
+/* 枠のない「もう一度コピー」は、アイコンの左端を上の「質問文を見る」の文字の左端にそろえる(押せる範囲はそのまま) */
+.ask-ai-actions .btn-ghost:first-child { margin-left: calc(var(--sp-3) * -1); }
 .ask-ai-privacy { font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
 
 /* ---------- 確認のダイアログ(UI.confirm)・シート(UI.sheet) ---------- */

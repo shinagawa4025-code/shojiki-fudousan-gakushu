@@ -7,9 +7,43 @@
          分野の色(--cat-*)はアイコンのステッカーと進捗バーで同じものを使う。
    形: 押せる物(ボタン・選択肢・押せるカード)は下に「ふち」(--lip-*)の厚みがあり、押すと沈む。
        置いてあるだけの面は 1px の線+外側の線(合わせて 2px)と下 2px の厚み。ぼかした影・淡いグラデーションは使わない。
-   文字の太さ: 本文 400 / ボタン以外のラベル 600〜700 / 見出し・ボタン・大きな数字 800(--font-display)
-   (iPhone のヒラギノは 600〜800 が W6。丸ゴシックは W4 だけなので 800 は端末が太字を合成する)
+   文字の太さ: 本文 400 / ボタン以外のラベル 600〜700 / 見出し・ボタン・大きな数字 800(--font-display = M PLUS Rounded 1c ExtraBold。600〜900 の指定は 800 の字形、500 以下は端末の書体)
    ========================================================= */
+
+/* 見出し用の書体(--font-display の先頭): M PLUS Rounded 1c ExtraBold(SIL Open Font License 1.1。fonts/OFL.txt)を、
+   アプリで使う文字だけに絞ったもの(tools/font_subset.js が作る。文言・名前に新しい文字を足したら作り直す。tools/check.js が警告する)。
+   ファイルは「かな・英数字・記号」と「漢字」の2つ(unicode-range。tools/font_subset.js の SLICES と同じ範囲)。ブラウザは画面に出た文字の
+   ファイルだけを読み込むので、起動画面(「ふどまな」)は小さい方だけで描け、初回の表示に要るファイルの読み込みを邪魔しない。
+   読み込みを待たずに端末の書体で先に表示し、届いたら差し替える(swap)。太さは 800 の1つだけ(600〜900 の指定はこの字形をそのまま使い、
+   太字を合成しない)。フォントにない文字(「○×」の × ÷ はこの書体だと小さいので、わざと入れていない)は --font-display の次の書体で
+   表示される。Service Worker が保存するのでオフラインでも使える */
+@font-face {
+  font-family: "Fudomana Rounded";
+  src: url("../fonts/fudomana-rounded-800-base.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0-33FF, U+4DC0-4DFF, U+A000-F8FF, U+FB00-FFFF;
+}
+@font-face {
+  font-family: "Fudomana Rounded";
+  src: url("../fonts/fudomana-rounded-800-kanji.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+20000-3FFFF;
+}
+/* 細い指定(500 以下。大きな数字の横の単位「/20」「%」・切り替えの件数など)は、この書体の 800 にせず端末の書体(--font-display の次)で
+   表示する: どの文字にも当たらない範囲(U+0)の面を細い太さに置くと、細い指定はこの面が選ばれ、文字がないので次の書体に移る
+   (この面のファイルは読み込まれない) */
+@font-face {
+  font-family: "Fudomana Rounded";
+  src: url("../fonts/fudomana-rounded-800-base.woff2") format("woff2");
+  font-weight: 100 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0;
+}
 
 /* ---------- 1. トークン ---------- */
 :root {
@@ -17,8 +51,9 @@
 
   /* 文字 */
   --font-sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
-  /* 見出し・ボタン・数字だけに使う(短い文字だけ。読む文章には使わない)。Windows では Yu Gothic UI の太字になる */
-  --font-display: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  /* 見出し・ボタン・数字だけに使う(短い文字だけ。読む文章には使わない)。どの端末でも同じ丸ゴシック(上の @font-face)。
+     読み込み中とフォントにない文字は、iPhone・Mac はヒラギノ丸ゴ、Windows は Yu Gothic UI の太字 */
+  --font-display: "Fudomana Rounded", "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, Menlo, monospace;
   --fs-2xs: .6875rem;
   --fs-xs: .75rem;
@@ -58,8 +93,10 @@
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
-  /* ボタン・選択肢 */
+  /* ボタン・選択肢・カードの中の色の付いた囲み */
   --radius-btn: 16px;
+  /* 押せるタイル(ホームの小さいタイル・今週やること・目的の札・初回ガイドの選択肢など。高さ 60〜170px) */
+  --radius-tile: 18px;
   /* カード・グループ化したリスト */
   --radius-card: 20px;
   /* シート・ダイアログ */
@@ -399,12 +436,18 @@ h2[tabindex="-1"]:focus { outline: none; }
 }
 
 .view-desc { color: var(--color-text-muted); font-size: var(--fs-md); line-height: var(--lh-snug); margin: 0 0 var(--sp-4); }
+/* 説明の文は1行 46 字ほどまで(タブレット・PC で行が長くなりすぎないように。スマホは幅いっぱいのまま)。
+   面の色が付いた冒頭の注意(設定の .settings-intro)は面ごと縮まないよう除く */
+:is(.view-desc:not(.settings-intro), .calc-note, .prog-note, .calc-disclaimer, .settings-answer-help, .ask-ai-privacy) { max-width: 46em; }
 /* 見出し・ボタンの文字は行ごとの長さをそろえ、最後の行に1〜2文字だけ残らないように */
 h2, .card-title, .empty-state-title, .todo-title, .hero-primary-title, .sheet-title, .btn-lg, .btn-block { text-wrap: balance; }
 /* 見出しは語の途中(「用語/集」「上/限」)で折り返さず、文節の切れ目で折り返す(Chrome系のみ。ほかのブラウザでは無視される) */
 h2, .card-title, .sheet-title { word-break: auto-phrase; }
 /* 行の中の短い説明(メニュー・設定の選択肢・ホームの行)も「バックア/ップ」のように語の途中で切らない */
 :is(.list-row-sub, .more-row-desc, .profile-option-desc, .todo-sub, .tile-desc) { word-break: auto-phrase; }
+/* カード・行・タイルの短い題名も同じ(語の途中で2行に分けない)。用語名・法令名・基礎知識の項目名のような長い複合語は、
+   1つの語が1行に収まらないと「…マンショ/ン」のように最後の1字だけ落ちるので対象にしない */
+:is(.topic-card-title, .basics-section-name, .fig-card-title, .more-row-title, .settings-card-title, .profile-option-title, .empty-state-title, .calc-title, .continue-title, .prog-topic-name, .ana-cat-name, .source-category) { word-break: auto-phrase; }
 /* 操作部品は長押しで文字選択・メニューが出ないように(本文は選択できるまま) */
 :is(.btn, .chip, .segmented, .subnav, .bottom-nav, .side-nav-item) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .text-muted { color: var(--color-text-muted); }
@@ -467,7 +510,7 @@ h2, .card-title, .sheet-title { word-break: auto-phrase; }
   width: 100%;
   min-height: 44px;
   padding: var(--sp-2) var(--sp-3) var(--sp-2) 40px;
-  border: 2px solid var(--color-border);
+  border: 2px solid var(--color-border-control);
   border-radius: var(--radius-md);
   font-size: var(--fs-md);
   background: var(--color-surface-muted);
@@ -561,7 +604,10 @@ h2, .card-title, .sheet-title { word-break: auto-phrase; }
 @media (hover: hover) { .side-nav-item:hover { background: var(--color-surface-muted); color: var(--color-text); } }
 /* 表示中: 下部タブと同じく緑の文字とアイコン。PC は場所が分かるよう面と 2px の枠も付ける */
 .side-nav-item[aria-current="page"] { background: var(--color-primary-soft); color: var(--color-primary); box-shadow: inset 0 0 0 2px var(--color-primary-line); font-family: var(--font-display); font-weight: var(--fw-display); }
-.side-nav-item[aria-current="page"] .icon { stroke-width: 2.25; }
+.side-nav-item[aria-current="page"] .icon { stroke-width: 2.5; }
+/* アイコンのうすい塗り(.i-t)は表示中の項目だけ */
+.side-nav-item .icon .i-t { fill-opacity: 0; }
+.side-nav-item[aria-current="page"] .icon .i-t { fill-opacity: .3; }
 .side-nav-item .badge-count { margin-left: auto; }
 .side-nav-bottom { margin-top: auto; padding-top: var(--sp-3); border-top: 2px solid var(--color-border); }
 
@@ -601,8 +647,10 @@ h2, .card-title, .sheet-title { word-break: auto-phrase; }
   transition: transform var(--dur-1) var(--ease-std);
 }
 .bottom-nav-icon .icon { width: 26px; height: 26px; transition: stroke-width var(--dur-1); }
+.bottom-nav-icon .icon .i-t { fill-opacity: 0; transition: fill-opacity var(--dur-1); }
 .bottom-nav-item[aria-current="page"] { color: var(--color-primary); font-family: var(--font-display); font-weight: var(--fw-display); }
-.bottom-nav-item[aria-current="page"] .bottom-nav-icon .icon { stroke-width: 2.4; }
+.bottom-nav-item[aria-current="page"] .bottom-nav-icon .icon { stroke-width: 2.5; }
+.bottom-nav-item[aria-current="page"] .bottom-nav-icon .icon .i-t { fill-opacity: .3; }
 .bottom-nav-item .badge-count { position: absolute; top: 3px; left: calc(50% + 8px); }
 
 body { padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom)); }
@@ -771,6 +819,9 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 @media (hover: hover) { .btn-gold:hover { background: var(--gold); filter: brightness(1.05); } }
 .btn-sm { --lip-h: 3px; min-height: 36px; padding: var(--sp-1) var(--sp-3); font-size: var(--fs-sm); border-radius: var(--radius-md); }
 .btn-lg { min-height: 52px; padding: var(--sp-3) var(--sp-5); font-size: var(--fs-base); border-radius: var(--radius-btn); }
+/* ふちの厚さは大きさの段階ごとに1つ: 小さいボタン 3px / ふつう・大きいボタン 4px(--lip-h の既定)/
+   画面の主な開始ボタン(高さ 60px 以上: ホームの「つづける」・トピックの問題への入口・○×と模擬試験の開始)5px */
+:is(.home-go, .topic-practice .btn, .ox-view .ox-start, .exam-view .exam-start) { --lip-h: 5px; border-radius: var(--radius-btn); }
 .btn-block { width: 100%; }
 .btn-icon {
   --lip-h: 0px;
@@ -926,7 +977,8 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
   width: 100%;
   min-height: 44px;
   padding: var(--sp-2) var(--sp-3);
-  border: 2px solid var(--color-border-strong);
+  /* 入力欄の枠は操作部品の線(面に対して 3:1 以上。計算機の入力欄と同じ) */
+  border: 2px solid var(--color-border-control);
   border-radius: var(--radius-md);
   font-size: var(--fs-base);
   background: var(--color-surface);
@@ -989,7 +1041,7 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
   display: grid;
   place-items: center;
 }
-.empty-state-icon .icon { width: 34px; height: 34px; stroke-width: 2.1; }
+.empty-state-icon .icon { width: 34px; height: 34px; stroke-width: 2.25; }
 .empty-state-title { font-family: var(--font-display); font-weight: var(--fw-display); color: var(--color-heading); font-size: var(--fs-lg); margin: 0; }
 .empty-state-body { font-size: var(--fs-md); max-width: 38ch; margin: 0; line-height: var(--lh-snug); }
 
@@ -1216,7 +1268,7 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
   place-items: center;
   flex-shrink: 0;
 }
-.topic-icon .icon { stroke-width: 2.1; }
+.topic-icon .icon { stroke-width: 2.4; }
 .topic-card-title { font-family: var(--font-display); font-weight: var(--fw-display); color: var(--color-heading); line-height: var(--lh-tight); font-feature-settings: "palt"; }
 .topic-card .episode-summary { font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); margin: 0; flex: 1; }
 .topic-progress-row { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--color-text-muted); }
@@ -1454,8 +1506,7 @@ a.topic-card { text-decoration: none; color: inherit; }
 .cat-bar-meta { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- 6. アニメーション ---------- */
-/* 画面の切替: 奥へ進むときだけ短く(タブの切替・戻るでは付けない。router.js 側で判定) */
-@keyframes view-enter { from { opacity: .6; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* 画面の切替の動きは css/motion.css(View Transitions) */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes sheet-up { from { transform: translateY(32px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -1467,7 +1518,6 @@ a.topic-card { text-decoration: none; color: inherit; }
 .anim-pop { animation: pop-check 250ms var(--ease-out); }
 .anim-shake { animation: shake-x 300ms var(--ease-std); }
 
-.view-enter { animation: view-enter 160ms var(--ease-out); }
 /* シートの閉じる動き・つまみで引いて閉じる操作・下端に固定する操作欄(.sheet-foot)は css/shell.css */
 
 @media (prefers-reduced-motion: reduce) {
@@ -1706,7 +1756,7 @@ a.topic-card { text-decoration: none; color: inherit; }
 :is(a, button).list-row:active { background-image: linear-gradient(var(--color-press), var(--color-press)); }
 /* 行のアイコン: 丸いステッカー(要注意は赤みのある色、済み・ごほうびは金色。分野の色は親の .cat-* で変わる) */
 .list-row-icon { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--sticker-bg, var(--cat, var(--sticker-primary))); color: var(--sticker-fg); flex-shrink: 0; }
-.list-row-icon .icon { stroke-width: 2.1; }
+.list-row-icon .icon { stroke-width: 2.4; }
 .list-row-icon.is-warn { --sticker-bg: var(--sticker-warn); }
 .list-row-icon:is(.is-ok, .is-warm) { --sticker-bg: var(--gold); color: var(--gold-ink); }
 .list-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.45; }
@@ -1747,6 +1797,8 @@ a.topic-card { text-decoration: none; color: inherit; }
 .about-section-title[tabindex="-1"]:focus { outline: none; }
 .about-section p { margin: 0 0 var(--sp-3); line-height: var(--lh-snug); }
 .about-section > :last-child { margin-bottom: 0; }
+/* 文の間のボタン(情報源の一覧へ)は、下のふちの分まで次の文から離す */
+.about-section > .card-actions:not(:last-child) { margin: var(--sp-1) 0 var(--sp-5); }
 .about-section ul, .about-section ol { margin: 0 0 var(--sp-3); padding-left: 1.3em; display: grid; gap: var(--sp-1); line-height: var(--lh-snug); }
 .about-sub { font-size: var(--fs-md); margin: var(--sp-4) 0 var(--sp-2); }
 .about-lead { font-weight: 700; color: var(--color-heading); }
@@ -1794,7 +1846,7 @@ a.topic-card { text-decoration: none; color: inherit; }
 /* 塗りのアイコン(*-fill)をステッカーに入れたときは、中の線をステッカーの色で抜く */
 :is(.sticker, .list-row-icon, .tile-icon, .todo-icon, .topic-icon) { --icon-cut: var(--sticker-bg, var(--cat, var(--sticker-primary))); }
 /* ステッカーの中のアイコンは線を太く(小さくても形が分かるように) */
-:is(.sticker, .tile-icon, .todo-icon) .icon { stroke-width: 2.1; }
+:is(.sticker, .tile-icon, .todo-icon) .icon { stroke-width: 2.4; }
 
 /* 分野の色: 要素か親に付けると、ステッカーと進捗バー(.progress-bar-fill)がその色になる */
 .cat-gyoho { --cat: var(--cat-gyoho); }

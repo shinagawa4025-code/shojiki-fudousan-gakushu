@@ -2,6 +2,11 @@
 /* style.css より後に読み込み、必要なところだけ上書きする。色はすべてトークン(ライト・ダーク共通) */
 
 /* ---------- 共通 ---------- */
+/* ふちの厚さ(押せる物の下の厚み。押すとこの分沈む)は大きさで3段階にそろえる(4択・○×・模擬試験で共通):
+   小 3px … 道具の小さなボタン(上のバーの絞り込み・問題一覧の番号・.btn-sm。高さ 44px 前後)
+   中 4px … ふつうのボタン・選択肢・試験の長さや分野の札・大きな「開始」(style.css の --lip-h)
+   大 5px … ○×の2択の大きなボタンだけ(ox.css の --ox-lip-h)
+   置いてあるだけの面は枠と下 3px の線(--shadow-card)、札の中の小さな面(記述ア〜エなど)は下 2px */
 /* タップしてすぐ反応するように(ダブルタップによる拡大の待ち時間をなくす) */
 .choice-btn, .grade-btn, .review-reveal, .ox-btn, .ox-next, .quiz-next, .quiz-filter-btn, .auto-cond-btn, .quiz-unsure-chip, .quiz-step-btn, .quiz-step-tool, .quiz-explain-toggle { touch-action: manipulation; }
 
@@ -193,6 +198,16 @@
 /* 問題が入れ替わるときは右から少しだけ入る */
 .quiz-steps > .quiz-card.is-current { animation: quiz-step-in 220ms var(--ease-out); }
 @keyframes quiz-step-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+/* その動きの途中(右へ 14px)で、カードの右端のブックマーク(右へ 8px はみ出させている)が画面の外へ出て、
+   ページが一瞬横に広がって揺れないように、スマホ・タブレットでは一覧の左右を画面の端(本文の左右の余白の外側)で切る。
+   余白の分だけ一覧を左右に広げてから切るので、選択肢のフォーカスの枠やブックマークは切れない。
+   overflow: clip はスクロールの箱を作らないので、上のバーの貼り付き(sticky)と画面の下に固定した判定のバーはそのまま */
+@media (max-width: 1023px) {
+  .quiz-stepper .quiz-steps { overflow-x: clip; margin-inline: calc(var(--sp-4) * -1); padding-inline: var(--sp-4); }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .quiz-stepper .quiz-steps { margin-inline: calc(var(--sp-6) * -1); padding-inline: var(--sp-6); }
+}
 /* 「つづける」で次の問題の先頭を貼り付いたバーのすぐ下へ(スマホの固定ヘッダーの分は html の scroll-padding-top) */
 .quiz-stepper .quiz-steps > .quiz-card { scroll-margin-top: calc(60px + var(--sp-2)); }
 /* 短い問題でも先頭をバーの下へ合わせられるよう、一覧に画面1枚分の高さを持たせる(下は空き) */
@@ -618,7 +633,7 @@ body.has-storage-banner:has(.ox-view.has-fb) .toast:not(.toast-top) { bottom: ca
 .quiz-self-ask { margin: var(--sp-2) 0 var(--sp-1); font-size: var(--fs-sm); color: var(--color-text-muted); }
 
 /* 自動生成クイズ: 条件は1行(タップでシート) */
-.auto-top { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.auto-top { display: flex; flex-direction: column; gap: var(--sp-3); margin-bottom: var(--sp-2); }
 .auto-cond-btn {
   display: flex;
   align-items: center;
@@ -626,7 +641,7 @@ body.has-storage-banner:has(.ox-view.has-fb) .toast:not(.toast-top) { bottom: ca
   width: 100%;
   min-height: 44px;
   padding: var(--sp-2) var(--sp-3);
-  border: 2px solid var(--color-border);
+  border: 2px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
@@ -634,7 +649,11 @@ body.has-storage-banner:has(.ox-view.has-fb) .toast:not(.toast-top) { bottom: ca
   font-size: var(--fs-md);
   text-align: left;
   cursor: pointer;
+  /* 押せる物なので下に小さなふち(上のバーの道具と同じ 3px)。押すと沈む */
+  box-shadow: 0 3px 0 var(--lip-neutral);
+  transition: border-color var(--dur-1), box-shadow 60ms, transform 60ms;
 }
+.auto-cond-btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--lip-neutral); }
 @media (hover: hover) { .auto-cond-btn:hover { border-color: var(--color-primary); } }
 .auto-cond-key { flex-shrink: 0; font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); }
 .auto-cond-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--color-text); }
@@ -713,6 +732,28 @@ body.has-storage-banner:has(.ox-view.has-fb) .toast:not(.toast-top) { bottom: ca
 /* タブレット: 本文の左右の余白(24px)に合わせて、貼り付くバーを端まで */
 @media (min-width: 768px) {
   .quiz-stepbar { margin-inline: calc(var(--sp-6) * -1); padding-inline: var(--sp-6); }
+}
+/* 横向きのスマホ: 本文の左右の余白は max(16px, ノッチ側の余白)(style.css)。貼り付くバーと一覧の広げ方もそれに合わせる
+   (768px 以上の幅でも 24px 広げると画面の外へ 8px はみ出し、ページが横に揺れるため) */
+@media (max-height: 500px) and (max-width: 1023px) and (orientation: landscape) {
+  .quiz-stepbar, .quiz-stepper .quiz-steps {
+    margin-left: calc(max(var(--sp-4), env(safe-area-inset-left)) * -1);
+    margin-right: calc(max(var(--sp-4), env(safe-area-inset-right)) * -1);
+    padding-left: max(var(--sp-4), env(safe-area-inset-left));
+    padding-right: max(var(--sp-4), env(safe-area-inset-right));
+  }
+}
+/* タブレット・PC(列の幅 700〜760px): 1問ずつの表示の文字を一段大きくし、1行を35〜40字ほどに
+   (問題文 18→20px、選択肢・記述 15→17px、選択肢ごとの解説 13→14px。模擬試験の exam.css・○×の ox.css と同じ段) */
+@media (min-width: 768px) {
+  .quiz-stepper .quiz-steps .quiz-question { font-size: var(--fs-xl); }
+  .quiz-stepper .quiz-steps .choice-btn, .quiz-stepper .quiz-steps .stmt-text { font-size: var(--fs-read); }
+  .quiz-stepper .quiz-steps .choice-note { font-size: var(--fs-md); }
+  .quiz-stepper .quiz-steps .choice-list { margin-top: var(--sp-6); }
+  /* 個数・組合せの短い選択肢は4つを1行に(キーの 1〜4 と同じ並び) */
+  .quiz-stepper .quiz-steps .choice-list-styled { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* 結果のカードの余白は○×の結果(ox.css の .ox-summary)と同じ */
+  .quiz-stepper .quiz-summary { padding: var(--sp-7) var(--sp-6) var(--sp-6); }
 }
 /* PC: 4択の画面は読みやすい幅の1列(760px)。貼り付くバーは画面の上端 */
 @media (min-width: 1024px) {

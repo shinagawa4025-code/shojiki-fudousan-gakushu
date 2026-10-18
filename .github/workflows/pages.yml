@@ -1,6 +1,6 @@
 name: Deploy to GitHub Pages
 
-# master に push すると、確認 → ビルド(まとめて縮小)→ ブラウザでの動作確認 → 公開 の順に動く。
+# master に push すると、確認 → 単体テスト → ビルド(まとめて縮小)→ ブラウザでの動作確認 → ブラウザのテスト → 公開 の順に動く。
 # - 確認(tools/check.js)が失敗したら何も公開しない(今の公開版がそのまま残る)
 # - ビルドか動作確認が失敗したら、元のファイル(webapp)をそのまま公開する(キャッシュ名だけコミットごとに変える)。
 #   元のファイルでも動作確認が失敗するとき(元のファイル自体の不具合)は、何も公開しない
@@ -9,8 +9,14 @@ name: Deploy to GitHub Pages
 #   何も公開しない(静的ページのないサイトを黙って公開しない)。動作確認(--require-static)は静的ページがあることも確かめる
 # - 予備の経路でもブラウザでの動作確認は必須(--require-browser)。ランナーに Chrome が見つからないときは、確かめていない
 #   元のファイルを公開せずに失敗する(今の公開版が残り、実行は失敗として通知される)
+# - 自動テスト(tools/test.js)は2か所で動かす。どちらも失敗したら何も公開しない(今の公開版が残る)。予備の経路には切り替えない
+#   ・単体テスト(--unit): 確認のすぐあと、元のファイル(webapp)で。数秒
+#   ・ブラウザのテスト(--browser): ビルドの経路か予備の経路でサイトのフォルダ(_site)ができたあと、公開する直前に、
+#     そのフォルダ(これから公開するもの)で。ランナーに Chrome がなければ失敗(--require-browser)
+#   予備の経路(元のファイルの公開)はこれまでどおりビルド・静的ページ・動作確認(smoke)の失敗のときだけ。テストの失敗は予備の経路に回さない
+#   (テストが見つけるのは画面の動きの不具合で、元のファイルにも同じ不具合があるため。公開を止めて直す)
 # - 各段階に時間の上限を付ける(ビルドの経路が想定外に長引いても、予備の経路が job の上限の前に動けるように)
-# 依存パッケージは使わない(npm install なし。Node の標準機能と、ランナーに入っている Chrome だけ)
+# 依存パッケージは使わない(npm install なし。Node の標準機能と、ランナーに入っている Chrome だけ。テストも同じ)
 # ランナーは ubuntu-24.04 に固定(ubuntu-latest は 2026-10-19 から Ubuntu 26.04 へ順次切り替わる。移るときは
 # ubuntu-26.04 で一度動かして、smoke.js が Chrome を見つけること・ビルドの BUILD_ID が変わらないことを確かめてから)
 # actions はすべて Node 24 で動く版(Node 20 の版は廃止予定の警告が出る)
@@ -33,7 +39,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # 確認3 + 単体テスト3 + ビルド8 + 予備8 + ブラウザのテスト10 分の上限より長く(ふだんは合わせて6分ほど)
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
         with:
@@ -44,6 +51,10 @@ jobs:
       - name: Check content and raw sources
         timeout-minutes: 3
         run: node tools/check.js webapp
+      # 失敗したら何も公開しない(continue-on-error なし)
+      - name: Unit tests (raw sources)
+        timeout-minutes: 3
+        run: node tools/test.js --unit --raw webapp
       - name: Build bundles, static pages and smoke test
         id: bundle
         continue-on-error: true
@@ -65,7 +76,12 @@ jobs:
           node tools/static_pages.js _site --webapp webapp
           # 元のファイルでも動かなければ(元のファイル自体の不具合・ブラウザがない)、何も公開しない(今の公開版が残る)
           node tools/smoke.js _site --raw webapp --require-browser --require-static
-          echo "::warning::Bundle build, static pages or smoke test failed; deployed the raw sources (CACHE_NAME shojiki-gakushu-raw-$SHA)"
+          echo "::warning::Bundle build, static pages or smoke test failed; falling back to the raw sources (CACHE_NAME shojiki-gakushu-raw-$SHA). They are deployed only if the browser tests pass"
+      # これから公開する _site(ビルドの経路でも予備の経路でも)をブラウザで確かめる。失敗したら何も公開しない
+      # (continue-on-error なし・予備の経路には回さない)。--raw は単体テストと同じ元のファイル
+      - name: Browser tests (the site to be deployed)
+        timeout-minutes: 10
+        run: node tools/test.js --browser --site _site --raw webapp --require-browser
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

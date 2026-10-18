@@ -10,6 +10,8 @@
 //      スクリプトと CSS が build の範囲の中にある / ファイルの最上位に const・let・class がない
 //   7. 個数・組合せの問題(style)の自己テスト(tools/selftest_styled.js): 見本(tools/fixtures/q4_example.js)を本物の
 //      問題エンジン・整合性チェック・検索・lint・ビルドの分割・○×の文の固定に通す
+//   8. 見出し用の書体(警告のみ): 画面の文言・データの名前に、fonts/fudomana-rounded-800-*.woff2 にない文字がない
+//      (あれば node tools/font_subset.js で作り直す。作り直さなくても、その文字だけ端末の書体で表示される)
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -155,6 +157,23 @@ try {
   console.log(`成功 ${r.passed}件・失敗 ${r.errors.length}件`);
 } catch (e) {
   E(`個数・組合せの自己テストを実行できませんでした: ${e.message}`);
+}
+
+// 8. 見出し用の書体に足りない文字(警告のみ)
+step('見出し用の書体(tools/font_subset.js)に足りない文字');
+try {
+  const font = require('./font_subset.js');
+  const r = font.checkCoverage(WEBAPP);
+  if (!r.exists) W(`${r.absent.join(', ')} がありません。node tools/font_subset.js --src <MPLUSRounded1c-ExtraBold.ttf> で作ってください(なくても端末の書体で表示されます)`);
+  else {
+    const sw = fs.readFileSync(path.join(WEBAPP, 'sw.js'), 'utf8');
+    const pre = new Set(readPrecacheList(sw).map((u) => u.replace(/^\.\//, '')));
+    r.files.filter((f) => !pre.has(f)).forEach((f) => W(`${f} が sw.js の PRECACHE_URLS にありません(オフラインで見出しが端末の書体になります)`));
+    if (r.missing.length) W(`画面の文言・データの名前に、見出し用の書体(fonts/fudomana-rounded-800-*.woff2)にない文字が ${r.missing.length}字あります: ${font.fmtChars(r.missing.slice(0, 40))}${r.missing.length > 40 ? '…' : ''}。node tools/font_subset.js --src <MPLUSRounded1c-ExtraBold.ttf> を実行し直してください(そのままでも、その文字だけ端末の書体で表示されます)`);
+    console.log(`${r.files.join('・')}: 合計 ${(r.bytes / 1024).toFixed(1)}KB・${r.glyphChars}字・足りない文字 ${r.missing.length}字`);
+  }
+} catch (e) {
+  W(`見出し用の書体の確認ができませんでした: ${e.message}`);
 }
 
 console.log(`\n確認の結果: エラー ${errors.length}件・警告 ${warns.length}件${summary ? `(問題 ${summary.quiz}${styledNote}・○×の文 ${summary.statements})` : ''}`);

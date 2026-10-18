@@ -1,0 +1,192 @@
+/* 動きと手ごたえ(v12.2。js/motion.js・js/mascot.js・js/badges.js・js/router.js と組)
+   ほかの CSS のあとに読み込む。「動きを減らす」設定ではどれも動かさない(動きは prefers-reduced-motion: no-preference の中だけ。
+   形と色は動きのない最後の状態)。音・振動は使わない
+   1. 画面の切り替え  2. 押し心地  3. 数え上げ  4. マスコット  5. 連続正解・小さな紙吹雪  6. 今日の目標の達成  7. バッジ獲得 */
+:root {
+  --fd-down: 70ms;                          /* 押したときの沈み */
+  --fd-up: 280ms;                           /* 離したときの戻り(少しだけ行き過ぎて戻る) */
+  --fd-spring: cubic-bezier(.3, 1.45, .55, 1);
+  --fd-slide: 28px;                         /* 画面の切り替えで横に動く幅 */
+}
+
+/* ---------- 1. 画面の切り替え(router.js → Motion.page) ----------
+   View Transitions(Safari 18 以降・Chrome・Edge): ヘッダーと下部タブは止めたまま、中身だけ
+   進む(data-fd-vt="forward")は右から、戻る("back")は左から少しスライドしながら入れ替わる。"fade" は重ねて薄く。
+   途中で押したら切り替えを打ち切って、押した所の部品に届ける(js/motion.js) */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-fd-vt] #app-header { view-transition-name: fd-head; }
+  html[data-fd-vt] #bottom-nav { view-transition-name: fd-tabs; }
+  ::view-transition-group(fd-head), ::view-transition-group(fd-tabs), ::view-transition-new(fd-head), ::view-transition-new(fd-tabs) { animation: none; }
+  ::view-transition-old(fd-head), ::view-transition-old(fd-tabs) { display: none; }
+  ::view-transition-group(root) { animation-duration: 200ms; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 160ms; animation-timing-function: var(--ease-std); }
+  html[data-fd-vt="forward"]::view-transition-old(root) { animation: fd-out-l 200ms var(--ease-out) both; }
+  html[data-fd-vt="forward"]::view-transition-new(root) { animation: fd-in-r 200ms var(--ease-out) both; }
+  html[data-fd-vt="back"]::view-transition-old(root) { animation: fd-out-r 200ms var(--ease-out) both; }
+  html[data-fd-vt="back"]::view-transition-new(root) { animation: fd-in-l 200ms var(--ease-out) both; }
+  /* View Transitions が使えないブラウザ: 新しい画面を短くフェード(透明度だけ。固定・貼り付く要素の位置は変えない) */
+  .fd-fade { animation: fade-in 150ms var(--ease-out); }
+}
+@keyframes fd-in-r { from { opacity: 0; transform: translateX(var(--fd-slide)); } }
+@keyframes fd-in-l { from { opacity: 0; transform: translateX(calc(var(--fd-slide) * -1)); } }
+@keyframes fd-out-l { to { opacity: 0; transform: translateX(calc(var(--fd-slide) * -1)); } }
+@keyframes fd-out-r { to { opacity: 0; transform: translateX(var(--fd-slide)); } }
+
+/* ---------- 2. 押し心地 ----------
+   ふちのある押せる物(ボタン・選択肢・押せるカード・下部タブのアイコン)は、押すとすばやく沈み(--fd-down)、
+   離すと少し弾んで戻る(--fd-up・--fd-spring)。沈む深さ・ふちの色は各 CSS のまま(:active の transform / box-shadow)。
+   読み込む順に左右されないよう html を前に付けて、各 CSS の transition より強くする */
+@media (prefers-reduced-motion: no-preference) {
+  html :is(.btn, .card-interactive, .chip, .todo-item, .basics-section-head, .ox-scope-chip, .ox-btn, .exam-format, .exam-nav-cell,
+    .plan-item, .onb-choice, .onb-interest, .profile-option, .path-node, .path-go-btn, .quick, .theme-card, .purpose-item,
+    .continue-card, .plan-tile, .hero-predict, .medal-face, .bottom-nav-icon),
+  html :is(.seg-bold .segmented-item, .figures-view .fig-pager-link) {
+    transition: background-color var(--dur-1) var(--ease-std), border-color var(--dur-1) var(--ease-std), color var(--dur-1) var(--ease-std),
+      opacity var(--dur-2) var(--ease-std), box-shadow var(--fd-up) var(--fd-spring), transform var(--fd-up) var(--fd-spring);
+  }
+  html :is(.btn, .card-interactive, .chip, .todo-item, .basics-section-head, .ox-scope-chip, .ox-btn, .exam-format, .exam-nav-cell,
+    .plan-item, .onb-choice, .onb-interest, .profile-option, .quick, .theme-card, .purpose-item, .continue-card, .plan-tile, .hero-predict):active,
+  html :is(.seg-bold .segmented-item, .figures-view .fig-pager-link):active,
+  html :is(.menu-step:active .path-node, .menu-step:active .path-go-btn, .badge-btn:active .medal-face, .bottom-nav-item:active .bottom-nav-icon) {
+    transition-duration: var(--dur-1), var(--dur-1), var(--dur-1), var(--dur-2), var(--fd-down), var(--fd-down);
+    transition-timing-function: var(--ease-std), var(--ease-std), var(--ease-std), var(--ease-std), var(--ease-out), var(--ease-out);
+  }
+}
+
+/* ---------- 3. 数え上げ(Motion.countUp) ----------
+   本当の数字は透明にして場所と読み上げを保ち、途中の数は CSS のカウンターで重ねて見せる(右そろえ。数字の幅は等幅) */
+.fd-counting { position: relative; -webkit-text-fill-color: transparent; }
+.fd-counting::after {
+  content: counter(fd-n);
+  counter-reset: fd-n var(--fd-n, 0);
+  position: absolute;
+  top: 0;
+  right: 0;
+  -webkit-text-fill-color: currentColor;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ---------- 4. マスコット(js/mascot.js) ----------
+   まばたき(開いた目 .m-eyes)はどこでも。待機中の小さな揺れ(.m-sway)はホームと結果の画面だけ。
+   ホームのマスコットはタップすると跳ねて表情が変わる(.is-hop。飾りなので読み上げない・フォーカスしない) */
+.mascot .m-blush { fill: none; stroke: var(--mascot-ink); stroke-width: 1.6; stroke-linecap: round; opacity: .45; }
+.mascot-shy .m-cheek { opacity: 1; }
+.home-mascot { -webkit-tap-highlight-color: transparent; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .mascot .m-eyes { transform-box: fill-box; transform-origin: center; animation: fd-blink 4.8s 1.2s infinite; }
+  :is(.home-mascot, .quiz-finish-mascot) .m-sway { transform-origin: 50px 94px; animation: fd-sway 4.2s ease-in-out infinite; }
+  .mascot.is-hop { animation: fd-hop 560ms var(--ease-out); }
+}
+@keyframes fd-blink { 0%, 93%, 100% { transform: none; } 96% { transform: scaleY(.12); } }
+@keyframes fd-sway { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
+@keyframes fd-hop { 0%, 100% { transform: none; } 30% { transform: translateY(-12px) scale(.97, 1.04); } 62% { transform: translateY(0) scale(1.05, .95); } 80% { transform: translateY(-3px); } }
+
+/* ---------- 5. 連続正解の札(Motion.streak。判定のバーの「正解!」の横)・小さな紙吹雪(.fd-burst。.confetti より少なく近く) ---------- */
+.fd-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: var(--sp-2);
+  padding: 0 var(--sp-3) 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  color: var(--gold-ink);
+  box-shadow: 0 2px 0 var(--gold-lip);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  vertical-align: .2em;
+}
+.fd-run .fd-mini { width: 24px; height: 24px; margin: -5px 0 -3px; }
+.fd-burst { position: fixed; z-index: 300; width: 0; height: 0; pointer-events: none; }
+.fd-burst .confetti-bit { width: 6px; height: 9px; }
+@media (prefers-reduced-motion: no-preference) {
+  .fd-run { animation: fd-pop 420ms var(--ease-pop) both; }
+  .fd-run .fd-mini { animation: mascot-hop 520ms var(--ease-out) 260ms 2; }
+}
+@media (prefers-reduced-motion: reduce) { .fd-burst { display: none; } }
+@keyframes fd-pop { 0% { opacity: 0; transform: scale(.4); } 70% { opacity: 1; transform: scale(1.12); } 100% { opacity: 1; transform: none; } }
+
+/* ---------- 6. 今日の目標の達成(Motion。'goal:met' で1日1回。画面の上に約2.6秒。読み上げは別の領域で) ---------- */
+.fd-cele {
+  position: fixed;
+  z-index: 210;
+  top: calc(var(--safe-top) + var(--app-bar-h) + var(--sp-3));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: calc(100vw - 32px);
+  padding: 4px var(--sp-5) 4px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  color: var(--gold-ink);
+  box-shadow: 0 4px 0 var(--gold-lip);
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-display);
+  letter-spacing: .04em;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity 240ms var(--ease-std);
+}
+.fd-cele .fd-mini { width: 36px; height: 36px; }
+.fd-cele.is-out { opacity: 0; }
+@media (min-width: 1024px) { .fd-cele { top: var(--sp-5); left: calc(50% + var(--sidebar-w) / 2); } }
+@media (prefers-reduced-motion: no-preference) {
+  .fd-cele { animation: fd-drop 460ms var(--ease-pop) both; }
+  .fd-cele .fd-mini { animation: mascot-hop 520ms var(--ease-out) 300ms 2; }
+}
+@keyframes fd-drop { from { opacity: 0; transform: translate(-50%, -18px) scale(.9); } to { opacity: 1; transform: translateX(-50%); } }
+
+/* ---------- 7. バッジ獲得(js/badges.js。.modal-overlay の上の小さなダイアログ。メダルがぽんと出て光が走る) ---------- */
+.fd-badge { max-width: 340px; padding: var(--sp-6) var(--sp-5) var(--sp-5); text-align: center; }
+.fd-badge-kicker { margin: 0; font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-display); letter-spacing: .1em; color: var(--gold-text); }
+.fd-medal { position: relative; width: 112px; height: 112px; margin: var(--sp-4) auto var(--sp-4); }
+.fd-medal-face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--gold);
+  color: var(--gold-ink);
+  box-shadow: inset 0 0 0 6px var(--gold-lip), 0 6px 0 var(--gold-lip);
+}
+.fd-medal-face .icon { width: 56px; height: 56px; stroke-width: 2.4; }
+/* 光の帯(はじめは左の外。走ったあとは右の外) */
+.fd-medal-face::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: 0;
+  width: 30%;
+  height: 140%;
+  background: var(--sticker-fg);
+  opacity: .5;
+  transform: translateX(-130%) rotate(20deg);
+  pointer-events: none;
+}
+.fd-spark { position: absolute; color: var(--gold-icon); }
+.fd-spark .icon { width: 100%; height: 100%; }
+.fd-spark.s1 { top: -6px; right: -14px; width: 28px; height: 28px; }
+.fd-spark.s2 { bottom: 4px; left: -18px; width: 22px; height: 22px; }
+.fd-badge-name { margin: 0; font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: var(--fw-display); line-height: var(--lh-tight); color: var(--color-heading); text-wrap: balance; }
+.fd-badge-desc { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); }
+.fd-badge-count { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.fd-badge .btn { margin-top: var(--sp-5); }
+@media (prefers-reduced-motion: no-preference) {
+  .fd-badge .fd-medal-face { animation: fd-medal-in 600ms var(--ease-pop) both; }
+  .fd-badge .fd-medal-face::after { animation: fd-shine 900ms var(--ease-std) 520ms both; }
+  .fd-badge .fd-spark { animation: fd-twinkle 1.8s ease-in-out 600ms infinite both; }
+  .fd-badge .fd-spark.s2 { animation-delay: 1.1s; }
+}
+@keyframes fd-medal-in { 0% { opacity: 0; transform: scale(.3) rotate(-24deg); } 60% { opacity: 1; transform: scale(1.12) rotate(6deg); } 100% { opacity: 1; transform: none; } }
+@keyframes fd-shine { from { transform: translateX(-130%) rotate(20deg); } to { transform: translateX(430%) rotate(20deg); } }
+@keyframes fd-twinkle { 0%, 100% { opacity: 0; transform: scale(.4) rotate(0); } 40% { opacity: 1; transform: scale(1) rotate(20deg); } 70% { opacity: .9; transform: scale(.85) rotate(30deg); } }

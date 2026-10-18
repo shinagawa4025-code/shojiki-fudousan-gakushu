@@ -478,6 +478,13 @@ window.Views.home = (function () {
         ${sticker(`medal`, `sticker-sm sticker-gold`, 20)}
         <span class="stat-text" aria-hidden="true"><span class="stat-num"><b>${badges}</b><small>個</small></span><span class="stat-label">バッジ</span></span>
       </a>`;
+    // 前に見せたときより増えた数だけ数え上げる(js/motion.js。このタブの中で覚える)
+    if (window.Motion) {
+      const b = sec.querySelectorAll(`.stat-num b`);
+      Motion.countUp(b[0], n, `streak`);
+      Motion.countUp(b[1], done, `goal-${g.kind}`);
+      Motion.countUp(b[2], badges, `badges`);
+    }
     return sec;
   }
 
@@ -514,6 +521,8 @@ window.Views.home = (function () {
         </div>
       </div>
       ${go ? goHtml(go) : ``}`;
+    // タップすると跳ねて表情が変わる(js/motion.js。飾りなので読み上げない・フォーカスしない)
+    if (art && window.Motion) Motion.tapMascot(sec.querySelector(`.home-mascot`));
     return sec;
   }
 
@@ -1478,6 +1487,7 @@ window.Views.home = (function () {
       if (!b) return;
       const n = Math.max(0, Math.floor(num(window.Badges && Badges.earnedCount ? safe(() => Badges.earnedCount(), 0) : 0)));
       b.textContent = String(n);
+      if (window.Motion) Motion.countUp(b, n, `badges`);
       a.setAttribute(`aria-label`, `バッジ ${n}個`);
     });
   }

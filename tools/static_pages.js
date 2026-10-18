@@ -8,7 +8,8 @@
 //   learn/<トピックID>.html      トピックの小見出しごとの基礎知識・用語・図解
 //   learn/term/<用語ID>.html     用語・基礎知識1件(作品で学ぶ専用の俗語 worksOnly は除く)
 //   learn/figure/<図解ID>.html   図解1点(アプリの使い方の図は除く)
-//   learn/learn.css             共通のCSS(アプリのデザイントークンと .dg-* の規則から作る。ライト/ダークは OS の設定に従う)
+//   learn/learn.css             共通のCSS(アプリのデザイントークン・見出し用の書体(@font-face。../fonts/ を参照)と .dg-* の規則から作る。
+//                               ライト/ダークは OS の設定に従う)
 //   sitemap.xml                 アプリの入口と上のページすべて(lastmod は SITE.contentAsOf)
 // データは --webapp(既定: サイトのフォルダが元のファイルならそこ、なければ ../webapp)を Node の vm で読む(tools/lib/appload.js)。
 // 4択の問題文は載せない。文字列はすべてエスケープする(図解の SVG はアプリと同じものをそのまま入れる)。
@@ -102,20 +103,39 @@ function tokenDecls(body) {
   return body.split(`;`).map((d) => d.trim()).filter((d) => /^(--[\w-]+|color-scheme)\s*:/.test(d));
 }
 
-function buildCss(webapp, html) {
+// アプリの見出し用の書体(css/*.css の @font-face)を静的ページでも使う。URL を learn/learn.css から見た場所に直し、
+// font-display は optional にする(検索から初めて来た人には読み込みを待たせず、差し替えで見出しの折り返しがずれる(CLS)こともない。
+// アプリを開いたことのある端末では保存済みのフォントですぐ表示される)。フォントのファイルがサイトになければ入れない(null)
+function learnFontFace(cssRel, body, siteHas) {
+  let ok = true;
+  const decl = oneLine(body).replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (m, q, u) => {
+    const site = posix.normalize(posix.join(posix.dirname(cssRel), u));
+    if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(u) || site.startsWith(`../`) || !siteHas(site)) { ok = false; return m; }
+    return `url("${posix.relative(`learn`, site)}")`;
+  }).replace(/font-display\s*:\s*[\w-]+/i, `font-display: optional`);
+  return ok ? `@font-face { ${decl.replace(/;?\s*$/, `;`)} }` : null;
+}
+
+// siteHas(サイトの直下からのパス): そのファイルがサイトにあるか(見出し用の書体を入れるかどうか)
+function buildCss(webapp, html, siteHas) {
   const files = styleList(html);
   if (!files.length) throw new Error(`index.html に CSS がありません`);
   const light = [];
   const dark = [];
   const dg = [];
   const dgDark = [];
+  const fonts = [];
+  let fontsSkipped = 0;
   const DARK = /^:root\[data-theme="dark"\]/;
   for (const rel of files) {
     const rules = cssRules(fs.readFileSync(path.join(webapp, rel), `utf8`));
     for (const r of rules) {
       if (r.selector === `:root`) light.push(...tokenDecls(r.body));
       else if (r.selector === `:root[data-theme="dark"]`) dark.push(...tokenDecls(r.body));
-      else {
+      else if (r.selector === `@font-face`) {
+        const face = learnFontFace(rel, r.body, siteHas || (() => false));
+        if (face) fonts.push(face); else fontsSkipped++;
+      } else {
         const sels = r.selector.split(`,`).map((x) => x.trim());
         if (sels.every((x) => /^\.dg(?![\w])|^\.dg-[\w-]+/.test(x))) dg.push(`${sels.join(`, `)} { ${oneLine(r.body).replace(/;?\s*$/, `;`)} }`);
         else if (sels.every((x) => DARK.test(x) && /\s\.dg(-[\w-]+)?\b/.test(x))) dgDark.push(`${sels.map((x) => x.replace(DARK, `:root`)).join(`, `)} { ${oneLine(r.body).replace(/;?\s*$/, `;`)} }`);
@@ -129,7 +149,7 @@ function buildCss(webapp, html) {
     return d ? d.slice(name.length + 1).trim() : null;
   };
   const css = `/* 学べるテーマ(静的ページ)の共通CSS。tools/static_pages.js が css/*.css のトークンと図解(.dg-*)の規則から作る。直接編集しない */
-:root {
+${fonts.map((f) => `${f}\n`).join(``)}:root {
   ${light.join(`;\n  `)};
   --lp-max: 760px;
 }
@@ -143,7 +163,7 @@ ${LAYOUT_CSS}
 /* 図解(css/style.css と同じ規則) */
 ${dg.join(`\n`)}
 `;
-  return { css, themeLight: tokenOf(light, `--color-surface`), themeDark: tokenOf(dark, `--color-surface`) };
+  return { css, themeLight: tokenOf(light, `--color-surface`), themeDark: tokenOf(dark, `--color-surface`), fonts: fonts.length, fontsSkipped };
 }
 
 // 静的ページのレイアウト(色はすべてトークン経由)。見た目はアプリと同じ考え方:
@@ -390,7 +410,8 @@ function main() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) throw new Error(`SITE.contentAsOf が YYYY-MM-DD ではありません: ${asOf}`);
   const asOfJa = ctx.DateUtil && typeof ctx.DateUtil.toJapanese === `function` ? ctx.DateUtil.toJapanese(asOf) : asOf;
   const lawAsOf = (t) => { const m = String(t.asOf || asOf).match(/^(\d{4})-(\d{1,2})/); return m ? `${m[1]}年${Number(m[2])}月時点の法令に基づく` : ``; };
-  const { css, themeLight, themeDark } = buildCss(WEBAPP, html);
+  const { css, themeLight, themeDark, fontsSkipped } = buildCss(WEBAPP, html, (f) => fs.existsSync(path.join(SITE_DIR, f)));
+  if (fontsSkipped) warn(`見出し用の書体(@font-face)${fontsSkipped}件のファイルがサイトにないため、静的ページでは端末の書体で表示します`);
   const cssHash = crypto.createHash(`sha256`).update(css).digest(`hex`).slice(0, 10);
   const footer = footerFrom(html, asOfJa);
   const topicsSrc = fs.readFileSync(path.join(WEBAPP, `js/views/topics.js`), `utf8`);
