@@ -148,19 +148,19 @@ window.Views.progress = (function () {
     card.innerHTML = `
       <div class="prog-stats">
         <div class="prog-stat is-streak${current > 0 ? `` : ` is-off`}">
-          ${sticker(current > 0 ? `flame-fill` : `flame`, `sticker-sm sticker-gold`, 18)}
+          ${sticker(current > 0 ? `flame-fill` : `flame`, `sticker-sm sticker-gold`, 20)}
           <span class="prog-stat-label">連続学習</span>
           <span class="prog-stat-num num"><b>${current}</b><small>日</small></span>
           <span class="prog-stat-sub num">最長 ${longest}日</span>
         </div>
         <div class="prog-stat">
-          ${sticker(`check`, `sticker-sm`, 18)}
+          ${sticker(`check`, `sticker-sm`, 20)}
           <span class="prog-stat-label">学習済み</span>
           <span class="prog-stat-num num"><b>${ov.pct}</b><small>%</small></span>
           <span class="prog-stat-sub num">${ov.done}/${ov.total}項目</span>
         </div>
         <a class="prog-stat prog-stat-link" href="#review">
-          ${sticker(`repeat`, `sticker-sm${due ? ` sticker-warn` : ``}`, 18)}
+          ${sticker(`repeat`, `sticker-sm${due ? ` sticker-warn` : ``}`, 20)}
           <span class="prog-stat-label">今日の復習</span>
           <span class="prog-stat-num num"><b>${due}</b><small>件</small></span>
           <span class="prog-stat-sub">${due ? `復習する` : `今日はなし`}${ic(`chevron-right`, 14)}</span>

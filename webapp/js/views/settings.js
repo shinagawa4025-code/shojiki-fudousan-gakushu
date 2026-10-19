@@ -437,7 +437,7 @@ window.Views.settings = (function () {
               <button type="button" class="target-row-main target-row-edit" data-edit="${esc(t.id)}" aria-label="${esc(`「${t.name}」を編集${tentative ? `(試験日は見込み)` : ``}`)}">
                 <span class="target-row-name">${esc(t.name)}</span>
                 <span class="target-row-tags"><span class="source-tag">${esc(type ? type.shortName : `その他`)}</span>${tentative ? `<span class="source-tag target-tentative-tag">見込み</span>` : ``}${onHome ? `<span class="source-tag target-home-tag">ホームに表示中</span>` : ``}</span>
-                <span class="target-row-date"><span class="nowrap">${DateUtil.toJapanese(t.date, true)}</span>${tentative ? `<span class="nowrap">(見込み)</span>` : ``}・<span class="nowrap">${d > 0 ? `あと${d}日` : d === 0 ? `今日` : `終了`}</span></span>
+                <span class="target-row-date"><span class="nowrap">${DateUtil.toJapanese(t.date, true)}${tentative ? `` : `・`}</span>${tentative ? `<span class="nowrap">(見込み)・</span>` : ``}<span class="nowrap">${d > 0 ? `あと${d}日` : d === 0 ? `今日` : `終了`}</span></span>
                 <span class="target-row-hint" aria-hidden="true">${UI.icon(`chevron-right`, { size: 18 })}</span>
               </button>
               <button type="button" class="btn btn-icon" data-remove="${esc(t.id)}" aria-label="${esc(`「${t.name}」を削除`)}">${UI.icon(`trash`)}</button>

@@ -360,8 +360,22 @@
   document.addEventListener(`touchstart`, () => {}, { passive: true });
 
   document.addEventListener(`DOMContentLoaded`, () => {
-    // 画面の初期化に失敗しても修正版を受け取れるよう、Service Worker は最初に登録する
-    try { initServiceWorker(); } catch (e) { console.error(`[起動] Service Worker`, e); }
+    // 画面の初期化に失敗しても修正版を受け取れるよう、Service Worker は最初に登録する(前に開いたことがあり、動いているとき)。
+    // 初めて開いたとき(まだ動いていない)は、詳細(ほかの画面のコード・データ)が届いてから登録する: インストールが同じファイル・書体を
+    // 同時に取りに行くと、遅い回線で画面の準備が遅れるため(届いたあとならブラウザのキャッシュから入る)。届かなくても60秒で登録する
+    const sw = () => { try { initServiceWorker(); } catch (e) { console.error(`[起動] Service Worker`, e); } };
+    const swActive = `serviceWorker` in navigator && !!navigator.serviceWorker.controller;
+    if (swActive || !window.AppData || typeof AppData.hasDetail !== `function` || AppData.hasDetail()) sw();
+    else {
+      let swTimer = null;
+      const swOnce = () => {
+        window.removeEventListener(`appdata:detail`, swOnce);
+        clearTimeout(swTimer);
+        sw();
+      };
+      window.addEventListener(`appdata:detail`, swOnce);
+      swTimer = setTimeout(swOnce, 60000);
+    }
     // 各段階は独立して実行する(1つが失敗しても、残りの機能と画面は動くように)
     let bootError = null;
     const step = (label, fn) => {

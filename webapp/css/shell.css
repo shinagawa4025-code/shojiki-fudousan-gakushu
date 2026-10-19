@@ -202,6 +202,11 @@ body.has-storage-banner.exam-active .toast:not(.toast-top) { bottom: calc(var(--
 .settings-seg { max-width: 520px; }
 .settings-limit-seg .segmented-item { flex: 1 1 0; min-width: 0; min-height: 44px; flex-direction: column; gap: 0; padding: var(--sp-1) 2px; line-height: 1.2; }
 .settings-limit-seg .segmented-count { margin-left: 0; }
+/* 320px などの狭い画面: 試験の日付(「2027年10月17日(日)・」は割らない)と「出さない」が枠からはみ出さない大きさに */
+@media (max-width: 359px) {
+  .settings-view .target-row-date { font-size: var(--fs-xs); }
+  .settings-limit-seg .segmented-item { letter-spacing: 0; font-size: var(--fs-xs); }
+}
 .settings-import-status { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
 .settings-import-status[hidden] { display: none; }
 /* スマホでは書き出し・読み込みのボタンを横いっぱいに */

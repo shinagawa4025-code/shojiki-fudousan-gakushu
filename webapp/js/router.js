@@ -141,7 +141,9 @@ window.Router = (function () {
 
   // 動きを付けるとき(View Transitions)は、今の画面を写し取ってから描くため、描画が hashchange の後になる。
   // 画面側の「離れたら後片付け」(UI.onLeave など。hashchange のときに古い画面が外れているかを見る)が描画より先に動いてしまうので、
-  // 描いたあとに hashchange をもう一度送る(fdResent。Router 自身は無視する)
+  // 古い画面を外してから hashchange をもう一度送り(fdResent。Router 自身は無視する)、そのあとで新しい画面を描く
+  // (動きのないときと同じ順: 後片付け → 描画。描いたあとに送ると、新しい画面のタイマー・ダイアログまで片付けてしまう)。
+  // 外してから描くまでは同じ処理の中なので、空の画面は表示されない。描画中の例外は、動きの約束(Promise)に飲まれないよう投げ直す
   let deferSeq = 0;
   function onHashChange(e) {
     if (e && e.fdResent) return;
@@ -159,13 +161,22 @@ window.Router = (function () {
     let sync = true;
     Motion.page(dir, () => {
       if (seq !== deferSeq) return; // 待っている間に別の移動・描画があった
-      render();
-      if (sync) return;
-      let ev = null;
-      try { ev = new HashChangeEvent(`hashchange`); } catch (err) { ev = null; }
-      if (!ev) return;
-      ev.fdResent = true;
-      window.dispatchEvent(ev);
+      try {
+        if (!sync) {
+          viewRoot.innerHTML = ``;
+          let ev = null;
+          try { ev = new HashChangeEvent(`hashchange`); } catch (err) { ev = null; }
+          if (ev) {
+            ev.fdResent = true;
+            window.dispatchEvent(ev);
+          }
+          if (seq !== deferSeq) return; // 後片付けの中で別の描画があった
+        }
+        render();
+      } catch (err) {
+        if (sync) throw err;
+        setTimeout(() => { throw err; }, 0);
+      }
     });
     sync = false;
   }
@@ -302,6 +313,11 @@ window.Router = (function () {
     if (subnav) viewRoot.appendChild(subnav);
     viewRoot.appendChild(pendingEl());
     window.scrollTo(0, 0);
+    // 押したリンク(画面の中)が消えてフォーカスが <body> に落ちないよう、読み込み中の見出しへ(描けたら新しい画面の見出しへ移る)
+    if (!firstRender) {
+      const h = viewRoot.querySelector(`.view-pending h2`);
+      if (h) { h.setAttribute(`tabindex`, `-1`); h.focus({ preventScroll: true }); }
+    }
     if (window.Nav) Nav.update(name);
     const app = appName();
     document.title = app ? `読み込み中|${app}` : `読み込み中`;

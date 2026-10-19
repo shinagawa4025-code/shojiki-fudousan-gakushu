@@ -10,7 +10,8 @@
 //      スクリプトと CSS が build の範囲の中にある / ファイルの最上位に const・let・class がない
 //   7. 個数・組合せの問題(style)の自己テスト(tools/selftest_styled.js): 見本(tools/fixtures/q4_example.js)を本物の
 //      問題エンジン・整合性チェック・検索・lint・ビルドの分割・○×の文の固定に通す
-//   8. 見出し用の書体(警告のみ): 画面の文言・データの名前に、fonts/fudomana-rounded-800-*.woff2 にない文字がない
+//   8. 見出し用の書体(警告のみ): 画面の文言・データの名前に、fonts/fudomana-rounded-800-*.woff2 にない文字がない。
+//      最初の画面の漢字が kanji-core のファイルにあり、css/style.css の kanji-core の unicode-range とそのファイルの文字が一致する
 //      (あれば node tools/font_subset.js で作り直す。作り直さなくても、その文字だけ端末の書体で表示される)
 'use strict';
 const fs = require('fs');
@@ -170,6 +171,9 @@ try {
     const pre = new Set(readPrecacheList(sw).map((u) => u.replace(/^\.\//, '')));
     r.files.filter((f) => !pre.has(f)).forEach((f) => W(`${f} が sw.js の PRECACHE_URLS にありません(オフラインで見出しが端末の書体になります)`));
     if (r.missing.length) W(`画面の文言・データの名前に、見出し用の書体(fonts/fudomana-rounded-800-*.woff2)にない文字が ${r.missing.length}字あります: ${font.fmtChars(r.missing.slice(0, 40))}${r.missing.length > 40 ? '…' : ''}。node tools/font_subset.js --src <MPLUSRounded1c-ExtraBold.ttf> を実行し直してください(そのままでも、その文字だけ端末の書体で表示されます)`);
+    if (!r.coreRange) W('css/style.css に fudomana-rounded-800-kanji-core.woff2 の @font-face(unicode-range 付き)がありません(最初の画面でも漢字の書体全体を読み込みます)');
+    else if (r.rangeDiff.length) W(`css/style.css の kanji-core の unicode-range と fonts/fudomana-rounded-800-kanji-core.woff2 の漢字が ${r.rangeDiff.length}字食い違っています: ${font.fmtChars(r.rangeDiff.slice(0, 40))}${r.rangeDiff.length > 40 ? '…' : ''}。node tools/font_subset.js --src <MPLUSRounded1c-ExtraBold.ttf> で作り直してください(unicode-range も書き直します)`);
+    if (r.coreMissing.length) W(`最初の画面(index.html・詳細の束に入れない js/・トピックと試験の名前)の漢字 ${r.coreMissing.length}字が fonts/fudomana-rounded-800-kanji-core.woff2 にありません: ${font.fmtChars(r.coreMissing.slice(0, 40))}${r.coreMissing.length > 40 ? '…' : ''}。表示はできますが、初めて開いたときに漢字の書体全体を読み込みます。node tools/font_subset.js --src <MPLUSRounded1c-ExtraBold.ttf> を実行し直してください`);
     console.log(`${r.files.join('・')}: 合計 ${(r.bytes / 1024).toFixed(1)}KB・${r.glyphChars}字・足りない文字 ${r.missing.length}字`);
   }
 } catch (e) {

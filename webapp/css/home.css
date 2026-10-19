@@ -91,6 +91,10 @@
 @media (min-width: 768px) and (max-width: 1279px) {
   .home-view { max-width: 720px; }
 }
+/* サイドバーのない幅(タブレット・横向きのスマホ)は本文の列が中央なので、ホームも中央に(右だけ空かないように) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .home-view { margin-inline: auto; }
+}
 @media (min-width: 1280px) {
   .home-head { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: var(--sp-6); align-items: end; }
   .home-head > .home-greet { grid-column: 1; grid-row: 1; }
@@ -195,6 +199,7 @@
 .hero2-days.is-ended strong { color: var(--color-text-muted); }
 .home-count .after-panel { margin-top: var(--sp-3); }
 @media (max-width: 359px) {
+  .hero2-days.is-after strong { font-size: var(--fs-xl); white-space: nowrap; }
   .home-count { padding: 16px 16px 18px; }
   .count-days strong { font-size: 3.25rem; }
   .count-top { flex-wrap: wrap; }
@@ -398,13 +403,17 @@ a.theme-card:active { transform: translateY(4px); box-shadow: 0 0 0 transparent;
 @media (hover: hover) { .hero-predict:hover { box-shadow: inset 0 0 0 100px var(--color-press); } }
 .home-count.is-count .hero-predict { margin-top: var(--sp-4); background: var(--color-surface); box-shadow: 0 3px 0 var(--lip-primary); }
 .home-count.is-count .hero-predict:active { transform: translateY(3px); box-shadow: 0 0 0 transparent; }
+/* 緑のカードの上ではフォーカスの枠(緑)が見えないので、塗りの上の文字の色にする(ライトは白・ダークは濃い色) */
+.home-count.is-count :focus-visible { outline-color: var(--color-on-primary); }
 
 /* 試験の後: 合格発表の案内・次の目標 */
 .after-panel { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); margin-bottom: var(--sp-1); }
 .after-result { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; padding: var(--sp-2) var(--sp-3); align-self: stretch; border-radius: var(--radius-md); background: var(--color-surface-muted); font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text); }
 .after-result > .icon { flex-shrink: 0; margin-top: 2px; color: var(--color-primary); }
 .after-result strong { color: var(--color-heading); }
-.after-link { display: inline-flex; align-items: center; gap: 2px; margin-left: var(--sp-1); font-weight: 600; }
+/* リンクは文の続きとして折り返す(「のサイト↗」は割らない。矢印は文字のすぐ後ろ) */
+.after-link { display: inline; margin-left: var(--sp-1); font-weight: 600; }
+.after-link .icon { margin-left: 2px; vertical-align: -2px; }
 .after-next { align-self: stretch; justify-content: flex-start; gap: var(--sp-3); min-height: 56px; padding: var(--sp-2) var(--sp-4); text-align: left; }
 .after-next > .icon { flex-shrink: 0; }
 .after-next-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }

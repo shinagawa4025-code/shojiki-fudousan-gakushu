@@ -1,9 +1,14 @@
 // 見出し用の書体(M PLUS Rounded 1c ExtraBold・SIL Open Font License 1.1)を、アプリで見出し用の書体(--font-display)を使う所に
 // 出る文字だけに絞って、webapp/fonts/ に woff2 を作る
 // (見出し h1〜h4・カードやシートの題・ボタン・大きな数字・タブ・バッジ・キャラクターのせりふなど。css/*.css の var(--font-display))
-// ファイルは2つに分ける(SLICES。css/style.css の @font-face の unicode-range と同じ分け方):
-//   fudomana-rounded-800-base.woff2  かな・英数字・記号(約30KB。起動画面の「ふどまな」はこれだけで描けるので、初回の表示を遅らせない)
-//   fudomana-rounded-800-kanji.woff2 漢字(ブラウザは漢字を描くときに読み込む)
+// ファイルは3つに分ける(SLICES。css/style.css の @font-face の unicode-range と同じ分け方):
+//   fudomana-rounded-800-base.woff2       かな・英数字・記号(約30KB。起動画面の「ふどまな」はこれだけで描けるので、初回の表示を遅らせない)
+//   fudomana-rounded-800-kanji-core.woff2 最初の画面に出うる漢字(collectCoreKanji: index.html・詳細の束に入れない js/ の文言・
+//                                         トピックと試験の名前)。ホーム・読み込み中の画面はこれだけで描ける
+//   fudomana-rounded-800-kanji.woff2      それ以外の漢字(ほかの画面で、その漢字を描くときに読み込む)
+//   (初めて開いたとき、遅い回線で漢字の書体全体が詳細の束(ほかの画面のコード)と取り合わないように分ける。v12.2)
+//   kanji-core の @font-face は漢字の面より後に書き、unicode-range に入れた文字を1字ずつ並べる(後に書いた面が先に使われる)。
+//   この unicode-range は作り直すときにこのファイルが css/style.css に書き込む(手で直さない)
 //
 // 使い方: node tools/font_subset.js --src <MPLUSRounded1c-ExtraBold.ttf> [--webapp webapp] [--python python]
 //         node tools/font_subset.js --dry      (文字を集めて、今のフォントに足りない文字を表示するだけ。フォントは作らない)
@@ -21,7 +26,8 @@
 //   4. いつも入れる文字: ASCII・ひらがな・カタカナ・全角の英数字と記号・よく使う句読点と記号(BASE_RANGES)
 //   元のフォントにない文字(絵文字・一部の記号や漢字)は入れられない。その文字は端末の書体(--font-display の次の候補)で表示される。
 //   × ÷ はこのフォントでは小さな欧文の字形なので、わざと入れない(EXCLUDE。「○×」が釣り合うよう端末の書体で表示する)
-// 出力: webapp/fonts/fudomana-rounded-800-base.woff2・-kanji.woff2 と、入れた文字の一覧 fudomana-rounded-800.chars.json
+// 出力: webapp/fonts/fudomana-rounded-800-base.woff2・-kanji-core.woff2・-kanji.woff2 と、入れた文字の一覧 fudomana-rounded-800.chars.json、
+//   css/style.css の kanji-core の @font-face の unicode-range
 //   (作り直すときの記録。tools/check.js は notInFont(元のフォントにない文字)を警告から除く)
 'use strict';
 const fs = require('fs');
@@ -35,10 +41,14 @@ const { loadApp } = require('./lib/appload.js');
 
 // 漢字(CJK 統合漢字・拡張A・互換漢字・拡張B 以降)。css/style.css の漢字の @font-face の unicode-range と同じ範囲
 const isKanji = (cp) => (cp >= 0x3400 && cp <= 0x4dbf) || (cp >= 0x4e00 && cp <= 0x9fff) || (cp >= 0xf900 && cp <= 0xfaff) || cp >= 0x20000;
+// test(コードポイント, 最初の画面の漢字の集合)
 const SLICES = [
   { id: 'base', file: 'fonts/fudomana-rounded-800-base.woff2', test: (cp) => !isKanji(cp) },
-  { id: 'kanji', file: 'fonts/fudomana-rounded-800-kanji.woff2', test: isKanji },
+  { id: 'kanji-core', file: 'fonts/fudomana-rounded-800-kanji-core.woff2', test: (cp, core) => isKanji(cp) && core.has(cp) },
+  { id: 'kanji', file: 'fonts/fudomana-rounded-800-kanji.woff2', test: (cp, core) => isKanji(cp) && !core.has(cp) },
 ];
+const CORE_SLICE = SLICES[1];
+const CSS_REL = 'css/style.css';
 const CHARS_REL = 'fonts/fudomana-rounded-800.chars.json';
 const SOURCE = {
   name: 'M PLUS Rounded 1c ExtraBold',
@@ -46,7 +56,7 @@ const SOURCE = {
   url: 'https://github.com/google/fonts/raw/main/ofl/mplusrounded1c/MPLUSRounded1c-ExtraBold.ttf',
   license: 'SIL Open Font License 1.1(webapp/fonts/OFL.txt)',
 };
-const BUDGET = 200 * 1024; // 1つの太さあたりの目安(2つのファイルの合計)
+const BUDGET = 215 * 1024; // 1つの太さあたりの目安(3つのファイルの合計。ファイルごとに名前・ライセンスの表が入る分を含む)
 
 // データの中で、見出し用の書体で表示される名前の項目(どの深さでも、この名前の文字列の項目を集める)
 const DATA_KEYS = new Set(['name', 'title', 'label', 'shortName', 'theme', 'displayLabel', 'category', 'orgName', 'level', 'version', 'status', 'duration', 'term', 'resultsOrg']);
@@ -218,6 +228,66 @@ function collectDisplayChars(webapp, opts) {
   return { chars: all, by };
 }
 
+// 最初の画面(起動画面・ホーム・ナビ・初回ガイド・読み込み中)に出うる漢字: index.html の文字、詳細の束に入れない js/ のファイル
+// (index.html で data-bundle="detail" のない <script>)の文言、トピックと試験・分野の名前。
+// ここにない漢字も表示はできる(残りの漢字のファイルを読み込む)。足りないと初回に漢字の書体全体を読み込むので速さだけの問題
+function collectCoreKanji(webapp, opts) {
+  opts = opts || {};
+  const core = new Set();
+  const add = (set) => set.forEach((c) => { if (isKanji(c)) core.add(c); });
+  const html = fs.readFileSync(path.join(webapp, 'index.html'), 'utf8');
+  add(charsOfHtml(html));
+  for (const m of html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"[^>]*>/g)) {
+    const rel = m[1].replace(/^\.\//, '');
+    if (/\bdata-bundle="detail"/.test(m[0]) || !/^js\//.test(rel)) continue;
+    const f = path.join(webapp, rel);
+    if (fs.existsSync(f)) add(charsOfJs(fs.readFileSync(f, 'utf8').replace(/^﻿/, '')));
+  }
+  const ctx = opts.ctx || loadApp(webapp, { hostname: 'localhost' }).ctx;
+  const data = ctx.APP_DATA || {};
+  add(charsOfData({ topics: data.topics || [], exams: data.exams || {} }));
+  return core;
+}
+
+// kanji-core の @font-face(css/style.css)の unicode-range。{ set, text } か、見つからなければ null
+const CORE_FACE_RE = /(@font-face\s*\{[^}]*fudomana-rounded-800-kanji-core\.woff2[^}]*unicode-range\s*:\s*)([^;}]*)/;
+function parseUnicodeRange(text) {
+  const set = new Set();
+  String(text).split(',').map((s) => s.trim()).filter(Boolean).forEach((part) => {
+    const m = part.match(/^U\+([0-9A-F?]+)(?:-([0-9A-F]+))?$/i);
+    if (!m || m[1].includes('?')) return;
+    const a = parseInt(m[1], 16);
+    const b = m[2] ? parseInt(m[2], 16) : a;
+    for (let c = a; c <= b; c++) set.add(c);
+  });
+  return set;
+}
+function coreRangeInCss(webapp) {
+  const f = path.join(webapp, CSS_REL);
+  if (!fs.existsSync(f)) return null;
+  const m = fs.readFileSync(f, 'utf8').match(CORE_FACE_RE);
+  return m ? { set: parseUnicodeRange(m[2]), text: m[2].trim() } : null;
+}
+// コードポイントの集合 → unicode-range の値(続いている所は U+xxxx-yyyy にまとめる)
+function formatUnicodeRange(cps) {
+  const s = [...cps].sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < s.length; i++) {
+    let j = i;
+    while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++;
+    const hex = (c) => c.toString(16).toUpperCase();
+    out.push(j > i ? `U+${hex(s[i])}-${hex(s[j])}` : `U+${hex(s[i])}`);
+    i = j;
+  }
+  return out.join(', ');
+}
+function writeCoreRange(webapp, cps) {
+  const f = path.join(webapp, CSS_REL);
+  const src = fs.readFileSync(f, 'utf8');
+  if (!CORE_FACE_RE.test(src)) throw new Error(`${CSS_REL} に fudomana-rounded-800-kanji-core.woff2 の @font-face(unicode-range 付き)がありません`);
+  fs.writeFileSync(f, src.replace(CORE_FACE_RE, (m, head) => `${head}${formatUnicodeRange(cps)}`));
+}
+
 // ---- woff2 の文字の対応表(cmap)を読む(Node の標準機能だけ。tools/check.js でも使う) ----
 const WOFF2_TAGS = ['cmap', 'head', 'hhea', 'hmtx', 'maxp', 'name', 'OS/2', 'post', 'cvt ', 'fpgm', 'glyf', 'loca', 'prep', 'CFF ', 'VORG', 'EBDT', 'EBLC', 'gasp', 'hdmx', 'kern', 'LTSH', 'PCLT', 'VDMX', 'vhea', 'vmtx', 'BASE', 'GDEF', 'GPOS', 'GSUB', 'EBSC', 'JSTF', 'MATH', 'CBDT', 'CBLC', 'COLR', 'CPAL', 'SVG ', 'sbix', 'acnt', 'avar', 'bdat', 'bloc', 'bsln', 'cvar', 'fdsc', 'feat', 'fmtx', 'fvar', 'gvar', 'hsty', 'just', 'lcar', 'mort', 'morx', 'opbd', 'prop', 'trak', 'Zapf', 'Silf', 'Glat', 'Gloc', 'Feat', 'Sill'];
 
@@ -317,18 +387,31 @@ function readCharsFile(webapp) {
 }
 
 // tools/check.js 用: 見出し用の書体で表示しうる文字のうち、フォントにない文字(元のフォントにない文字は除く)。
-// 文字はその文字の範囲のファイル(SLICES)で探す(css の unicode-range と同じ。ほかのファイルにあっても使われない)
+// 文字はブラウザと同じ順で探す(css の unicode-range と同じ): かな・英数字は base、漢字は kanji-core の unicode-range(css/style.css)に
+// あれば kanji-core、なければ(または kanji-core にその字がなければ)残りの漢字のファイル
+// あわせて、最初の画面の漢字のうち kanji-core にないもの(coreMissing。表示はできるが初回に漢字の書体全体を読み込む)と、
+// css の unicode-range と kanji-core の文字の食い違い(rangeDiff。作り直したあとに css だけ戻したときなど)を返す
 function checkCoverage(webapp, opts) {
+  opts = opts || {};
   const files = SLICES.map((s) => s.file);
   const absent = files.filter((f) => !fs.existsSync(path.join(webapp, f)));
-  if (absent.length) return { files, absent, exists: false, missing: [] };
+  if (absent.length) return { files, absent, exists: false, missing: [], coreMissing: [], rangeDiff: [] };
   const have = SLICES.map((s) => woff2CodePoints(path.join(webapp, s.file)));
+  const by = Object.fromEntries(SLICES.map((s, i) => [s.id, have[i]]));
   const list = readCharsFile(webapp);
   const skip = list ? list.notInFontSet : new Set();
-  const { chars } = collectDisplayChars(webapp, opts);
-  const missing = [...chars].filter((c) => !skip.has(c) && !SLICES.some((s, i) => s.test(c) && have[i].has(c))).sort((a, b) => a - b);
+  const ctx = opts.ctx || loadApp(webapp, { hostname: 'localhost' }).ctx;
+  const { chars } = collectDisplayChars(webapp, { ctx });
+  const range = coreRangeInCss(webapp);
+  const routed = range ? range.set : new Set();
+  const covered = (c) => (isKanji(c) ? (routed.has(c) && by['kanji-core'].has(c)) || by.kanji.has(c) : by.base.has(c));
+  const missing = [...chars].filter((c) => !skip.has(c) && !covered(c)).sort((a, b) => a - b);
+  const core = collectCoreKanji(webapp, { ctx });
+  const coreMissing = [...core].filter((c) => !skip.has(c) && !(routed.has(c) && by['kanji-core'].has(c))).sort((a, b) => a - b);
+  const coreFile = [...by['kanji-core']].filter(isKanji);
+  const rangeDiff = range ? [...new Set([...coreFile.filter((c) => !routed.has(c)), ...[...routed].filter((c) => !by['kanji-core'].has(c))])].sort((a, b) => a - b) : coreFile;
   const bytes = files.reduce((n, f) => n + fs.statSync(path.join(webapp, f)).size, 0);
-  return { files, absent, exists: true, glyphChars: have.reduce((n, h) => n + h.size, 0), missing, bytes };
+  return { files, absent, exists: true, glyphChars: have.reduce((n, h) => n + h.size, 0), missing, bytes, coreMissing, rangeDiff, coreRange: !!range };
 }
 
 const fmtChars = (cps) => cps.map((c) => (c === 0x20 ? '(空白)' : c === 0x3000 ? '(全角空白)' : c === 0xa0 ? '(NBSP)' : String.fromCodePoint(c))).join('');
@@ -343,12 +426,14 @@ function main() {
   const args = process.argv.slice(2);
   const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
   const WEBAPP = path.resolve(opt('--webapp') || path.join(__dirname, '..', 'webapp'));
-  const { chars, by } = collectDisplayChars(WEBAPP);
+  const ctx = loadApp(WEBAPP, { hostname: 'localhost' }).ctx;
+  const { chars, by } = collectDisplayChars(WEBAPP, { ctx });
+  const core = collectCoreKanji(WEBAPP, { ctx });
   const sorted = [...chars].sort((a, b) => a - b);
-  console.log(`集めた文字 ${sorted.length}字(うち漢字 ${sorted.filter(isKanji).length}字)・場所ごと: JS の文言 ${by.js}・静的ページ ${by.static || 0}・index.html ${by.html}・データの名前 ${by.data}・いつも入れる文字 ${by.base}`);
+  console.log(`集めた文字 ${sorted.length}字(うち漢字 ${sorted.filter(isKanji).length}字・最初の画面の漢字 ${sorted.filter((c) => CORE_SLICE.test(c, core)).length}字)・場所ごと: JS の文言 ${by.js}・静的ページ ${by.static || 0}・index.html ${by.html}・データの名前 ${by.data}・いつも入れる文字 ${by.base}`);
 
   if (args.includes('--dry')) {
-    const r = checkCoverage(WEBAPP);
+    const r = checkCoverage(WEBAPP, { ctx });
     if (!r.exists) console.log(`まだないファイル: ${r.absent.join(', ')}`);
     else console.log(`今のフォント(${(r.bytes / 1024).toFixed(1)}KB・${r.glyphChars}字)に足りない文字 ${r.missing.length}字${r.missing.length ? `: ${fmtChars(r.missing.slice(0, 80))}` : ''}`);
     return;
@@ -369,7 +454,7 @@ function main() {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     made.push({ s, out, tmp });
     // -I: 分離モード(カレントフォルダや環境変数のモジュールを読まない)
-    const r = spawnSync(python, ['-I', path.join(__dirname, 'font_subset.py'), path.resolve(src), tmp], { input: JSON.stringify(sorted.filter(s.test)), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const r = spawnSync(python, ['-I', path.join(__dirname, 'font_subset.py'), path.resolve(src), tmp], { input: JSON.stringify(sorted.filter((cp) => s.test(cp, core))), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     if (r.status !== 0) fail(`サブセットを作れませんでした(${python} -I tools/font_subset.py・終了コード ${r.status}):\n${r.stderr || r.error || ''}\nfontTools がないときは: python -m pip install "fonttools[woff]"`);
     const res = JSON.parse(r.stdout);
     // 作ったファイルを Node の読み取り(tools/check.js と同じもの)で確かめる: 入れたはずの文字がすべてある
@@ -378,8 +463,10 @@ function main() {
     if (lost.length) fail(`${s.file} に入っていない文字があります: ${fmtChars(lost.slice(0, 40))}`);
     made[made.length - 1].res = res;
   }
-  // 全部できてから置き換える
+  // 全部できてから置き換える。kanji-core に入れた漢字を css/style.css の unicode-range に書く
   made.forEach((x) => fs.renameSync(x.tmp, x.out));
+  const coreMade = made.find((x) => x.s === CORE_SLICE);
+  writeCoreRange(WEBAPP, coreMade.res.included);
   const included = made.flatMap((x) => x.res.included).sort((a, b) => a - b);
   const notInFont = made.flatMap((x) => x.res.notInFont).sort((a, b) => a - b);
   const r0 = made[0].res;
@@ -406,6 +493,6 @@ function main() {
   if (total > BUDGET) console.log(`WARN 見出し用の書体の合計が目安の ${BUDGET / 1024}KB を超えています(${(total / 1024).toFixed(1)}KB)`);
 }
 
-module.exports = { collectDisplayChars, checkCoverage, woff2CodePoints, readCharsFile, SLICES, CHARS_REL, fmtChars };
+module.exports = { collectDisplayChars, collectCoreKanji, checkCoverage, woff2CodePoints, readCharsFile, formatUnicodeRange, parseUnicodeRange, SLICES, CHARS_REL, fmtChars };
 
 if (require.main === module) main();

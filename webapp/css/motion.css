@@ -58,6 +58,8 @@
 .fd-counting { position: relative; -webkit-text-fill-color: transparent; }
 .fd-counting::after {
   content: counter(fd-n);
+  /* 途中の数は読み上げない(代わりの文字を空に。対応していないブラウザは上の行を使う) */
+  content: counter(fd-n) / "";
   counter-reset: fd-n var(--fd-n, 0);
   position: absolute;
   top: 0;
@@ -70,13 +72,14 @@
 
 /* ---------- 4. マスコット(js/mascot.js) ----------
    まばたき(開いた目 .m-eyes)はどこでも。待機中の小さな揺れ(.m-sway)はホームと結果の画面だけ。
+   どちらも画面を開いたときに数回だけ(ずっと動き続けない。止める操作がなくても気にならないように。WCAG 2.2.2)。
    ホームのマスコットはタップすると跳ねて表情が変わる(.is-hop。飾りなので読み上げない・フォーカスしない) */
 .mascot .m-blush { fill: none; stroke: var(--mascot-ink); stroke-width: 1.6; stroke-linecap: round; opacity: .45; }
 .mascot-shy .m-cheek { opacity: 1; }
 .home-mascot { -webkit-tap-highlight-color: transparent; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
 @media (prefers-reduced-motion: no-preference) {
-  .mascot .m-eyes { transform-box: fill-box; transform-origin: center; animation: fd-blink 4.8s 1.2s infinite; }
-  :is(.home-mascot, .quiz-finish-mascot) .m-sway { transform-origin: 50px 94px; animation: fd-sway 4.2s ease-in-out infinite; }
+  .mascot .m-eyes { transform-box: fill-box; transform-origin: center; animation: fd-blink 4.8s 1.2s 2; }
+  :is(.home-mascot, .quiz-finish-mascot) .m-sway { transform-origin: 50px 94px; animation: fd-sway 4.2s ease-in-out 1; }
   .mascot.is-hop { animation: fd-hop 560ms var(--ease-out); }
 }
 @keyframes fd-blink { 0%, 93%, 100% { transform: none; } 96% { transform: scaleY(.12); } }
@@ -142,6 +145,8 @@
   .fd-cele .fd-mini { animation: mascot-hop 520ms var(--ease-out) 300ms 2; }
 }
 @keyframes fd-drop { from { opacity: 0; transform: translate(-50%, -18px) scale(.9); } to { opacity: 1; transform: translateX(-50%); } }
+/* ダイアログ・シート(バッジの獲得など)が開いたら、その暗い幕の上に出さない */
+body:has(.modal-overlay, .sheet-backdrop) .fd-cele { visibility: hidden; }
 
 /* ---------- 7. バッジ獲得(js/badges.js。.modal-overlay の上の小さなダイアログ。メダルがぽんと出て光が走る) ---------- */
 .fd-badge { max-width: 340px; padding: var(--sp-6) var(--sp-5) var(--sp-5); text-align: center; }
@@ -181,6 +186,18 @@
 .fd-badge-desc { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); }
 .fd-badge-count { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
 .fd-badge .btn { margin-top: var(--sp-5); }
+/* 低い画面(横向きのスマホ・拡大表示)でも上下が切れないよう、収まらなければ上から並べて幕ごとスクロールする。
+   低いときはメダルと余白を小さく(横向きの区切り max-height: 500px) */
+.fd-badge-overlay { align-items: flex-start; overflow-y: auto; overscroll-behavior: contain; }
+.fd-badge-overlay .fd-badge { margin: auto; }
+@media (max-height: 500px) {
+  .fd-badge { padding: var(--sp-4) var(--sp-5); }
+  .fd-medal { width: 72px; height: 72px; margin: var(--sp-2) auto; }
+  .fd-medal-face .icon { width: 36px; height: 36px; }
+  .fd-spark.s1 { width: 20px; height: 20px; }
+  .fd-spark.s2 { width: 16px; height: 16px; }
+  .fd-badge .btn { margin-top: var(--sp-3); }
+}
 @media (prefers-reduced-motion: no-preference) {
   .fd-badge .fd-medal-face { animation: fd-medal-in 600ms var(--ease-pop) both; }
   .fd-badge .fd-medal-face::after { animation: fd-shine 900ms var(--ease-std) 520ms both; }

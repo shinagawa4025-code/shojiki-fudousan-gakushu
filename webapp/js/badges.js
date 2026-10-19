@@ -199,7 +199,16 @@ window.Badges = (function () {
     present();
   }
 
+  // 文字を入力している途中(検索欄・設定の入力欄など)は出さない(打った文字・Enter がダイアログに取られないように。離れてから出す)
+  function typing() {
+    const ae = document.activeElement;
+    if (!ae) return false;
+    if (ae.isContentEditable || ae.tagName === `TEXTAREA` || ae.tagName === `SELECT`) return true;
+    return ae.tagName === `INPUT` && !/^(button|submit|reset|checkbox|radio|range|color|file|image)$/i.test(ae.type || ``);
+  }
+
   function quietNow() {
+    if (typing()) return false;
     if (window.Motion && typeof Motion.busy === `function`) return !Motion.busy(true);
     return !busy() && !document.querySelector(`.modal-overlay, .sheet-backdrop`);
   }
@@ -262,7 +271,9 @@ window.Badges = (function () {
       if (back && back.focus && back.isConnected) back.focus({ preventScroll: true });
     }
     // 画面が移ったら(戻る操作など)閉じる。フォーカスは新しい画面の見出しのまま。残りは落ち着いてから出す
-    function onNav() {
+    // (画面の切り替えの動きのあとに Router が送り直す hashchange(fdResent)は、同じ移動の2回目なので数えない)
+    function onNav(e) {
+      if (e && e.fdResent) return;
       window.removeEventListener(`hashchange`, onNav);
       shut();
       shown.shift();
@@ -307,7 +318,8 @@ window.Badges = (function () {
       const res = commit(met);
       const t = DateUtil.today();
       rows.forEach((r) => { if (!r.earnedAt && met.includes(r.id)) r.earnedAt = t; });
-      if (!res.silent) announce(res.fresh);
+      // 画面の描画の途中(進捗の画面)で呼ばれるので、知らせは描き終えてから(Router が見出しへフォーカスを移したあと)
+      if (!res.silent && res.fresh.length) { const fresh = res.fresh; setTimeout(() => announce(fresh), 0); }
     }
     return rows;
   }

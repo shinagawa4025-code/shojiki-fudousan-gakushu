@@ -176,6 +176,8 @@
 .calc-stat.is-primary .calc-stat-sub { margin-top: 4px; font-size: var(--fs-sm); font-weight: 600; color: inherit; }
 @media (max-width: 359px) {
   .calc-stat.is-primary .stat-value { font-size: 2.125rem; }
+  /* 2列の小さな結果は、6けたの金額でも「円」だけが次の行に落ちないよう少し小さく */
+  .calc-stat:not(.is-primary) .stat-value { font-size: var(--fs-lg); }
 }
 .calc-empty { flex-direction: row; align-items: center; color: var(--color-text-muted); }
 .calc-empty p { margin: 0; }

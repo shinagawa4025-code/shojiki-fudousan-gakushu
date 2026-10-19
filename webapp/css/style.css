@@ -33,6 +33,16 @@
   font-display: swap;
   unicode-range: U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+20000-3FFFF;
 }
+/* 最初の画面(起動画面・ホーム・ナビ・読み込み中)に出うる漢字だけの小さなファイル。上の漢字の面より後に書く(後に書いた面が先に使われる)。
+   unicode-range は node tools/font_subset.js が書き込む(手で直さない)。ここにない漢字は上の面(残りの漢字)から */
+@font-face {
+  font-family: "Fudomana Rounded";
+  src: url("../fonts/fudomana-rounded-800-kanji-core.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4E00, U+4E09-4E0B, U+4E0D-4E0E, U+4E26, U+4E2D, U+4E86, U+4E88-4E89, U+4E8B-4E8C, U+4EA4, U+4EBA, U+4ECA-4ECB, U+4ED5-4ED6, U+4ED8, U+4EE3-4EE5, U+4EEE, U+4EF6, U+4EFB, U+4F1A, U+4F38, U+4F4F, U+4F53, U+4F55, U+4F5C, U+4F7F, U+4F8B, U+4FA1, U+4FC2-4FC3, U+4FDD, U+4FE1, U+500B, U+501F, U+5024, U+5074, U+50B5, U+50CF, U+512A, U+5143, U+5148, U+514D, U+5165, U+5168, U+516C, U+5171, U+5177-5178, U+5185, U+518D, U+51E6, U+51FA, U+5206-5207, U+5217, U+521D, U+5224-5225, U+5229, U+5236, U+524D, U+5272, U+529B, U+52A0, U+52B9, U+52C9, U+52D5, U+52D8-52D9, U+533A, U+5341, U+5352, U+5354, U+5358, U+5370, U+5374, U+53BB, U+53CA, U+53CD, U+53D6-53D7, U+53E4, U+53EF, U+53F7, U+5408, U+540C-540D, U+542B, U+544A, U+5473, U+548C, U+54C1, U+5546, U+554F, U+55B6, U+56DB, U+56DE, U+56F2-56F3, U+56FA, U+56FD, U+571F, U+5728, U+5730, U+57FA, U+5831, U+5897, U+58EB, U+58F2, U+5909, U+5916, U+591A, U+591C, U+5927, U+5931, U+5951, U+59CB, U+5A92, U+5B50, U+5B57-5B58, U+5B66, U+5B85, U+5B89, U+5B8C, U+5B9A, U+5B9F, U+5BB6, U+5BB9, U+5BE9, U+5BFE, U+5C0F, U+5C11, U+5C4B, U+5C65, U+5E02, U+5E2F, U+5E45, U+5E74, U+5E81, U+5E83, U+5EA6, U+5EC3, U+5EFA, U+5F0F, U+5F15, U+5F31, U+5F35, U+5F37, U+5F53, U+5F62, U+5F79, U+5F85, U+5F8B-5F8C, U+5F97, U+5FA9, U+5FC3, U+5FC5, U+5FD8, U+5FDC, U+601D, U+6027, U+60C5, U+60F3, U+610F, U+614B, U+61B6, U+6210, U+6226, U+623B, U+6240, U+624B, U+629E, U+62B5, U+62BC, U+62C5, U+62E0, U+6301, U+6311, U+6357, U+63A2, U+63A7-63A8, U+63AA, U+63F4, U+64CD, U+64EC, U+652F, U+6539, U+653E, U+6557, U+6570, U+6574, U+6587, U+6599, U+65AD, U+65B0, U+65B9, U+65BD, U+65E5, U+660E, U+6613, U+6620, U+6642, U+666E-666F, U+66AE, U+66F4, U+66F8, U+66FF-6700, U+6708-6709, U+671F, U+6728, U+672A-672C, U+6761, U+6765, U+6790, U+679A, U+679C, U+67FB, U+6839, U+683C, U+6848, U+691C, U+696D, U+6982, U+69CB, U+6A19, U+6A21, U+6A29, U+6A5F, U+6B21, U+6B3A, U+6B62-6B63, U+6B74, U+6B8A-6B8B, U+6BCE, U+6C11, U+6C17, U+6C34, U+6C7A, U+6CD5, U+6CE8, U+6D41, U+6D88, U+6E08, U+6E21, U+6E2C, U+6E80, U+6E90, U+6E96, U+6F14, U+706B, U+70B9-70BA, U+7121, U+7136, U+719F, U+7247-7248, U+7269, U+7279, U+72B6, U+72EC, U+7372, U+7387, U+7406, U+7455, U+751F, U+7523, U+7528, U+7531, U+7533, U+753B, U+754C, U+756A, U+75B2, U+75B5, U+767A-767B, U+7684, U+76DB, U+76E3, U+76EE, U+76F4, U+76F8, U+7701, U+7740, U+7763, U+77E5, U+77ED, U+78BA, U+790E, U+793A, U+79D1-79D2, U+79DF, U+79FB, U+7A0B, U+7A0E, U+7A2E, U+7A7A, U+7ACB, U+7AEF, U+7AF6, U+7B2C, U+7B49, U+7B54, U+7B56, U+7B97, U+7BA1, U+7BC0, U+7BC4, U+7BC9, U+7C21, U+7D04, U+7D0D, U+7D19-7D1B, U+7D22, U+7D30, U+7D39, U+7D42, U+7D44, U+7D50, U+7D71, U+7D99-7D9A, U+7DAD, U+7DCF, U+7DE8, U+7E3E, U+7F6E, U+7FA9, U+7FD2, U+8005, U+805E, U+80A2, U+80FD, U+8155, U+81EA, U+81F4, U+822C, U+82E6, U+843D, U+878D, U+884C, U+8868, U+88C1, U+88CF, U+88DC, U+8907, U+8981, U+8987, U+898B, U+898F, U+899A, U+89A7, U+89E3, U+8A08, U+8A18, U+8A2D, U+8A31, U+8A3C, U+8A50, U+8A55, U+8A66, U+8A73, U+8A8D, U+8A9E, U+8AA4, U+8AAC-8AAD, U+8AB2, U+8ABF, U+8AC7, U+8AD6, U+8AF8, U+8B58, U+8B66, U+8B72, U+8B77, U+8C61, U+8CAC, U+8CB7-8CB8, U+8CBB, U+8CC3, U+8CC7, U+8CEA, U+8CFC, U+8D08, U+8D77, U+8D85, U+8DB3, U+8DF5, U+8EAB, U+8FB2, U+8FBC, U+8FD1, U+8FD4, U+8FF0, U+8FFD, U+9000-9001, U+9006, U+901A, U+9020, U+9023, U+9031-9032, U+9045, U+904B, U+904E, U+9054-9055, U+9069, U+9078, U+907F, U+90E8, U+90FD, U+914D, U+916C, U+91CD-91CF, U+91D1, U+9332, U+9451, U+9577, U+9580, U+9589, U+958B, U+9593, U+95A2, U+9632, U+9650, U+9664, U+967A, U+9694, U+96A3, U+96C6, U+96E3, U+975E, U+9762, U+9805-9806, U+9808, U+9811, U+984C-984D, U+985E, U+9A13, U+9AD8;
+}
 /* 細い指定(500 以下。大きな数字の横の単位「/20」「%」・切り替えの件数など)は、この書体の 800 にせず端末の書体(--font-display の次)で
    表示する: どの文字にも当たらない範囲(U+0)の面を細い太さに置くと、細い指定はこの面が選ばれ、文字がないので次の書体に移る
    (この面のファイルは読み込まれない) */
@@ -1311,7 +1321,11 @@ a.topic-card { text-decoration: none; color: inherit; }
 .episode-chip-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin: var(--sp-2) 0; }
 .video-links { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); flex-wrap: wrap; }
 .specials-section { margin-top: var(--sp-5); }
-.specials-section summary { cursor: pointer; font-weight: 700; padding: var(--sp-2) 0; color: var(--color-heading); min-height: 44px; display: flex; align-items: center; gap: var(--sp-2); }
+.specials-section summary { cursor: pointer; font-weight: 700; padding: var(--sp-2) 0; color: var(--color-heading); min-height: 44px; display: flex; align-items: center; gap: var(--sp-2); list-style: none; }
+/* 開閉できることが分かるよう、トピックの基礎知識と同じ下向きの矢印(開くと上向き) */
+.specials-section summary::-webkit-details-marker { display: none; }
+.specials-section summary .chevron { display: inline-flex; margin-left: auto; color: var(--color-text-muted); transition: transform var(--dur-2) var(--ease-std); }
+.specials-section[open] summary .chevron { transform: rotate(180deg); }
 .law-row { padding: var(--sp-3) var(--sp-4); }
 .law-name { font-weight: 700; color: var(--color-heading); display: flex; align-items: center; gap: var(--sp-2); }
 .law-desc { font-size: var(--fs-md); margin: var(--sp-1) 0; line-height: var(--lh-snug); }

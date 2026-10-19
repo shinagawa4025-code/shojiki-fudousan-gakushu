@@ -467,7 +467,7 @@
 /* 320px などの狭い画面では、「あなたの回答」が2行に割れないよう、印を番号の下から始めて1行で出す */
 @media (max-width: 359px) {
   .choice-list-styled .choice-btn.is-done .choice-tags { margin-left: calc(-24px - var(--sp-2)); }
-  .quiz-card .choice-list-styled .choice-btn.is-done .choice-tags { margin-left: calc(-34px - var(--sp-3)); }
+  .quiz-card .choice-list-styled .choice-btn.is-done .choice-tags { margin-left: calc(-34px - var(--sp-3)); margin-top: 12px; }
   .choice-list-styled .choice-tag { white-space: nowrap; }
   .quiz-card .choice-list-styled .choice-btn { gap: var(--sp-2); }
   .quiz-card .choice-list-styled .choice-text { font-size: var(--fs-base); }

@@ -30,6 +30,7 @@ const PRECACHE_URLS = [
   `./css/learning.css`,
   `./css/motion.css`,
   `./fonts/fudomana-rounded-800-base.woff2`,
+  `./fonts/fudomana-rounded-800-kanji-core.woff2`,
   `./fonts/fudomana-rounded-800-kanji.woff2`,
   `./js/siteConfig.js`,
   `./data/episodes.js`,

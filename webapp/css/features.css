@@ -544,6 +544,8 @@
 .plan-none .card-actions, .plan-after > .link-btn { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
 .plan-after > .link-btn { display: inline-flex; gap: var(--sp-1); min-height: 44px; }
 @media (max-width: 359px) {
+  /* 試験の後の「お疲れさまでした」は1行に(吹き出しの幅に収まる大きさ) */
+  .plan-after .plan-days strong { font-size: var(--fs-xl); white-space: nowrap; }
   .plan-items { grid-template-columns: minmax(0, 1fr); }
   .plan-items.is-odd > li:first-child .plan-item { grid-template-columns: minmax(0, 1fr); }
   .plan-days strong { font-size: 3.25rem; }
@@ -891,6 +893,7 @@ body.onb-open .sheet-backdrop { z-index: 180; }
   /* 記録のカウンター: ステッカーを左に、数字・名前・補足を右に */
   .prog-stat { display: grid; grid-template-columns: auto auto; grid-template-areas: "s n" "s l" "s u"; justify-content: center; align-items: center; column-gap: 12px; row-gap: 0; padding: 14px 12px; text-align: left; }
   .prog-stat > .sticker { grid-area: s; width: 44px; height: 44px; margin: 0; }
+  .prog-stat > .sticker .icon { width: 24px; height: 24px; }
   .prog-stat-num { grid-area: n; }
   .prog-stat-label { grid-area: l; }
   .prog-stat-sub { grid-area: u; }

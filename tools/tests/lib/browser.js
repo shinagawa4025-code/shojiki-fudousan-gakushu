@@ -468,9 +468,10 @@ class Page {
       await sleep(100);
     }
   }
-  // 動き(CSS のアニメーション・トランジション)が終わるのを待つ(無限に続く動きは待たない。最大 ms)
+  // 動き(CSS のアニメーション・トランジション)が終わるのを待つ(無限に続く動き・マスコットの待機中のまばたきと揺れ(fd-blink・fd-sway。
+  // 画面を開いてから約10秒続く飾り)は待たない。最大 ms)
   async settle(ms) {
-    await this.waitFor(() => document.getAnimations().filter((a) => a.playState === 'running' && a.effect && a.effect.getComputedTiming().iterations !== Infinity).length === 0, { timeout: ms || 3000 });
+    await this.waitFor(() => document.getAnimations().filter((a) => a.playState === 'running' && a.effect && a.effect.getComputedTiming().iterations !== Infinity && !/^fd-(blink|sway)$/.test(a.animationName || '')).length === 0, { timeout: ms || 3000 });
   }
   // 閉じる(エラー・外部への通信がないことを確かめてから)
   async close() {

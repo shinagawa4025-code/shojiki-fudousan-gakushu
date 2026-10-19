@@ -30,10 +30,15 @@
       "glyphs": 395,
       "bytes": 30832
     },
+    "fudomana-rounded-800-kanji-core.woff2": {
+      "chars": 469,
+      "glyphs": 470,
+      "bytes": 94156
+    },
     "fudomana-rounded-800-kanji.woff2": {
-      "chars": 857,
-      "glyphs": 858,
-      "bytes": 169844
+      "chars": 388,
+      "glyphs": 389,
+      "bytes": 85876
     }
   },
   "count": 1232,
