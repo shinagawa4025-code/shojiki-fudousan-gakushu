@@ -14,7 +14,7 @@ function target(ctx, date, created, extra) {
   setKey(ctx, 'examTargets', [Object.assign({ id: 'et1', name: '宅建士試験', examTypeId: 'takken', date, primary: true,
     createdAt: typeof created === 'string' ? new Date(`${created}T09:00:00`).getTime() : (created === undefined ? Date.UTC(2025, 0, 1) : created) }, extra || {})]);
 }
-const ALLOWED_CATS = ['kenri', 'horei', 'zei', 'gyoho', 'menjo', 'shohi', 'shisan'];
+const ALLOWED_CATS = ['kenri', 'horei', 'zei', 'gyoho', 'menjo', 'shohi', 'shohiho'];
 function hrefOk(ctx, h) {
   let m;
   if ((m = h.match(/^#topics\/([^/]+)$/))) return !!ctx.AppIndex.topicsById[m[1]];
@@ -141,9 +141,17 @@ test('1週間の時間・配分(配点 ×(1.5 − 習熟度))・段階ごとの�
   t.eq(A.map((a) => Math.round(a.share * 50)), [14, 8, 3, 20, 5], '割合 = 配点');
   const snap = { examTypeId: 'takken', categories: [{ id: 'kenri', available: true, mastery: 20 }, { id: 'horei', available: true, mastery: 90 }, { id: 'zei', available: false, mastery: 0 }, { id: 'gyoho', available: true, mastery: 80 }, { id: 'menjo', available: true, mastery: 100 }] };
   const w = Object.fromEntries(ctx.Plan._internal.allocation(ctx.Stats.examType('takken'), snap).map((a) => [a.cat, a.weight]));
-  const raw = { kenri: 14 / 50 * 1.3, horei: 8 / 50 * 0.6, zei: 3 / 50 * 1.5, gyoho: 20 / 50 * 0.7, menjo: 5 / 50 * 0.5 };
+  // 用語も回答もない分野(分析の available: false。執筆中で中身のない分野)は配分しない(v13 の plan.js)
+  const raw = { kenri: 14 / 50 * 1.3, horei: 8 / 50 * 0.6, gyoho: 20 / 50 * 0.7, menjo: 5 / 50 * 0.5 };
   const sum = Object.values(raw).reduce((s, x) => s + x, 0);
-  t.ok(Object.keys(raw).every((k) => Math.abs(w[k] - raw[k] / sum) < 1e-9), '配分 = 配点 ×(1.5 − 習熟度/100)(記録のない分野は習熟度0)', w);
+  t.ok(!('zei' in w) && Object.keys(raw).every((k) => Math.abs(w[k] - raw[k] / sum) < 1e-9), '配分 = 配点 ×(1.5 − 習熟度/100)・中身のない分野(available: false)は配分しない', w);
+  // 分析に行のない分野は習熟度0(まだ手をつけていない)として配分する
+  const snapNoZei = Object.assign({}, snap, { categories: snap.categories.filter((r) => r.id !== 'zei') });
+  const w0 = Object.fromEntries(ctx.Plan._internal.allocation(ctx.Stats.examType('takken'), snapNoZei).map((a) => [a.cat, a.weight]));
+  const raw0 = Object.assign({ zei: 3 / 50 * 1.5 }, raw);
+  const sum0 = Object.values(raw0).reduce((s, x) => s + x, 0);
+  t.ok(Object.keys(raw0).every((k) => Math.abs(w0[k] - raw0[k] / sum0) < 1e-9), '分析に行のない分野は習熟度0', w0);
+  t.eq(ctx.Plan._internal.allocation(null, snap), [], '試験の種類が分からない(null)→ 配分なし(例外を出さない)');
   ctx.Goals.set({ kind: 'minutes', value: 60 });
   const snap2 = { examTypeId: 'takken', categories: [
     { id: 'kenri', mastery: 40, available: true, coverage: 0.5 }, { id: 'horei', mastery: 60, available: true, coverage: 0.8 },
@@ -177,9 +185,20 @@ test('税理士・その他の試験・税理士の試験の後', (t) => {
   let ctx = fresh();
   setKey(ctx, 'examTargets', [{ id: 'z', name: '税理士試験(消費税法)', examTypeId: 'zeirishi', date: ctx.DateUtil.addDays(T, 100), primary: true, createdAt: Date.UTC(2025, 0, 1) }]);
   let c = ctx.Plan.current();
-  t.eq(c.alloc.map((a) => [a.cat, a.share]), [['shisan', 0.5], ['shohi', 0.5]], '税理士: 分野は同じ割合');
+  // 並びは data/exams.js の focusOrder(消費税法 → 不動産と消費税 → 不動産税務)
+  t.eq(c.alloc.map((a) => [a.cat, a.share]), [['shohiho', 0.333], ['shohi', 0.333], ['shisan', 0.333]], '税理士: 分野は同じ割合(消費税法・不動産と消費税・不動産税務の順)');
   t.ok(c.week.every((x) => hrefOk(ctx, x.href)), '税理士: リンク先がある', c.week);
   t.ok(!c.week.some((x) => x.kind === 'exam'), '税理士: 模擬試験は出さない');
+  // 記録がまだない(優先度が並ぶ)税理士: 弱点分析の1位・おすすめ・今週やることの分野の作業は消費税法から
+  const snapZ = ctx.Analysis.analyze('zeirishi');
+  const cz = ctx.Plan.current({ snap: snapZ });
+  t.eq([snapZ.summary.focus && snapZ.summary.focus.id, snapZ.categories.slice().sort((a, b) => a.rank - b.rank).map((r) => r.id),
+    (snapZ.actions.find((a) => a.kind === 'read') || {}).nav, (cz.week.find((x) => x.cat) || {}).cat],
+  ['shohiho', ['shohiho', 'shohi', 'shisan'], '#topics/topicR', 'shohiho'], '税理士で記録なし: 消費税法を先に(優先の分野・順位・おすすめ・今週やること)');
+  t.eq(ctx.Plan._internal.allocation(ctx.Stats.examType('takken'), null).map((a) => a.cat), ['kenri', 'horei', 'zei', 'gyoho', 'menjo'], '宅建士(focusOrder なし)の配分の並びは categories の順のまま');
+  setKey(ctx, 'examTargets', [{ id: 'z', name: '税理士試験(消費税法)', examTypeId: 'zeirishi', date: ctx.DateUtil.addDays(T, 10), primary: true, createdAt: Date.UTC(2025, 0, 1) }]);
+  c = ctx.Plan.current();
+  t.ok(c.phase.id === 'final' && c.week.some((x) => x.href === '#ox/cat/shohiho/20') && c.week.every((x) => hrefOk(ctx, x.href)), '税理士の直前: 消費税法の○×(#ox/cat/shohiho/20)・リンク先がある', c.week);
   setKey(ctx, 'examTargets', [{ id: 'o', name: '何かの試験', examTypeId: 'other', date: ctx.DateUtil.addDays(T, 30), primary: true, createdAt: Date.UTC(2025, 0, 1) }]);
   c = ctx.Plan.current();
   t.ok(c.state === 'before' && c.week.some((x) => x.href === '#ox') && c.week.some((x) => x.href === '#quiz'), 'その他の試験 → ○×と4択', c.week);

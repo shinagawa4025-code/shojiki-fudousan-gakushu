@@ -110,10 +110,18 @@ window.Plan = (function () {
 
   // [{ cat, label, share, mastery, weight, topicIds }](weight は合計1)
   function allocation(type, snap) {
+    // 目標の試験の種類が分からない(読み込んだ記録の examTypeId が不正など。Stats.examType が null)ときは配分なし
+    if (!type) return [];
     const rows = snapRows(snap, type.id);
     // 弱点分析で用語も回答も1つもない分野(執筆中で中身のまだない分野)は配分しない(空のトピックへ案内しないため)
     const cats = categoriesOf(type).filter((c) => !rows || !rows[c.id] || rows[c.id].available !== false);
     if (!cats.length) return [];
+    // 試験ごとの focusOrder(data/exams.js。税理士は消費税法を先に)があれば、その順に並べる(重みが並んだときの順になる)
+    if (Array.isArray(type.focusOrder)) {
+      const pref = type.focusOrder;
+      const idx = (id) => (pref.indexOf(id) < 0 ? pref.length : pref.indexOf(id));
+      cats.sort((a, b) => idx(a.id) - idx(b.id));
+    }
     const qs = cats.map((c) => (typeof c.questions === `number` && c.questions > 0 ? c.questions : 0));
     const qsum = qs.reduce((s, n) => s + n, 0);
     const list = cats.map((c, i) => {

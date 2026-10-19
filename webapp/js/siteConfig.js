@@ -24,7 +24,7 @@ window.SITE = (function () {
     // (v12 は宅建士試験(2026-10-18)の後に公開する。日付を変えたら data/changelog.js の v12 と about.js の PRIVACY_DATES.revised も合わせる)
     releasedAt: `2026-10-19`,
     // 内容(法令・税制・統計)を確認した基準日
-    contentAsOf: `2026-10-15`,
+    contentAsOf: `2026-10-17`,
     // バックアップファイル名などに使う英字の名前
     backupSlug: `fudomana`,
     report,

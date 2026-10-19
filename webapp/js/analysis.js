@@ -433,7 +433,11 @@ window.Analysis = (function () {
         available,
       }, r, { priority: available ? Math.round(importance * (100 - r.mastery)) / 100 : 0 });
     });
-    rows.slice().sort((a, b) => (Number(b.available) - Number(a.available)) || (b.priority - a.priority) || ((b.questions || 0) - (a.questions || 0)))
+    // 並んだときは試験ごとの focusOrder(data/exams.js。税理士は消費税法を先に)、なければ categories の順
+    const pref = Array.isArray(type.focusOrder) ? type.focusOrder : [];
+    const prefIdx = (id) => (pref.indexOf(id) < 0 ? pref.length : pref.indexOf(id));
+    rows.slice().sort((a, b) => (Number(b.available) - Number(a.available)) || (b.priority - a.priority) || ((b.questions || 0) - (a.questions || 0))
+      || (prefIdx(a.id) - prefIdx(b.id)))
       .forEach((r, i) => { r.rank = i + 1; });
     return rows;
   }
@@ -641,7 +645,8 @@ window.Analysis = (function () {
     if (due > 0) {
       cands.push({ kind: `review`, title: `今日の復習(${due}件)`, detail: `復習のタイミングが来た用語があります。忘れかけた今が覚え直しどき`, nav: `#review`, icon: `repeat`, priority: 0.55 + Math.min(due, 40) / 100 });
     }
-    snap.categories.forEach((r) => {
+    // 分野の順位の順に候補へ入れる(優先度が並んだときも順位の順に出す)
+    snap.categories.slice().sort((a, b) => (a.rank || 0) - (b.rank || 0)).forEach((r) => {
       const a = categoryAction(r, snap.ctx);
       if (a) cands.push(a);
     });

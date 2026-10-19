@@ -86,13 +86,16 @@ window.Recommend = (function () {
     return Math.max(1, Math.ceil(sec / 60));
   }
 
-  // 試験向けの基礎知識の順: 優先して伸ばしたい分野(なければ出題数の多い分野。税理士は消費税法 → 不動産と消費税)のトピックから
+  // 試験向けの基礎知識の順: 優先して伸ばしたい分野 → 出題数の多い分野 → 試験ごとの focusOrder(data/exams.js。
+  // 税理士は消費税法 → 不動産と消費税 → 不動産税務)→ categories の順で、その分野のトピックから
   // (基礎知識の残っていないトピックは nextTheme が飛ばす)
   function examTopicOrder(type, focusId) {
-    const firsts = focusId ? [focusId] : (type.id === `zeirishi` ? [`shohiho`, `shohi`] : []);
+    const firsts = focusId ? [focusId] : [];
     const rank = (c) => (firsts.includes(c.id) ? firsts.indexOf(c.id) : firsts.length);
+    const pref = Array.isArray(type.focusOrder) ? type.focusOrder : [];
+    const prefIdx = (c) => (pref.includes(c.id) ? pref.indexOf(c.id) : pref.length);
     const cats = type.categories.map((c, i) => ({ c, i })).sort((a, b) => (rank(a.c) - rank(b.c))
-      || ((Number(b.c.questions) || 0) - (Number(a.c.questions) || 0)) || (a.i - b.i)).map((x) => x.c);
+      || ((Number(b.c.questions) || 0) - (Number(a.c.questions) || 0)) || (prefIdx(a.c) - prefIdx(b.c)) || (a.i - b.i)).map((x) => x.c);
     const out = [];
     cats.forEach((c) => (c.topicIds || []).forEach((id) => { if (topicById(id) && !out.includes(id)) out.push(id); }));
     return out;

@@ -54,6 +54,9 @@ window.APP_DATA.exams = {
       name: `税理士試験`,
       shortName: `税理士`,
       mockExam: false,
+      // 優先順位が並んだとき(出題数の目安がなく、まだ記録もないときなど)の分野の順。弱点分析の順位・学習計画の配分の並び・
+      // ホームの「新しい基礎知識」の順で使う(科目としての消費税法を先に案内する)。省略した試験は categories の順
+      focusOrder: [`shohiho`, `shohi`, `shisan`],
       categories: [
         { id: `shisan`, name: `不動産税務`, questions: null, topicIds: [`topicH`], termIds: [`basicB04`, `basicB05`, `basicB06`, `basicB08`, `basicC05`] },
         { id: `shohi`, name: `不動産と消費税`, questions: null, topicIds: [`topicO`], termIds: [`basicH13`] },

@@ -158,6 +158,14 @@ window.AppIndex = (function () {
     dupCheck(`クイズ`, data.quiz.map((q) => q.id));
     dupCheck(`トピック`, data.topics.map((t) => t.id));
     dupCheck(`情報源`, data.sources.map((s) => s.id));
+    // 名前の重複(用語・基礎知識・トピックどうし): 学習ページ(tools/static_pages.js が作る learn/)の title が重なって公開できなくなり、
+    // 用語集・検索にも同じ見出しが2つ並ぶため、ここで先に見つける
+    const nameSeen = dict();
+    allTerms.concat(data.topics).forEach((t) => {
+      if (!t || typeof t.name !== `string`) return;
+      if (nameSeen[t.name]) issues.push(`${t.id}: 名前が ${nameSeen[t.name]} と同じ「${t.name}」(learn/ のページの title が重複する)`);
+      else nameSeen[t.name] = t.id;
+    });
     retiredQuizMissing.forEach((id) => issues.push(`retiredQuizIds: 存在しない問題 ${id}`));
 
     // 試験分野の明示 examCats: { 試験ID: 分野ID | null }(null は「その試験の範囲外」)。js/stats.js の categoryOf が最優先で使う

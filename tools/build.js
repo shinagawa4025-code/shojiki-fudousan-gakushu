@@ -37,12 +37,15 @@ const cssplit = require('./lib/cssplit.js');
 
 // 初回の表示(ホーム)に要る JS+CSS。v12.2 で CSS を最初の表示の分と詳細に分け、v12(約230KB)より小さくなったので
 // 300KB → 240KB に見直した(ホームが v12 より遅くならないように)。CSS は最初の描画(FCP)を止めるので別にも見る
-const BUDGET_FIRST = 240 * 1024;
+// v13 で4択が約800問から約1,000問に増え(消費税法130問・個数/組合せ60問)、本体のデータ(問題文など。ホームの集計と検索が使う)が
+// 大きくなったため 250KB に見直した(2026-10-19 時点で約243KB)。これ以上増えるときは、問題文を詳細の束に移すことを検討する
+const BUDGET_FIRST = 250 * 1024;
 const BUDGET_FIRST_CSS = 25 * 1024;
 // 詳細を含めた JS+CSS。v12 で4択を約520問から約800問(+54%)に増やし、詳細の束(解説・選択肢・記述ア〜エ)が大きくなったため
 // 800KB → 1,000KB に見直した(2026-10 時点で約900KB。v12.2 で詳細の CSS(元の CSS の全部。最初の表示の CSS と重なる約19KB を含む)
 // が加わり約960KB)。詳細はホームを描いたあとに読み込むので、ホームの速さは上の BUDGET_FIRST で見る
-const BUDGET_TOTAL = 1000 * 1024;
+// v13 で問題が約1,000問になり約1,090KB になったため 1,150KB に見直した
+const BUDGET_TOTAL = 1150 * 1024;
 const SKIP_DIRS = new Set(['js', 'css', 'data']); // まとめたので公開しない(古い Service Worker が新旧のファイルを混ぜて保存しないように)
 const JUNK = /^(desktop\.ini|thumbs\.db|\..*)$/i;
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');

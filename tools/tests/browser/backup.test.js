@@ -123,8 +123,8 @@ B.test('前の版(v11.1)のファイル: すべてのキーをそのまま読み
   t.ok(C.dailyGoal == null && C.answerPrefs == null && C.answerDaily == null, '前の記録(新しいキー)は消して既定に戻る', C);
   t.eq(await p.evaluate(() => Goals.get()), { kind: 'actions', value: 10 }, '1日の目標は既定');
   await p.go('home');
-  const news = await p.waitFor(() => { const c = document.querySelector('.home-news'); return c && c.textContent; });
-  t.ok(news && /合格予測/.test(news) && /学習計画/.test(news) && !(await p.exists('.onb-overlay')), 'お知らせのカード(初回ガイドなし)', news && news.slice(0, 100));
+  const news = await p.waitFor(() => { const c = document.querySelector('.home-news'); return c && c.textContent.replace(/\s+/g, ' '); });
+  t.ok(news && /新しくなりました/.test(news) && /消費税法/.test(news) && /合格予測/.test(news) && /学習計画/.test(news) && !(await p.exists('.onb-overlay')), 'お知らせのカード(初回ガイドなし。v11 の記録なので v12 の合格予測・学習計画も案内)', news && news.slice(0, 400));
 });
 
 B.test('悪意のあるファイル(__proto__・HTML)・壊れた中身: 汚染なし・スクリプトが動かない・すべての画面が出る', async (t) => {

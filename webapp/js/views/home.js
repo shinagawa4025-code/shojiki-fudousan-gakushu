@@ -1128,10 +1128,16 @@ window.Views.home = (function () {
     const styledCount = window.APP_DATA && Array.isArray(APP_DATA.quiz) ? APP_DATA.quiz.filter((q) => isMc(q) && q.style).length : 0;
     // v13(onboarding.js の WHATS_NEW を v13 にしたとき): 消費税法の全体・個数問題/組合せ問題の増量・模擬試験の枠
     const shohihoCount = window.APP_DATA && Array.isArray(APP_DATA.quiz) ? APP_DATA.quiz.filter((q) => isMc(q) && q.examCats && q.examCats.zeirishi === `shohiho`).length : 0;
+    // 3桁区切り(更新履歴の「約1,000問」と表記をそろえる)
+    const comma = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, `,`);
+    // v12 より前の版から直接更新した人(v12 のお知らせを見ていない)には、v12 で追加した機能も1行で案内する
+    const seen = Storage.get(`seenWhatsNew`, null);
+    const missedV12 = seen !== `v12` && seen !== `v13`;
     const items = version === `v13` ? [
       shohihoCount ? `税理士試験の<a href="#topics/topicR">消費税法</a>を、法律の全体(課税の対象・納税義務・税額の計算・簡易課税・申告・インボイスなど)に広げました。新しいトピック3つと4択${shohihoCount}問(計算問題を含む)です` : ``,
       styledCount ? `本試験と同じ形式の「個数問題」「組合せ問題」を${styledCount}問に増やし、模擬試験(本番形式)では宅建業法6問・権利関係1問・法令上の制限2問を出します` : ``,
-      mcCount >= 300 ? `4択問題は全部で約${Math.round(mcCount / 50) * 50}問になりました` : ``,
+      mcCount >= 300 ? `4択問題は全部で約${comma(Math.round(mcCount / 50) * 50)}問になりました` : ``,
+      missedV12 ? `前の版では<a href="#progress/predict">合格予測</a>・試験日から逆算した<a href="#plan">学習計画</a>・1日の目標と<a href="#progress/badges">バッジ</a>も追加しています` : ``,
       profileHint,
     ].filter(Boolean) : version === `v12` ? [
       mcCount >= 300 ? `4択問題を約${Math.round(mcCount / 50) * 50}問に増やしました${styledCount ? `(本試験と同じ形式の「個数問題」「組合せ問題」${styledCount}問を含む)` : ``}` : ``,
