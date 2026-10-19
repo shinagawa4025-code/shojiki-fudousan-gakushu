@@ -151,7 +151,10 @@ B.test('PC: 動きを減らす設定・判定のバーの位置とそろえ方�
   const col = await p.evaluate(() => { const c = document.querySelector('.ox-card').getBoundingClientRect(); const l = document.querySelector('.ox-feedback .quiz-fb-live').getBoundingClientRect(); const a = document.querySelector('.ox-feedback .quiz-fb-actions').getBoundingClientRect(); return { cl: Math.round(c.left), cr: Math.round(c.right), ll: Math.round(l.left), ar: Math.round(a.right) }; });
   const side = await p.evaluate(() => Math.round(document.getElementById('view-root').getBoundingClientRect().left)); // 本文の列の左端(= サイドバーの右端)
   t.ok(side > 0 && Math.abs(s.fb.l - side) <= 1 && Math.abs(s.fb.b - s.vh) <= 1 && Math.abs(col.cl - col.ll) <= 2 && Math.abs(col.cr - col.ar) <= 2, 'PC の判定のバーはサイドバーの右・列にそろう', { fb: s.fb, col, side });
-  t.ok(await p.evaluate(() => getComputedStyle(document.querySelector('.ox-keys')).display !== 'none'), 'PC ではキーの案内を出す');
+  // キーの案内はマウスなどで操作する端末だけに出す(ox.css: (hover: none), (pointer: coarse) では隠す)。
+  // CI のブラウザ(画面のない Linux)はマウスがない扱いになるので、端末の申告どおりに出し分けているかを確かめる
+  const keys = await p.evaluate(() => ({ coarse: matchMedia('(hover: none), (pointer: coarse)').matches, shown: getComputedStyle(document.querySelector('.ox-keys')).display !== 'none' }));
+  t.ok(keys.shown === !keys.coarse, 'キーの案内はマウス操作の端末だけに出す', keys);
 });
 
 B.test('通常の○×(自信度なし): 2つのボタン・数字キーと自動で次へ・矢印キー・Enter(PC)', async (t) => {
