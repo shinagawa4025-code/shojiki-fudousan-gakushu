@@ -1126,8 +1126,14 @@ window.Views.home = (function () {
     // 以前から使っている人は学ぶ目的が未設定(ホームは暮らし向けの表示になる)ので、設定の場所を案内する
     const profileHint = Stats.getProfile && !Stats.getProfile() ? `<a href="#settings/profile">学ぶ目的</a>(宅建士試験・暮らし・仕事・税理士試験)を選ぶと、ホームのおすすめが目的に合わせて変わります` : ``;
     const styledCount = window.APP_DATA && Array.isArray(APP_DATA.quiz) ? APP_DATA.quiz.filter((q) => isMc(q) && q.style).length : 0;
-    // v12(onboarding.js の WHATS_NEW を v12 にしたとき): 合格予測・学習計画・学習時間と目標・バッジ・個数問題など
-    const items = version === `v12` ? [
+    // v13(onboarding.js の WHATS_NEW を v13 にしたとき): 消費税法の全体・個数問題/組合せ問題の増量・模擬試験の枠
+    const shohihoCount = window.APP_DATA && Array.isArray(APP_DATA.quiz) ? APP_DATA.quiz.filter((q) => isMc(q) && q.examCats && q.examCats.zeirishi === `shohiho`).length : 0;
+    const items = version === `v13` ? [
+      shohihoCount ? `税理士試験の<a href="#topics/topicR">消費税法</a>を、法律の全体(課税の対象・納税義務・税額の計算・簡易課税・申告・インボイスなど)に広げました。新しいトピック3つと4択${shohihoCount}問(計算問題を含む)です` : ``,
+      styledCount ? `本試験と同じ形式の「個数問題」「組合せ問題」を${styledCount}問に増やし、模擬試験(本番形式)では宅建業法6問・権利関係1問・法令上の制限2問を出します` : ``,
+      mcCount >= 300 ? `4択問題は全部で約${Math.round(mcCount / 50) * 50}問になりました` : ``,
+      profileHint,
+    ].filter(Boolean) : version === `v12` ? [
       mcCount >= 300 ? `4択問題を約${Math.round(mcCount / 50) * 50}問に増やしました${styledCount ? `(本試験と同じ形式の「個数問題」「組合せ問題」${styledCount}問を含む)` : ``}` : ``,
       `<a href="#progress/predict">合格予測</a>を追加しました。最近の4択・模擬試験の分野別の正答率から、得点の見込みを幅つきで表示します(アプリ独自の推定です)`,
       `試験日から逆算した<a href="#plan">学習計画</a>を追加しました。いまの時期と「今週やること」がホームにも出ます`,

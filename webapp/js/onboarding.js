@@ -9,7 +9,7 @@ window.Onboarding = (function () {
   const PREFIX = `shojikiLearn.v1.`;
   // ホームの「アプリが新しくなりました」の版。内容を変えたらここを変えると、既存の利用者に1度だけ表示される
   // (v12: 4択約800問・個数/組合せ・合格予測・学習計画・目標/学習時間/バッジ・「勘で当たった」。文言は views/home.js の whatsNewCard)
-  const WHATS_NEW = `v12`;
+  const WHATS_NEW = `v13`;
   // 起動時に自動で書き込まれる・ガイド自身が使うキー、学習記録ではないキーは「既存ユーザー」の判定に含めない
   const IGNORE_KEYS = [`themePreference`, `ttsRate`, `oxPrefs`, `quizPrefs`, `srsMigrated`, `schemaVersion`, `onboardingDone`, `seenWhatsNew`,
     `lastBackupAt`, `backupNoteDismissedAt`, `installNoteDismissedAt`, `learnerProfile`, `seenReviewTip`, `glossaryMode`, `audience`,
