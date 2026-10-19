@@ -1076,6 +1076,8 @@ window.Views.ox = (function () {
       else aiBox.remove();
 
       live.innerHTML = verdictHtml(a, review, fresh);
+      // 連続正解 3・5・10問(js/motion.js): 「n問連続!」の札と小さな紙吹雪
+      if (fresh && a.ok && !a.unsure && window.Motion) Motion.streak(fb, okRunAt(sess, sess.index));
       actions.innerHTML = `
         <button type="button" class="btn btn-secondary btn-lg quiz-explain-toggle" data-role="explain-toggle" aria-expanded="false" aria-controls="${resultId}"></button>
         <button type="button" class="btn btn-lg quiz-next ox-next" data-role="next"><span>${isLast ? `結果を見る` : `つづける`}</span>${ic(isLast ? `flag` : `arrow-right`, 20)}</button>`;
@@ -1324,6 +1326,8 @@ window.Views.ox = (function () {
       if (complete && hero && window.Mascot && typeof Mascot.confetti === `function`) {
         try { Mascot.confetti(hero); } catch (e) { /* 飾りなので失敗しても続ける */ }
       }
+      // 正解の数を 0 から数え上げる(js/motion.js)
+      if (window.Motion) Motion.countIn(wrap.querySelector(`.ox-score`));
     }
   }
 

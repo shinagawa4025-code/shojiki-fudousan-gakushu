@@ -46,16 +46,16 @@ const fail = (m) => { failures.push(m); console.log(GH ? `::error::smoke: ${m}` 
 const ok = (m) => console.log(`ok   ${m}`);
 
 // ---- GitHub Pages に似せた静的サーバー ----
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.map': 'application/json' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.map': 'application/json', '.woff2': 'font/woff2' };
 function startServer(root, port) {
   const log = [];
   const sockets = new Set();
-  // slow: { re, ms } に合う URL は ms だけ遅らせて返す(遅い通信の確認用)
+  // slow: { re, ms } に合う URL は ms(数か、URL から決める関数)だけ遅らせて返す(遅い通信の確認用)
   const ctl = { slow: null };
   const server = http.createServer((req, res) => {
     const url = decodeURIComponent(req.url.split('?')[0]);
     log.push(url);
-    if (ctl.slow && ctl.slow.re.test(url)) { const ms = ctl.slow.ms; setTimeout(() => respond(req, res, url), ms); return; }
+    if (ctl.slow && ctl.slow.re.test(url)) { const ms = typeof ctl.slow.ms === 'function' ? ctl.slow.ms(url) : ctl.slow.ms; setTimeout(() => respond(req, res, url), ms); return; }
     respond(req, res, url);
   });
   function respond(req, res, url) {
@@ -87,28 +87,54 @@ function startServer(root, port) {
 }
 
 // ---- ブラウザと DevTools プロトコル ----
-function findBrowser() {
-  // Linux は GitHub のランナー(ubuntu-24.04・26.04 とも Chrome・Chromium・Edge 入り)の置き場所を順に探す
+// 使えるブラウザの候補(見つかった順)。--browser・CHROME_PATH・CHROME_BIN を最初に。
+// Linux は GitHub のランナー(ubuntu-24.04・26.04 とも Chrome・Chromium・Edge 入り)の置き場所を順に探す。
+// Windows・Mac は Edge を先に、次に Chrome(Edge のヘッドレスが起動しない版があるので、起動できなければ次の候補を使う。launchAny)
+function findBrowsers() {
+  const local = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe') : null;
   const c = [opt('--browser'), process.env.CHROME_PATH, process.env.CHROME_BIN,
     '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/opt/google/chrome/chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium',
     '/usr/bin/microsoft-edge', '/usr/bin/microsoft-edge-stable',
-    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
-  return c.find((p) => p && fs.existsSync(p)) || null;
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', local,
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
+  return [...new Set(c.filter((p) => p && fs.existsSync(p)))];
 }
+function findBrowser() { return findBrowsers()[0] || null; }
 
 async function launch(exe) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-'));
   const flags = ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-background-networking', '--disable-sync', '--disable-component-update', '--window-size=390,844'];
   if (process.platform === 'linux') flags.push('--no-sandbox', '--disable-dev-shm-usage');
+  // Edge 155 以降の Windows 版は、起動し直す仕組み(互換レイヤー)のせいでヘッドレスだとすぐ終わる(終了コード 0)。起動し直さないようにする
+  if (/msedge(\.exe)?$|Microsoft Edge$/i.test(exe)) flags.push('--edge-skip-compat-layer-relaunch');
   const proc = spawn(exe, [...flags, 'about:blank'], { stdio: 'ignore' });
+  let exited = null;
+  proc.on('exit', (code, signal) => { exited = `終了コード ${code}${signal ? `・${signal}` : ''}`; });
+  proc.on('error', (e) => { exited = e.message; });
   const portFile = path.join(dir, 'DevToolsActivePort');
-  for (let i = 0; i < 150 && !fs.existsSync(portFile); i++) await sleep(100);
-  if (!fs.existsSync(portFile)) { proc.kill(); throw new Error('ブラウザが起動しませんでした(DevToolsActivePort がない)'); }
+  for (let i = 0; i < 150 && !fs.existsSync(portFile) && !exited; i++) await sleep(100);
+  const cleanup = async () => { try { proc.kill(); } catch (e) { /* 終了済み */ } await sleep(300); try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* 使用中 */ } };
+  if (!fs.existsSync(portFile)) { await cleanup(); throw new Error(exited ? `ブラウザがすぐに終了しました(${exited})` : 'ブラウザが起動しませんでした(DevToolsActivePort がない)'); }
   let lines = [];
-  for (let i = 0; i < 50; i++) { lines = fs.readFileSync(portFile, 'utf8').trim().split('\n'); if (lines.length >= 2) break; await sleep(100); }
+  for (let i = 0; i < 50; i++) { try { lines = fs.readFileSync(portFile, 'utf8').trim().split('\n'); } catch (e) { lines = []; } if (lines.length >= 2) break; await sleep(100); }
+  if (lines.length < 2) { await cleanup(); throw new Error('ブラウザの DevToolsActivePort が読めません'); }
   const cdp = await CDP.connect(`ws://127.0.0.1:${lines[0]}${lines[1]}`);
-  return { cdp, close: async () => { try { await cdp.send('Browser.close'); } catch (e) { /* 終了済み */ } await sleep(500); try { proc.kill(); } catch (e) { /* 終了済み */ } try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* 使用中 */ } } };
+  return { cdp, exe, close: async () => { try { await cdp.send('Browser.close'); } catch (e) { /* 終了済み */ } await sleep(500); try { proc.kill(); } catch (e) { /* 終了済み */ } try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* 使用中 */ } } };
+}
+
+// 候補を順に起動して、最初に動いたものを使う(どれも起動できなければ最後の理由で失敗)
+async function launchAny(list) {
+  let last = null;
+  for (const exe of list) {
+    try {
+      return await launch(exe);
+    } catch (e) {
+      last = e;
+      console.log(`info ブラウザ ${exe} を起動できませんでした(${e.message})${list.indexOf(exe) < list.length - 1 ? '。次の候補を試します' : ''}`);
+    }
+  }
+  throw last || new Error('Chrome / Edge が見つかりません');
 }
 
 class CDP {
@@ -428,7 +454,7 @@ async function checkAfterExam(browser, base) {
 
 // 9. 公開版で詳細の束が遅いとき(サーバーで3秒遅らせ、Service Worker とブラウザのキャッシュを使わないページで)
 async function checkSlowDetail(browser, base, server) {
-  server.ctl.slow = { re: /\/assets\/detail\.[0-9a-f]+\.js$/, ms: 3000 };
+  server.ctl.slow = { re: /\/assets\/detail\.[0-9a-f]+\.(js|css)$/, ms: 3000 };
   const page = await openPage(browser.cdp);
   try {
     await page.send('Network.enable');
@@ -467,6 +493,27 @@ async function checkSlowDetail(browser, base, server) {
     const y = await page.eval('window.scrollY');
     if (!pend2 || !shown2 || savedY < 100 || Math.abs(y - savedY) > 2) fail(`詳細が遅いとき: 再読み込みでスクロール位置に戻りません(読み込み中 ${pend2}・表示 ${shown2}・保存 ${savedY}・今 ${y})`);
     else ok(`詳細が遅いとき: 再読み込みで「読み込み中」のあと保存した位置(${y}px)に戻る`);
+    // 詳細の CSS が JS より遅いとき(直リンク #quiz と、ホームから開いたとき): 画面は詳細の CSS が効いてから描く(見た目のない画面を出さない)。
+    // ホームと初回ガイドは最初の表示の CSS だけで描ける(tools/lib/cssplit.js)。ホーム以外の画面が初めて出た瞬間に、詳細の CSS があるか
+    server.ctl.slow = { re: /\/assets\/detail\.[0-9a-f]+\.(js|css)$/, ms: (u) => (/\.css$/.test(u) ? 4000 : 300) };
+    const FOUC = `(() => { const css = () => Array.prototype.some.call(document.styleSheets, (s) => (s.href || '').indexOf('/assets/detail.') >= 0 && (s.href || '').indexOf('.css') >= 0);
+      const mo = new MutationObserver(() => { if (window.__fouc) return; const v = document.querySelector('#view-root .view:not(.view-pending):not(.home-view)'); if (!v) return;
+        window.__fouc = { view: v.className, css: css(), info: window.AppData ? AppData.info() : null }; });
+      document.addEventListener('DOMContentLoaded', () => { window.__homeCss = css(); mo.observe(document.getElementById('view-root'), { childList: true, subtree: true }); }); })();`;
+    const { identifier } = await page.send('Page.addScriptToEvaluateOnNewDocument', { source: FOUC });
+    for (const [label, start, go] of [['直リンク #quiz', 'quiz', null], ['ホームから #exam', 'home', 'exam']]) {
+      await navigateNoWait(page, `${base}index.html?fouc=${start}#${start}`);
+      if (go) {
+        await page.waitFor(`window.__appBooted === true && !!document.querySelector('#view-root .home-view')`, 20000);
+        await page.eval(`location.hash = '#${go}'; true`);
+      }
+      const seen = await page.waitFor('!!window.__fouc', 20000);
+      const f = await page.eval('window.__fouc || null');
+      if (!seen || !f) fail(`詳細の CSS が遅いとき(${label}): 画面が出ません ${JSON.stringify(await page.eval(STATE).catch(() => null))}`);
+      else if (!f.css || !f.info || f.info.css !== 'ready' || f.info.state !== 'ready') fail(`詳細の CSS が遅いとき(${label}): 詳細の CSS が効く前に画面を描きました ${JSON.stringify(f)}`);
+      else ok(`詳細の CSS が遅いとき(${label}): 画面は詳細の CSS が効いてから出る(CSS ${f.info.cssAt}ms・JS ${f.info.loadedAt}ms)`);
+    }
+    await page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier });
     if (page.errors.length) page.errors.forEach((e) => fail(`詳細が遅いとき: ${e}`));
   } finally {
     server.ctl.slow = null;
@@ -482,9 +529,9 @@ const STATE = `(() => { const v = document.querySelector('#view-root .view'); re
 async function main() {
   if (!fs.existsSync(path.join(SITE, 'index.html'))) { fail(`${SITE}/index.html がありません`); return; }
   const staticPages = checkStaticFiles();
-  const exe = findBrowser();
-  if (!exe || typeof WebSocket === 'undefined') {
-    const why = !exe ? 'Chrome / Edge が見つかりません' : 'この Node には WebSocket がありません(Node 22 以上が必要)';
+  const browsers = findBrowsers();
+  if (!browsers.length || typeof WebSocket === 'undefined') {
+    const why = !browsers.length ? 'Chrome / Edge が見つかりません' : 'この Node には WebSocket がありません(Node 22 以上が必要)';
     if (REQUIRE) fail(why); else console.log(`SKIP ${why}(ブラウザでの確認を省きます)`);
     return;
   }
@@ -496,8 +543,8 @@ async function main() {
   const exp = expected();
   const server = await startServer(SITE, Number(opt('--port')) || 0);
   const base = `http://127.0.0.1:${server.port}${BASE_PATH}`;
-  console.log(`配信 ${base}(${SITE})・ブラウザ ${exe}`);
-  const browser = await launch(exe);
+  const browser = await launchAny(browsers);
+  console.log(`配信 ${base}(${SITE})・ブラウザ ${browser.exe}`);
   const result = { cacheName };
   let deepIds = null;
   try {

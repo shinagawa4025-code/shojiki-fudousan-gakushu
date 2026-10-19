@@ -10,6 +10,11 @@
   <!-- GitHub Pages が存在しないURLで返すページ。サイトの階層に関係なく表示できるよう、パスはすべて絶対パスで書く。
        アプリの CSS は読めないので、色はアプリのトークン(css/style.css)と同じ値をここに書く -->
   <style>
+    /* 見出し・ボタンはアプリと同じ丸ゴシック(css/style.css の @font-face と同じファイル)。漢字は最初の画面用の小さなファイル(kanji-core。
+       見出しの「見」が入っている)だけを使う。待たずに端末の書体で表示し、すでに読み込んだことがあるときだけ使う(optional: 文字が後から入れ替わらない) */
+    @font-face { font-family: "Fudomana Rounded"; src: url("/shojiki-fudousan-gakushu/fonts/fudomana-rounded-800-base.woff2") format("woff2"); font-weight: 800; font-style: normal; font-display: optional; unicode-range: U+0-33FF, U+4DC0-4DFF, U+A000-F8FF, U+FB00-FFFF; }
+    @font-face { font-family: "Fudomana Rounded"; src: url("/shojiki-fudousan-gakushu/fonts/fudomana-rounded-800-kanji-core.woff2") format("woff2"); font-weight: 800; font-style: normal; font-display: optional; unicode-range: U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+20000-3FFFF; }
+    :root { --font-display: "Fudomana Rounded", "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif; }
     :root { --bg: #f5f8f3; --text: #16211a; --muted: #56665b; --primary: #1e7a4c; --on-primary: #fff; --lip: #135a36; --ground: #dfe7db;
       --m-roof: #1e7a4c; --m-roof-dark: #135a36; --m-body: #fff6e2; --m-door: #f2b01e; --m-ink: #1f2a22; --m-cheek: #f6a540; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif; background: var(--bg); color: var(--text); display: grid; place-items: center; min-height: 100vh; padding: 24px 16px; box-sizing: border-box; text-align: center; line-height: 1.75; letter-spacing: .02em; }
@@ -28,11 +33,11 @@
     .m-ink { fill: var(--m-ink); }
     .m-line { fill: none; stroke: var(--m-ink); stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
     .m-bub { fill: var(--muted); opacity: .7; }
-    h1 { margin: 20px 0 8px; font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif; font-size: 1.5rem; font-weight: 800; line-height: 1.3; letter-spacing: .03em; font-feature-settings: "palt"; }
+    h1 { margin: 20px 0 8px; font-family: var(--font-display); font-size: 1.5rem; font-weight: 800; line-height: 1.3; letter-spacing: .03em; font-feature-settings: "palt"; }
     h1, p { text-wrap: balance; }
     p { margin: 0; color: var(--muted); }
     /* アプリのボタンと同じ形: 緑の面+下のふち。押すと沈む */
-    a { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; margin-top: 24px; padding: 10px 24px; box-sizing: border-box; border-radius: 16px; background: var(--primary); color: var(--on-primary); text-decoration: none; font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif; font-weight: 800; letter-spacing: .04em; box-shadow: 0 4px 0 var(--lip); transition: transform 120ms, box-shadow 120ms; }
+    a { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; margin-top: 24px; padding: 10px 24px; box-sizing: border-box; border-radius: 16px; background: var(--primary); color: var(--on-primary); text-decoration: none; font-family: var(--font-display); font-weight: 800; letter-spacing: .04em; box-shadow: 0 4px 0 var(--lip); transition: transform 120ms, box-shadow 120ms; }
     a:active { transform: translateY(4px); box-shadow: 0 0 0 var(--lip); }
     a:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
     @media (prefers-reduced-motion: reduce) { a { transition: none; } }

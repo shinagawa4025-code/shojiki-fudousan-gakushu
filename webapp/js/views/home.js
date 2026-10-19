@@ -481,6 +481,13 @@ window.Views.home = (function () {
         ${sticker(`medal`, `sticker-sm sticker-gold`, 20)}
         <span class="stat-text" aria-hidden="true"><span class="stat-num"><b>${badges}</b><small>個</small></span><span class="stat-label">バッジ</span></span>
       </a>`;
+    // 前に見せたときより増えた数だけ数え上げる(js/motion.js。このタブの中で覚える)
+    if (window.Motion) {
+      const b = sec.querySelectorAll(`.stat-num b`);
+      Motion.countUp(b[0], n, `streak`);
+      Motion.countUp(b[1], done, `goal-${g.kind}`);
+      Motion.countUp(b[2], badges, `badges`);
+    }
     return sec;
   }
 
@@ -517,6 +524,8 @@ window.Views.home = (function () {
         </div>
       </div>
       ${go ? goHtml(go) : ``}`;
+    // タップすると跳ねて表情が変わる(js/motion.js。飾りなので読み上げない・フォーカスしない)
+    if (art && window.Motion) Motion.tapMascot(sec.querySelector(`.home-mascot`));
     return sec;
   }
 
@@ -734,12 +743,12 @@ window.Views.home = (function () {
       const when = res.date ? `${shortDate(res.date, true)}${res.time ? ` ${res.time}` : ``}` : ``;
       // 発表日の当日は時刻の前後どちらでも読めるように「今日(…)」。年が変わってから見るときは年も付ける
       const text = res.date && res.date === today ? `合格発表は<strong class="nowrap">今日(${esc(when)})</strong>です。`
-        : res.date && res.date > today ? `合格発表は<strong class="nowrap">${esc(when)}</strong>の予定です。`
+        : res.date && res.date > today ? `合格発表は<strong class="nowrap">${esc(when)}</strong><span class="nowrap">の予定です。</span>`
           : res.date ? `合格発表は${esc(res.date.slice(0, 4) === today.slice(0, 4) ? shortDate(res.date, true) : DateUtil.toJapanese(res.date, true))}に行われました。`
             : `合格発表の日程と結果は、実施機関のサイトで確認できます。`;
       resLine = `
         <p class="after-result">${ic(`calendar`, 16)}
-          <span>${text}<a class="after-link" href="${esc(res.url)}" target="_blank" rel="noopener noreferrer">${esc(res.org || `実施機関`)}のサイト${ic(`external`, 14)}<span class="sr-only">(新しいタブで開きます)</span></a></span>
+          <span>${text}<a class="after-link" href="${esc(res.url)}" target="_blank" rel="noopener noreferrer">${esc(res.org || `実施機関`)}<span class="nowrap">のサイト${ic(`external`, 14)}</span><span class="sr-only">(新しいタブで開きます)</span></a></span>
         </p>`;
     }
     // 次の目標の候補: 公式の試験日 > 見込みの日付(「見込み・未発表」と明記)
@@ -1481,6 +1490,7 @@ window.Views.home = (function () {
       if (!b) return;
       const n = Math.max(0, Math.floor(num(window.Badges && Badges.earnedCount ? safe(() => Badges.earnedCount(), 0) : 0)));
       b.textContent = String(n);
+      if (window.Motion) Motion.countUp(b, n, `badges`);
       a.setAttribute(`aria-label`, `バッジ ${n}個`);
     });
   }

@@ -713,7 +713,7 @@ window.Views.calculators = (function () {
 
   const CALCS = [
     {
-      id: `loan`, group: `loan`, label: `住宅ローン返済`, icon: `yen`, title: `住宅ローン返済シミュレーター`,
+      id: `loan`, group: `loan`, label: `住宅ローン返済`, icon: `yen`, title: `住宅ローン返済シミュレーター`, titleHtml: `住宅ローン返済<wbr><span class="nowrap">シミュレーター</span>`,
       desc: `元利均等返済(毎月の返済額が一定)と元金均等返済(元金部分が一定で利息が徐々に減る)を比べます。`,
       extraNote: `固定金利・ボーナス返済なしの単純計算です。金融機関の審査条件や保証料等により実際の返済額は異なります。`,
       fields: [
@@ -1604,7 +1604,7 @@ window.Views.calculators = (function () {
           <header class="calc-head">
             <span class="calc-head-icon sticker sticker-lg${TAX_CALC_IDS.includes(def.id) ? ` cat-zei` : ``}" aria-hidden="true">${UI.icon(def.icon, { size: 26 })}</span>
             <div class="calc-head-text">
-              <h3 id="calc-title" class="calc-title" tabindex="-1">${def.title}</h3>
+              <h3 id="calc-title" class="calc-title" tabindex="-1">${def.titleHtml || def.title}</h3>
               <p class="calc-desc" id="calc-desc">${def.desc}</p>
               <button type="button" class="link-btn calc-desc-more" data-role="desc-more" aria-expanded="false" aria-controls="calc-desc" hidden>続きを読む</button>
             </div>

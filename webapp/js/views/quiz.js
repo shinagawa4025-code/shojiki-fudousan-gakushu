@@ -528,7 +528,7 @@ window.Views.quiz = (function () {
   // 4択の判定: 「正解!」+ひとこと / 「おしい!」+「正解は 3」(個数・組合せは「正解は 3(三つ)」のように選択肢の文字も)+「〇〇」を復習に追加
   function mcVerdict(ok, correctIdx, term, okSub, answerText, restored) {
     const cheer = cheerText(ok, restored);
-    if (ok) return { ok, sub: [cheer, okSub].filter(Boolean).join(` `) };
+    if (ok) return { ok, sub: [cheer, okSub].filter(Boolean).join(` `), run: restored ? 0 : okRun };
     return {
       ok,
       answer: `正解は <b class="num">${correctIdx + 1}</b>${answerText ? `(${esc(answerText)})` : ``}`,
@@ -550,6 +550,8 @@ window.Views.quiz = (function () {
     el.classList.toggle(`is-ng`, !v.ok);
     const live = el.querySelector(`[data-role="verdict-live"]`);
     if (live) live.innerHTML = verdictHtml(v);
+    // 連続正解 3・5・10問(js/motion.js): 「n問連続!」の札と小さな紙吹雪
+    if (v.run && window.Motion) Motion.streak(el, v.run);
     const card = el.closest(`.quiz-card`);
     // 戻る・再読み込みで再現したカードは、前に「解説を見る/閉じる」で開け閉めした状態があればそれに合わせる
     const memo = card && card.classList.contains(`is-restored`) && card.dataset.quizId ? explainMemo()[card.dataset.quizId] : undefined;
@@ -686,6 +688,8 @@ window.Views.quiz = (function () {
     if (hero && window.Mascot && typeof Mascot.confetti === `function`) {
       try { Mascot.confetti(hero); } catch (e) { /* 飾りなので失敗しても続ける */ }
     }
+    // 正解の数を 0 から数え上げる(js/motion.js。解き終えた直後だけ)
+    if (window.Motion) Motion.countIn(panel);
   }
 
   // 終わりの画面の上の部分(マスコット+見出し)。マスコットは飾り(読み上げない)

@@ -1,26 +1,31 @@
-// 公開版の「詳細」(解説などのデータと、ホーム以外の画面のコード)を、ホームを描いたあとに読み込む(初回の表示を速くするため)
+// 公開版の「詳細」(解説などのデータと、ホーム以外の画面のコードと CSS)を、ホームを描いたあとに読み込む(初回の表示を速くするため)
 //
-// 公開時(tools/build.js)は、データと画面のコードを2つの束に分ける:
-//   本体(assets/data.*.js・assets/app.*.js): ホーム・一覧・集計に必要な項目とコード。詳細の項目は同じ場所に仮の値(PENDING)を置く
-//     (4択の選択肢は「…」「……」のような別々の仮の値。件数・○×の文の数・正誤・分野はそのまま数えられる)
-//   詳細(assets/detail.*.js): 4択の解説・選択肢・選択肢ごとの解説、基礎知識と用語の深掘り・根拠法令、作品・情報源の本文など
-//     と、index.html で data-bundle="detail" を付けたファイル(ホーム以外の画面・図解など)
-// 本体のデータの束が window.__APP_DETAIL__ = { src, id } を書く。詳細の束は読み込まれると AppData._merge で仮の値を本物に
-// 置き換え(オブジェクトはそのまま。索引 AppIndex もそのまま使える)、画面のコードを定義してから AppData._done を呼ぶ。
+// 公開時(tools/build.js)は、データと画面のコードと CSS を2つの束に分ける:
+//   本体(assets/data.*.js・assets/app.*.js・assets/app.*.css): ホーム・一覧・集計に必要な項目とコード。詳細の項目は同じ場所に
+//     仮の値(PENDING)を置く(4択の選択肢は「…」「……」のような別々の仮の値。件数・○×の文の数・正誤・分野はそのまま数えられる)。
+//     CSS は、詳細が届く前に出る要素(ホーム・初回ガイド・検索・お知らせなど)に当たりうる規則だけ(tools/lib/cssplit.js)
+//   詳細(assets/detail.*.js・assets/detail.*.css): 4択の解説・選択肢・選択肢ごとの解説、基礎知識と用語の深掘り・根拠法令、
+//     作品・情報源の本文など と、index.html で data-bundle="detail" を付けたファイル(ホーム以外の画面・図解など)。
+//     CSS は元の CSS の全部(本体の CSS のあとに置くと、元のファイルとまったく同じカスケードになる)
+// 本体のデータの束が window.__APP_DETAIL__ = { src, css, id } を書く。読み込むときは CSS と JS を同時に取りに行き(JS は preload)、
+// CSS が効いてから JS を実行する(画面のコードが CSS より先に動いて、見た目のない画面を描かないように)。
+// 詳細の束は実行されると AppData._merge で仮の値を本物に置き換え(オブジェクトはそのまま。索引 AppIndex もそのまま使える)、
+// 画面のコードを定義してから AppData._done を呼ぶ。
 // ローカル開発・元のファイルのままの公開(予備)では __APP_DETAIL__ がないので、最初から「詳細あり」(hasDetail() が true)。
 //
 // API:
-//   hasDetail()   詳細がそろっているか
+//   hasDetail()   詳細(データ・画面のコード・CSS)がそろっているか
 //   whenDetail()  そろったら解決する Promise(元のファイルのままなら即座に解決)。まだ読み込んでいなければ読み込みを始める。
-//                 3回試して読み込めなければ reject(次に呼ばれたときにもう一度読み込む)
-//   start()       ホームを描いたあとに Router が呼ぶ。手の空いたときに読み込みを始める
+//                 CSS・JS それぞれ3回試して読み込めなければ reject(次に呼ばれたときにもう一度読み込む)
+//   start()       ホームを描いたあとに Router が呼ぶ。ホームが画面に出たらすぐ読み込みを始める
 //   version()     詳細を取り込むたびに増える数(問題エンジン・検索の作り置きの目印)
 //   onDetail(fn)  詳細を取り込んだ直後に呼ぶ関数を登録する
 //   lazyView(name) 公開版で詳細の側に回した画面の代わり(ビルドが本体に入れる)。描画は Router が詳細を待ってから行う
 //   note(where)   詳細が必要な処理が、詳細より先に呼ばれたことを記録する(確認用。info().premature に入る)
-//   info()        計測・確認用 { mode, state, attempts, startedAt, loadedAt, premature }
+//   info()        計測・確認用 { mode, state, attempts, startedAt, cssAt, loadedAt, premature }
 window.AppData = (function () {
   const cfg = window.__APP_DETAIL__ && typeof window.__APP_DETAIL__.src === `string` ? window.__APP_DETAIL__ : null;
+  const CSS = cfg && typeof cfg.css === `string` && cfg.css ? cfg.css : null; // 詳細の CSS(古いビルドの本体にはない)
   const PENDING = `…`; // 詳細が届くまでの仮の値(build.js と同じ)
   const RETRY_DELAYS = [1500, 4000]; // 読み込みに失敗したときの再試行までの待ち時間
   // 詳細より先に呼ばれることがある、DOM 要素を返す関数(読み込み中の表示を返し、届いたら差し替える)
@@ -33,12 +38,17 @@ window.AppData = (function () {
   let broken = false; // 詳細の束は届いたが取り込めなかった(読み込み直しても直らない)
   let merged = false;
   let ver = 0;
-  let attempts = 0; // 今回の読み込みで試した回数(失敗のあとにもう一度読み込むときは 0 に戻す)
-  let tries = 0; // これまでに試した回数の合計(再試行の URL の番号)
+  let attempts = 0; // 今の段階(CSS か JS)で試した回数(CSS が届いたとき・失敗のあとにもう一度読み込むときは 0 に戻す)
+  let tries = 0; // JS をこれまでに試した回数の合計(再試行の URL の番号)
+  let cssTries = 0; // CSS をこれまでに試した回数の合計
+  let cssState = CSS ? `idle` : `ready`; // idle | loading | ready
+  let cssLink = null; // 読み込み中の CSS の <link>
   let startedAt = null;
+  let cssAt = null;
   let loadedAt = null;
   let retryTimer = null;
   let scheduled = false;
+  let background = false; // ホームを描いたあとの読み込み(低い優先度で取りに行き、ホームの書体・画像より先にしない)
   let toasted = false;
   let waiters = [];
   const hooks = [];
@@ -64,12 +74,20 @@ window.AppData = (function () {
     return new Promise((resolve, reject) => {
       waiters.push({ resolve, reject });
       if (state === `failed`) { attempts = 0; state = `idle`; }
+      // ここから読み込み始めるときは、待っている画面があるので優先度を下げない
+      if (state === `idle`) background = false;
       load();
     });
   }
 
+  // 今の段階を試す: CSS がまだなら CSS、効いていれば JS
   function inject() {
     if (typeof document === `undefined`) return;
+    if (cssState !== `ready`) injectCss();
+    else injectJs();
+  }
+
+  function injectJs() {
     attempts += 1;
     tries += 1;
     const s = document.createElement(`script`);
@@ -77,6 +95,7 @@ window.AppData = (function () {
     // (番号は読み込み直しのたびにも増やし続ける。Service Worker はクエリを無視して保存済みのものを返す)
     s.src = tries > 1 ? `${cfg.src}?r=${tries}` : cfg.src;
     s.async = true;
+    if (background) s.fetchPriority = `low`;
     // index.html の起動の見張りに数えさせない(失敗は下で再試行し、だめなら案内を出す。起動の失敗の画面で上書きしない)
     s.setAttribute(`data-lazy`, ``);
     s.onerror = () => fail(new Error(`詳細データを読み込めませんでした(${cfg.src})`), true);
@@ -85,10 +104,54 @@ window.AppData = (function () {
     (document.head || document.documentElement).appendChild(s);
   }
 
+  // 詳細の CSS は <head> の最後に置く(本体の CSS より後。元の CSS の全部なので、届くと元のファイルと同じカスケードになる)
+  function injectCss() {
+    attempts += 1;
+    cssTries += 1;
+    cssState = `loading`;
+    const l = document.createElement(`link`);
+    l.rel = `stylesheet`;
+    l.href = cssTries > 1 ? `${CSS}?r=${cssTries}` : CSS;
+    l.setAttribute(`data-lazy`, ``);
+    if (background) l.fetchPriority = `low`;
+    l.onload = () => {
+      if (cssLink !== l) return;
+      cssLink = null;
+      cssState = `ready`;
+      cssAt = now();
+      attempts = 0;
+      if (state === `loading`) injectJs();
+    };
+    l.onerror = () => {
+      if (cssLink !== l) return;
+      cssLink = null;
+      cssState = `idle`;
+      l.remove();
+      fail(new Error(`詳細データを読み込めませんでした(${CSS})`), true);
+    };
+    cssLink = l;
+    (document.head || document.documentElement).appendChild(l);
+  }
+
+  // JS を CSS と同時に取りに行く(実行は CSS が効いてから。injectJs が同じ URL の <script> を入れたときに使われる)
+  function preloadJs() {
+    try {
+      const has = Array.prototype.some.call(document.querySelectorAll(`link[rel="preload"]`), (l) => l.getAttribute(`href`) === cfg.src);
+      if (has) return;
+      const l = document.createElement(`link`);
+      l.rel = `preload`;
+      l.as = `script`;
+      l.href = cfg.src;
+      if (background) l.fetchPriority = `low`;
+      (document.head || document.documentElement).appendChild(l);
+    } catch (e) { /* preload できなくても、CSS のあとに読み込む */ }
+  }
+
   function load() {
     if (!cfg || state === `loading` || state === `ready` || broken) return;
     state = `loading`;
     if (startedAt == null) startedAt = now();
+    if (cssState !== `ready` && tries === 0 && typeof document !== `undefined`) preloadJs();
     inject();
   }
 
@@ -123,17 +186,16 @@ window.AppData = (function () {
     }, 0);
   }
 
-  // ホームを描いたあと(Router から)。ページの読み込み(load)が終わってから、手の空いたときに読み込みを始める
-  // (load の前に始めると、詳細が届くまでブラウザの「読み込み中」の表示が続くため)
+  // ホームを描いたあと(Router から)。ホームが画面に出たら(次の描画のあと)すぐ読み込みを始める。
+  // ページの読み込み(load)は待たない(見出しの書体の漢字の部分が load を遅らせ、ほかの画面が使えるまでが遅くなるため。
+  // そのかわり、詳細が届くまでブラウザの「読み込み中」の表示が続く)。描画の合図が来ない(裏のタブなど)ときもタイマーで始める
   function start() {
     if (!cfg || scheduled || state !== `idle`) return;
     scheduled = true;
-    const go = () => {
-      if (typeof window.requestIdleCallback === `function`) window.requestIdleCallback(() => load(), { timeout: 500 });
-      else setTimeout(load, 50);
-    };
-    if (typeof document === `undefined` || document.readyState === `complete`) go();
-    else window.addEventListener(`load`, go, { once: true });
+    let done = false;
+    const go = () => { if (!done) { done = true; if (state === `idle`) background = true; load(); } };
+    if (typeof window.requestAnimationFrame === `function`) window.requestAnimationFrame(() => setTimeout(go, 0));
+    setTimeout(go, 1000);
   }
 
   function onDetail(fn) {
@@ -234,7 +296,7 @@ window.AppData = (function () {
   }
 
   function info() {
-    return { mode: cfg ? `split` : `raw`, state, attempts, startedAt, loadedAt, version: ver, premature: premature.slice() };
+    return { mode: cfg ? `split` : `raw`, state, css: CSS ? cssState : null, attempts, startedAt, cssAt, loadedAt, version: ver, premature: premature.slice() };
   }
 
   // 最初からホーム以外の画面を開いたとき(共有されたリンクなど)は、待たずにすぐ読み込み始める

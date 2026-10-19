@@ -4,18 +4,24 @@
 // 1. index.html の <!-- build:css … --> / <!-- build:js … --> 〜 <!-- /build --> の範囲ごとに、ファイルを順番どおりにつなげて
 //    assets/<名前>.<内容のハッシュ10桁>.css / .js にまとめる。JS は1ファイルずつ try { } で包む(1つが実行時エラーでも残りは動く。
 //    別々の <script> と同じ)。縮小は控えめ(tools/lib/minify.js: コメントと不要な空白だけ。文字列・テンプレートの中身は触らない。行番号は元と同じ)
-// 2. 初回の表示を速くするため、ホームに要らないものを「詳細」の束(assets/detail.*.js)に分ける(webapp/js/appData.js が読み込む):
+// 2. 初回の表示を速くするため、ホームに要らないものを「詳細」の束(assets/detail.*.js・assets/detail.*.css)に分ける
+//    (webapp/js/appData.js がホームを描いたあとに読み込む。CSS が効いてから JS を実行する):
 //    - build:js data の範囲(設定とデータ)は Node で実行し、できた APP_DATA を「本体」と「詳細」に分ける(tools/lib/split.js)。
 //      本体の束 = 設定などのコード(SITE・ContentPack)+ 本体の APP_DATA(JSON)+ 詳細の束の場所(window.__APP_DETAIL__)
 //    - build:js app の範囲で data-bundle="detail" を付けたファイル(ホーム以外の画面・図解など)は詳細の束に入れ、本体には
 //      画面の代わり(AppData.lazyView)だけを置く。詳細の束 = 詳細の APP_DATA を本体に戻す処理 + それらのファイル
+//    - CSS(build:css の範囲。1つだけ)は、最初の表示の CSS(assets/<名前>.*.css)= 本体のコード・index.html・データに出てくる
+//      クラスだけで当たりうる規則(と @font-face)を元の順番のまま、詳細の CSS = 元の CSS の全部(tools/lib/cssplit.js)。
+//      詳細の CSS を最初の表示の CSS のあとに置くと、カスケードが元のファイルとまったく同じになる
 // 3. 本体だけの状態でも件数・○×の文の id と正誤・索引・整合性チェックが元と同じこと、詳細を戻すと APP_DATA・○×の文・索引が
 //    元のファイルとまったく同じになることを Node で確かめる(localhost と公開サイトのホスト名の両方)
-// 4. index.html の範囲を1つの <link> / <script> に置き換え、<meta name="app-build"> を入れる
+// 4. index.html の範囲を1つの <link> / <script> に置き換え、本体の JS の preload(CSS の <link> のすぐ後ろ)・
+//    <meta name="app-build">・Content-Security-Policy を入れる
 // 5. sw.js をひな形から作る: CACHE_NAME = shojiki-gakushu-<ハッシュ>、BUILD_ID、PRECACHE_URLS(index.html・manifest・まとめたファイル・
-//    詳細の束・index.html のアイコン)
+//    詳細の束(JS・CSS)・CSS が url() で参照するファイル(見出し用の書体 fonts/*.woff2。ハッシュは付けずにコピー)・index.html のアイコン)
 // 6. index.html・manifest が参照するファイルと、プリキャッシュのファイルがすべて出力先にあることを確かめる
-// 7. 大きさの表を出す(初回の表示に要る JS と CSS の gzip 合計が 300KB、詳細を含めた合計が 1,000KB を超えたら警告。下の BUDGET_*)
+// 7. 大きさの表を出す(初回の表示に要る JS と CSS の gzip 合計が 240KB・そのうち CSS が 25KB、詳細を含めた合計が 1,000KB を
+//    超えたら警告。下の BUDGET_*)
 // どこかで失敗したら終了コード1で終わり、出力先は作らない(途中までのサイトを残さない)。CI はそのとき元のファイルのまま公開する。
 'use strict';
 const fs = require('fs');
@@ -25,12 +31,17 @@ const zlib = require('zlib');
 const vm = require('vm');
 const { minifyJs, minifyCss, topLevelLexical, countNl } = require('./lib/minify.js');
 const { loadApp, loadBuilt, summarize, scriptList, styleList, ENGINE } = require('./lib/appload.js');
-const { parseBlocks, localRefs, generateSw } = require('./lib/html.js');
+const { parseBlocks, localRefs, generateSw, isLocal } = require('./lib/html.js');
 const split = require('./lib/split.js');
+const cssplit = require('./lib/cssplit.js');
 
-const BUDGET_FIRST = 300 * 1024; // 初回の表示(ホーム)に要る JS+CSS
+// 初回の表示(ホーム)に要る JS+CSS。v12.2 で CSS を最初の表示の分と詳細に分け、v12(約230KB)より小さくなったので
+// 300KB → 240KB に見直した(ホームが v12 より遅くならないように)。CSS は最初の描画(FCP)を止めるので別にも見る
+const BUDGET_FIRST = 240 * 1024;
+const BUDGET_FIRST_CSS = 25 * 1024;
 // 詳細を含めた JS+CSS。v12 で4択を約520問から約800問(+54%)に増やし、詳細の束(解説・選択肢・記述ア〜エ)が大きくなったため
-// 800KB → 1,000KB に見直した(2026-10 時点で約900KB)。詳細はホームを描いたあとに読み込むので、ホームの速さは上の BUDGET_FIRST で見る
+// 800KB → 1,000KB に見直した(2026-10 時点で約900KB。v12.2 で詳細の CSS(元の CSS の全部。最初の表示の CSS と重なる約19KB を含む)
+// が加わり約960KB)。詳細はホームを描いたあとに読み込むので、ホームの速さは上の BUDGET_FIRST で見る
 const BUDGET_TOTAL = 1000 * 1024;
 const SKIP_DIRS = new Set(['js', 'css', 'data']); // まとめたので公開しない(古い Service Worker が新旧のファイルを混ぜて保存しないように)
 const JUNK = /^(desktop\.ini|thumbs\.db|\..*)$/i;
@@ -68,6 +79,13 @@ function sourceMap(file, lineMap, sources, contents) {
 
 function readSrc(src, rel) {
   return fs.readFileSync(path.join(src, rel), 'utf8').replace(/^﻿/, '');
+}
+
+// CSS の url( ) が指すローカルのファイル(data: と外部の URL・# とクエリは除く)
+function cssUrls(css) {
+  return [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/url\(\s*(['"]?)([^'")]*?)\1\s*\)/gi)]
+    .map((m) => m[2].split('#')[0].split('?')[0].trim())
+    .filter((u) => u && isLocal(u) && !/^data:/i.test(u));
 }
 
 // HTML の中のスクリプト(src なし・JSON-LD などのデータは除く)の中身。CSP のハッシュに使う
@@ -215,21 +233,51 @@ function main() {
     if (blocks.indexOf(dataBlock) > blocks.indexOf(appBlocks[0])) throw new Error('build:js data の範囲はアプリの範囲より前に置く');
 
     const report = [];
-    const assets = []; // { kind, name, url, block }
+    const assets = []; // { kind, name, url, block }(最初の表示に要るもの。詳細の束は detailUrl・detailCssUrl)
     const engine = []; // 確認用: 本体のうち ENGINE のファイル(縮小後・包んだもの)
+    let detailCssUrl = null;
 
-    // ---- CSS ----
-    for (const b of blocks.filter((x) => x.kind === 'css')) {
-      const code = b.files.map((rel) => {
+    // ---- CSS: 最初の表示の分(assets/<名前>.*.css)と詳細(assets/detail.*.css。元の CSS の全部)に分ける(tools/lib/cssplit.js) ----
+    // CSS が url() で参照するファイル(見出し用の書体 fonts/*.woff2 など)。そのまま出力先へコピーされ、プリキャッシュにも入れる。
+    // まとめた CSS は assets/ に置くので、元の css/ から見た場所と assets/ から見た場所が同じであること
+    const cssBlocks = blocks.filter((x) => x.kind === 'css');
+    if (cssBlocks.length !== 1) throw new Error(`build:css の範囲は1つにする(最初の表示の分と詳細に分けるため。今は ${cssBlocks.length}個)`);
+    // 詳細が届く前の画面の要素を作れるのは、index.html・データの範囲・アプリの範囲のうち詳細に回していないファイルだけ
+    const coreSources = [html, ...blocks.filter((b) => b.kind === 'js').flatMap((b) => b.files.filter((f) => !b.later.has(f))).map((rel) => readSrc(SRC, rel))];
+    const coreName = cssplit.nameIndex(coreSources);
+    const cssRefs = new Set();
+    const cssSplit = []; // { file, all, first, kept, dropped }
+    for (const b of cssBlocks) {
+      const parts = b.files.map((rel) => {
         const raw = readSrc(SRC, rel);
+        for (const u of cssUrls(raw)) {
+          const fromSrc = path.posix.normalize(path.posix.join(path.posix.dirname(rel), u));
+          const fromAsset = path.posix.normalize(path.posix.join('assets', u));
+          if (fromSrc !== fromAsset || fromSrc.startsWith('../')) throw new Error(`${rel} の url(${u}) は、まとめた CSS(assets/)からだと別の場所を指します`);
+          if (!fs.existsSync(path.join(SRC, fromSrc))) throw new Error(`${rel} の url(${u}) のファイルがありません`);
+          cssRefs.add(fromSrc);
+        }
         const r = minifyCss(raw);
         if (!r.minified) warn(`${rel} は縮小せずにまとめました(${r.reason})`);
         report.push({ file: rel, raw: Buffer.byteLength(raw), out: Buffer.byteLength(r.code), minified: r.minified });
-        return r.code;
-      }).join('\n') + '\n';
-      const file = `${b.name}.${sha(code).slice(0, 10)}.css`;
-      fs.writeFileSync(path.join(TMP, 'assets', file), code);
+        const items = cssplit.parseCss(r.code);
+        if (cssplit.serialize(items) !== r.code.trim()) throw new Error(`${rel}: CSS を規則に分けて戻すと元と違います(tools/lib/cssplit.js)`);
+        const fp = cssplit.firstPaint(items, coreName);
+        cssSplit.push({ file: rel, all: r.code, first: fp.css, kept: fp.kept, dropped: fp.dropped });
+        return { all: r.code, first: fp.css };
+      });
+      const firstCode = `${parts.map((p) => p.first).join('\n')}\n`;
+      const allCode = `${parts.map((p) => p.all).join('\n')}\n`;
+      // 見出し用の書体(@font-face)は最初の表示の分に必ず入れる(ホームの見出し・ボタン)
+      const faces = (s) => (s.match(/@font-face\s*\{/g) || []).length;
+      if (faces(firstCode) !== faces(allCode)) throw new Error(`最初の表示の CSS に @font-face が ${faces(firstCode)}/${faces(allCode)} 個しかありません`);
+      if (!/:root\s*\{/.test(firstCode)) throw new Error('最初の表示の CSS にデザイントークン(:root)がありません');
+      const file = `${b.name}.${sha(firstCode).slice(0, 10)}.css`;
+      fs.writeFileSync(path.join(TMP, 'assets', file), firstCode);
       assets.push({ kind: 'css', name: b.name, url: `assets/${file}`, block: b });
+      const dfile = `detail.${sha(allCode).slice(0, 10)}.css`;
+      fs.writeFileSync(path.join(TMP, 'assets', dfile), allCode);
+      detailCssUrl = `assets/${dfile}`;
     }
 
     // ---- データを本体と詳細に分ける ----
@@ -261,7 +309,7 @@ function main() {
       dat.file(rel, m.raw, m.code);
     });
     report.push({ file: `(本体のデータ ${snap.dataFiles.length}ファイル)`, raw: snap.dataFiles.reduce((s, f) => s + Buffer.byteLength(readSrc(SRC, f)), 0), out: Buffer.byteLength(coreJson), minified: true });
-    dat.gen(`window.__APP_DETAIL__={src:${lit(detailUrl)},id:${lit(detailId)}};\n`);
+    dat.gen(`window.__APP_DETAIL__={src:${lit(detailUrl)},css:${lit(detailCssUrl)},id:${lit(detailId)}};\n`);
     dat.gen(`try{window.APP_DATA=JSON.parse(${lit(coreJson)})}catch(e){console.error('[bundle] data',e);(window.__bundleErrors=window.__bundleErrors||[]).push('data')}\n`);
     if (snap.packs) dat.gen(`try{(function(p){ContentPack.list=function(){return p.slice();};})(JSON.parse(${lit(JSON.stringify(snap.packs))}))}catch(e){console.error('[bundle] data',e);(window.__bundleErrors=window.__bundleErrors||[]).push('data')}\n`);
     const dataFile = writeAsset(TMP, dataBlock.name, dat);
@@ -302,17 +350,22 @@ function main() {
     console.log(`  詳細に回したファイル ${later.length}件(画面の代わり ${stubs.join(', ')})`);
 
     // ---- index.html: 範囲を後ろから置き換える ----
+    // 本体の JS(body の最後の <script>)は、CSS の <link> のすぐ後ろで preload して、CSS・データの束と同時に取りに行く
+    // (<meta http-equiv="Content-Security-Policy"> があると Chrome の先読み(preload scanner)が働かず、2つ目の <script> は
+    //  1つ目を実行し終えてから取りに行くため、遅い回線ではホームの表示がその往復の分だけ遅れる。実行の順番は変わらない)
+    const jsPreloads = assets.filter((x) => x.kind === 'js').map((x) => `\n  <link rel="preload" href="${x.url}" as="script">`).join('');
     for (const asset of assets.slice().sort((x, y) => y.block.start - x.block.start)) {
-      const tag = asset.kind === 'css' ? `<link rel="stylesheet" href="${asset.url}">` : `<script src="${asset.url}"></script>`;
+      const tag = asset.kind === 'css' ? `<link rel="stylesheet" href="${asset.url}">${jsPreloads}` : `<script src="${asset.url}"></script>`;
       html = html.slice(0, asset.block.start) + tag + html.slice(asset.block.end);
     }
     const left = [...scriptList(html), ...styleList(html)].filter((s) => !assets.some((x) => x.url === s));
     if (left.length) throw new Error(`置き換えたあとの index.html に、まとめていないファイルが残っています: ${left.join(', ')}`);
     const PLACEHOLDER = '__APP_BUILD_ID__';
     if (!/<meta charset="utf-8">/i.test(html)) throw new Error('index.html に <meta charset="utf-8"> がありません');
-    // 最初からホーム以外の画面を開いたとき(静的ページの「アプリで学ぶ」・共有されたリンク)は、詳細の束も本体と並べて読み込み始める
-    // (js/appData.js が同じ URL の <script> を入れたときに使われる)。ホームのときは本体を先に届けるため読み込まない
-    const preload = `<script>(function(){var h=(location.hash||'').replace(/^#/,'').split('/')[0];if(h&&h!=='home'){var l=document.createElement('link');l.rel='preload';l.as='script';l.href=${lit(detailUrl)};document.head.appendChild(l);}})();</script>`;
+    // 最初からホーム以外の画面を開いたとき(静的ページの「アプリで学ぶ」・共有されたリンク)は、詳細の束(JS と CSS)も本体と並べて
+    // 読み込み始める(js/appData.js が同じ URL の <script>・<link rel="stylesheet"> を入れたときに使われる)。ホームのときは本体を先に
+    // 届けるため読み込まない。CSS はここでは preload だけ(ここで stylesheet を入れると最初の表示の CSS より前に並び、順番が変わる)
+    const preload = `<script>(function(){var h=(location.hash||'').replace(/^#/,'').split('/')[0];if(h&&h!=='home'){[[${lit(detailUrl)},'script'],[${lit(detailCssUrl)},'style']].forEach(function(p){var l=document.createElement('link');l.rel='preload';l.as=p[1];l.href=p[0];document.head.appendChild(l);});}})();</script>`;
     new vm.Script(preload.replace(/^<script>|<\/script>$/g, ''));
     // Content-Security-Policy(公開版だけ。GitHub Pages はヘッダーを付けられないので <meta>)。スクリプトは同じサイトのファイルと、
     // index.html の中のスクリプト(起動の見張り・テーマ・上の preload)のハッシュだけを許す(万一 HTML に文字列が混ざっても実行されない)。
@@ -327,10 +380,11 @@ function main() {
 
     const copied = copyStatic(SRC, TMP);
 
-    // プリキャッシュ: 入口・manifest・まとめたファイル(詳細の束も)・index.html が使うアイコン(起動画面の画像と OGP 画像は除く)
+    // プリキャッシュ: 入口・manifest・まとめたファイル(詳細の束も)・CSS が参照するファイル(見出し用の書体)・
+    // index.html が使うアイコン(起動画面の画像と OGP 画像は除く)
     const refs = localRefs(html);
     const iconRefs = refs.filter((r) => (r.tag === 'img') || (r.tag === 'link' && /(^|\s)(icon|apple-touch-icon|manifest)(\s|$)/.test(r.rel))).map((r) => r.url);
-    const list = [...new Set(['index.html', 'manifest.json', ...assets.map((x) => x.url), detailUrl, ...iconRefs])].map((u) => `./${u}`);
+    const list = [...new Set(['index.html', 'manifest.json', ...assets.map((x) => x.url), detailUrl, detailCssUrl, ...cssRefs, ...iconRefs])].map((u) => `./${u}`);
     const template = fs.readFileSync(path.join(SRC, 'sw.js'), 'utf8');
     const h = crypto.createHash('sha256').update(template);
     for (const u of list) {
@@ -354,21 +408,29 @@ function main() {
     [...(mf.icons || []), ...(mf.shortcuts || []).flatMap((s) => s.icons || [])].forEach((ic) => { if (!fs.existsSync(path.join(TMP, ic.src))) missing.push(`manifest ${ic.src}`); });
     if (missing.length) throw new Error(`出力先にないファイル: ${missing.join(', ')}`);
     if (!fs.readFileSync(path.join(TMP, 'index.html'), 'utf8').includes(buildId)) throw new Error('index.html に BUILD_ID が入っていません');
-    if (!fs.readFileSync(path.join(TMP, 'assets', dataFile), 'utf8').includes(detailUrl)) throw new Error('本体のデータの束に詳細の束の場所が入っていません');
+    const dataText = fs.readFileSync(path.join(TMP, 'assets', dataFile), 'utf8');
+    if (!dataText.includes(detailUrl) || !dataText.includes(detailCssUrl)) throw new Error('本体のデータの束に詳細の束(JS・CSS)の場所が入っていません');
 
     // 大きさ
     const gz = (f) => zlib.gzipSync(fs.readFileSync(path.join(TMP, f)), { level: 9 }).length;
-    const rows = ['index.html', 'sw.js', ...assets.map((x) => x.url), detailUrl].map((f) => ({ f, bytes: fs.statSync(path.join(TMP, f)).size, gzip: gz(f) }));
+    const afterHome = new Set([detailUrl, detailCssUrl]);
+    const rows =['index.html', 'sw.js', ...assets.map((x) => x.url), detailUrl, detailCssUrl, ...cssRefs].map((f) => ({ f, bytes: fs.statSync(path.join(TMP, f)).size, gzip: gz(f) }));
     const kb = (n) => `${(n / 1024).toFixed(1)}KB`;
     console.log('\nファイル                               大きさ      gzip');
-    rows.forEach((r) => console.log(`${r.f.padEnd(38)} ${kb(r.bytes).padStart(9)} ${kb(r.gzip).padStart(9)}`));
-    const firstGz = rows.filter((r) => /\.(js|css)$/.test(r.f) && r.f.startsWith('assets/') && r.f !== detailUrl).reduce((s, r) => s + r.gzip, 0);
-    const totalGz = rows.filter((r) => /\.(js|css)$/.test(r.f) && r.f.startsWith('assets/')).reduce((s, r) => s + r.gzip, 0);
+    rows.forEach((r) => console.log(`${r.f.padEnd(38)} ${kb(r.bytes).padStart(9)} ${kb(r.gzip).padStart(9)}${afterHome.has(r.f) ? '  (ホームを描いたあと)' : ''}`));
+    const isAsset = (r, re) => re.test(r.f) && r.f.startsWith('assets/');
+    const firstGz = rows.filter((r) => isAsset(r, /\.(js|css)$/) && !afterHome.has(r.f)).reduce((s, r) => s + r.gzip, 0);
+    const firstCssGz = rows.filter((r) => isAsset(r, /\.css$/) && !afterHome.has(r.f)).reduce((s, r) => s + r.gzip, 0);
+    const totalGz = rows.filter((r) => isAsset(r, /\.(js|css)$/)).reduce((s, r) => s + r.gzip, 0);
     const rawBytes = report.reduce((s, r) => s + r.raw, 0);
     const outBytes = report.reduce((s, r) => s + r.out, 0);
     console.log(`縮小: ${report.length}ファイル ${kb(rawBytes)} → ${kb(outBytes)}(縮小しなかったファイル ${report.filter((r) => !r.minified).length}件)`);
-    console.log(`JS+CSS の gzip: 初回の表示に要るもの ${kb(firstGz)}(目安 ${kb(BUDGET_FIRST)} 以内)・詳細を含めた合計 ${kb(totalGz)}(目安 ${kb(BUDGET_TOTAL)} 以内)`);
+    const keptRules = cssSplit.reduce((s, x) => s + x.kept, 0);
+    const droppedRules = cssSplit.reduce((s, x) => s + x.dropped, 0);
+    console.log(`CSS: 最初の表示に入れた規則 ${keptRules}件・詳細だけの規則 ${droppedRules}件(${cssSplit.map((x) => `${x.file.replace(/^css\//, '')} ${x.kept}/${x.kept + x.dropped}`).join('・')})`);
+    console.log(`JS+CSS の gzip: 初回の表示に要るもの ${kb(firstGz)}(目安 ${kb(BUDGET_FIRST)} 以内。うち CSS ${kb(firstCssGz)}・目安 ${kb(BUDGET_FIRST_CSS)} 以内)・詳細を含めた合計 ${kb(totalGz)}(目安 ${kb(BUDGET_TOTAL)} 以内)`);
     if (firstGz > BUDGET_FIRST) warn(`初回の表示に要る JS+CSS の gzip ${kb(firstGz)} が目安の ${kb(BUDGET_FIRST)} を超えています(ホームの表示が遅くなります)`);
+    if (firstCssGz > BUDGET_FIRST_CSS) warn(`最初の表示の CSS の gzip ${kb(firstCssGz)} が目安の ${kb(BUDGET_FIRST_CSS)} を超えています(最初の描画が遅くなります)`);
     if (totalGz > BUDGET_TOTAL) warn(`JS+CSS の gzip 合計 ${kb(totalGz)} が目安の ${kb(BUDGET_TOTAL)} を超えています(ホーム以外の画面が使えるまでが遅くなります)`);
     console.log(`CACHE_NAME ${cacheName}・プリキャッシュ ${list.length}件・そのままコピー ${copied.length}件`);
 

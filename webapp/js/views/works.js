@@ -59,7 +59,7 @@ window.Views.works = (function () {
       <div class="card-list" data-role="episode-list"></div>
       ${specials.length ? `
       <details class="specials-section">
-        <summary>特別編・総集編(${specials.length}本)</summary>
+        <summary><span>特別編・総集編(${specials.length}本)</span><span class="chevron">${ic(`chevron-down`, 18)}</span></summary>
         <div class="card-list" data-role="specials-list"></div>
       </details>` : ``}
     `;

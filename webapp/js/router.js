@@ -10,7 +10,6 @@ window.Router = (function () {
   const DEFAULT_VIEW = `home`;
   let firstRender = true;
   let currentView = null;
-  let renderedView = null; // 最後に実際に描いた画面(読み込み中の表示は含めない。入るアニメーションの判定に使う)
   let pending = false; // 詳細を待って「読み込み中」を出している間
   const SLOW_MS = 15000; // 読み込み中がこれより長く続いたら、時間がかかっていることを知らせる
   let renderSeq = 0;
@@ -47,11 +46,21 @@ window.Router = (function () {
     clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => { if (location.hash === scrollHash) saveScroll(); }, 300);
   }, { passive: true });
-  // 画面内リンクで移動する直前にも保存する
+  // 画面内リンクで移動する直前にも保存する。どこのリンクか(下部タブ・サイドバー・サブナビ・ロゴ)は画面の切り替えの動きに使う
+  let tapped = null;
   document.addEventListener(`click`, (e) => {
     const a = e.target.closest && e.target.closest(`a[href^="#"]`);
-    if (a) saveScroll();
+    if (!a) return;
+    saveScroll();
+    tapped = { href: a.getAttribute(`href`), tab: !!a.closest(`#bottom-nav, #side-nav, .subnav, .brand`), at: Date.now() };
   }, true);
+  // 移動の種類。Navigation API があれば 'traverse'(戻る/進む)か。iPhone のスワイプで戻るなど、ブラウザ自身が動きを付けたときは重ねない
+  // (popstate は # だけの移動でも来るので、戻る/進むの判定には使わない。Navigation API が無いときは history.state の印 vn で決める)
+  let navInfo = null;
+  let uaAt = 0;
+  const NAV_API = !!(window.navigation && window.navigation.currentEntry && typeof window.navigation.currentEntry.index === `number` && typeof window.navigation.addEventListener === `function`);
+  if (NAV_API) window.navigation.addEventListener(`navigate`, (e) => { navInfo = { traverse: e.navigationType === `traverse`, ua: !!e.hasUAVisualTransition, at: Date.now() }; });
+  window.addEventListener(`popstate`, (e) => { if (e && e.hasUAVisualTransition) uaAt = Date.now(); });
 
   function register(name, view) {
     views[name] = view;
@@ -81,7 +90,99 @@ window.Router = (function () {
     return canonical(String(h || ``).replace(/^#/, ``).split(`/`)[0]);
   }
 
+  // ---- 画面の切り替えの動き(v12.2。js/motion.js と css/motion.css) ----
+  // 進む(奥へ・別の画面へ)は右から、戻る(同じタブの上の階層・ホーム・履歴の戻る)は左から少しスライド、
+  // 下部タブ・サイドバー・サブナビ・ロゴでの切替は重ねて薄く。最初の表示・同じ画面の描き直し(同じ # や同じ画面の同じ深さ)・
+  // 模擬試験の解答中(#exam/run)・初回ガイド・読み込み中は動かさない
+  let lastHash = null;
+  let lastIdx = null;
+  let lastVn = 0;
+  // 履歴の中の位置(戻る/進むの向きを決める)。Navigation API が無いブラウザでは、初めて描いたときに history.state へ印(vn: 時刻)を付ける
+  function entryIndex() {
+    try { if (NAV_API && navigation.currentEntry.index >= 0) return navigation.currentEntry.index; } catch (e) { /* 下の印を使う */ }
+    const st = history.state;
+    return st && typeof st === `object` && typeof st.vn === `number` ? st.vn : null;
+  }
+  function markEntry() {
+    if (!NAV_API) {
+      const st = history.state;
+      if (!(st && typeof st === `object` && typeof st.vn === `number`)) {
+        lastVn = Math.max(Date.now(), lastVn + 1);
+        try { history.replaceState(Object.assign({}, st && typeof st === `object` ? st : {}, { vn: lastVn }), ``); } catch (e) { /* 向きは深さで決める */ }
+      }
+    }
+    lastHash = location.hash;
+    lastIdx = entryIndex();
+  }
+  const depthOf = (h) => {
+    const p = String(h || ``).replace(/^#/, ``).split(`/`).filter(Boolean);
+    return !p.length || canonical(p[0]) === DEFAULT_VIEW ? 0 : p.length;
+  };
+  const isExamRun = (h) => /^#?exam\/run/.test(String(h || ``));
+  function pageDir(trav, tab) {
+    const prev = lastHash;
+    const next = location.hash;
+    if (firstRender || pending || prev == null || prev === next || isExamRun(prev) || isExamRun(next)) return null;
+    const pv = viewOfHash(prev);
+    const nv = viewOfHash(next);
+    if (!hasOwn(views, nv) || needsDetail(nv) || document.body.classList.contains(`exam-active`) || document.querySelector(`.onb-overlay`)) return null;
+    const pd = depthOf(prev);
+    const nd = depthOf(next);
+    if (trav) {
+      const idx = entryIndex();
+      if (idx != null && lastIdx != null && idx !== lastIdx) return idx < lastIdx ? `back` : `forward`;
+      return nd < pd ? `back` : `forward`;
+    }
+    if (pv === nv && pd === nd) return null;
+    if (tab) return `fade`;
+    const sameTab = window.Nav && Nav.tabOf ? Nav.tabOf(pv) === Nav.tabOf(nv) : pv === nv;
+    return nv === DEFAULT_VIEW || (sameTab && nd < pd) ? `back` : `forward`;
+  }
+
+  // 動きを付けるとき(View Transitions)は、今の画面を写し取ってから描くため、描画が hashchange の後になる。
+  // 画面側の「離れたら後片付け」(UI.onLeave など。hashchange のときに古い画面が外れているかを見る)が描画より先に動いてしまうので、
+  // 古い画面を外してから hashchange をもう一度送り(fdResent。Router 自身は無視する)、そのあとで新しい画面を描く
+  // (動きのないときと同じ順: 後片付け → 描画。描いたあとに送ると、新しい画面のタイマー・ダイアログまで片付けてしまう)。
+  // 外してから描くまでは同じ処理の中なので、空の画面は表示されない。描画中の例外は、動きの約束(Promise)に飲まれないよう投げ直す
+  let deferSeq = 0;
+  function onHashChange(e) {
+    if (e && e.fdResent) return;
+    const now = Date.now();
+    const nav = navInfo && now - navInfo.at < 1000 ? navInfo : null;
+    const tap = tapped && now - tapped.at < 1000 && tapped.href === location.hash ? tapped : null;
+    navInfo = null;
+    tapped = null;
+    // 戻る/進む: Navigation API の種類。無いときは、前に描いた印(vn)のある履歴へ移ったか
+    const trav = NAV_API ? !!(nav && nav.traverse) : entryIndex() != null;
+    const ua = (nav && nav.ua) || now - uaAt < 1000;
+    const dir = ua ? null : pageDir(trav, !!(tap && tap.tab));
+    if (!dir || !window.Motion || typeof Motion.page !== `function`) { render(); return; }
+    const seq = ++deferSeq;
+    let sync = true;
+    Motion.page(dir, () => {
+      if (seq !== deferSeq) return; // 待っている間に別の移動・描画があった
+      try {
+        if (!sync) {
+          viewRoot.innerHTML = ``;
+          let ev = null;
+          try { ev = new HashChangeEvent(`hashchange`); } catch (err) { ev = null; }
+          if (ev) {
+            ev.fdResent = true;
+            window.dispatchEvent(ev);
+          }
+          if (seq !== deferSeq) return; // 後片付けの中で別の描画があった
+        }
+        render();
+      } catch (err) {
+        if (sync) throw err;
+        setTimeout(() => { throw err; }, 0);
+      }
+    });
+    sync = false;
+  }
+
   function render() {
+    deferSeq++;
     const seq = ++renderSeq;
     let { view, param } = parseHash();
     // 古いURL(#summary/…)は、履歴を増やさずに今のURL(#works/…)へ付け替える(state はそのまま)
@@ -103,9 +204,7 @@ window.Router = (function () {
       return;
     }
     pending = false;
-    const prevView = renderedView;
     currentView = name;
-    renderedView = name;
 
     // 別の画面で保存した位置・状態(yh の画面が違う)がこの履歴に入っていたら使わない(画面側の qState・gState なども読ませない)
     // 同じ画面内の URL の付け替え(#quiz → #quiz/auto など)は画面名が同じなのでそのまま使う
@@ -113,10 +212,9 @@ window.Router = (function () {
     if (st0 && typeof st0 === `object` && typeof st0.yh === `string` && viewOfHash(st0.yh) !== viewOfHash(location.hash)) {
       try { history.replaceState(null, ``); } catch (e) { /* 無視 */ }
     }
-    // 戻る/進む・再読み込み(この履歴を前に表示したことがある)か。y・yh はこの画面を表示したあとにだけ書かれる
+    // 戻る/進む・再読み込み(この履歴を前に表示したことがある)ときの位置。y・yh はこの画面を表示したあとにだけ書かれる
     const st = history.state && typeof history.state === `object` ? history.state : null;
     const savedY = st && typeof st.y === `number` && Number.isFinite(st.y) ? st.y : 0;
-    const returning = !!(st && typeof st.yh === `string`);
 
     document.body.classList.remove(`exam-active`);
     // 前の画面の読み上げは止める(画面を離れても読み続けないように)
@@ -153,11 +251,8 @@ window.Router = (function () {
       setTimeout(fix, 50);
     }
 
-    // 画面に入るアニメーションは、同じタブ内で奥へ進むときだけ(タブ・サブナビの切替、戻る/進む・再読み込みでは動かさない)
+    // 画面の切り替えの動きは onHashChange(js/motion.js)。ここでは付けない
     const viewEl = Array.from(viewRoot.children).find((el) => el.classList.contains(`view`));
-    if (viewEl && !failed && !unknown && isDrillIn(prevView, name) && !returning && !(savedY > 0) && !(window.UI && UI.prefersReducedMotion())) {
-      viewEl.classList.add(`view-enter`);
-    }
 
     if (window.Nav) {
       Nav.update(name);
@@ -176,6 +271,7 @@ window.Router = (function () {
       heading.focus({ preventScroll: true });
     }
     firstRender = false;
+    markEntry();
 
     if (unknown && window.UI) UI.toast(`ページが見つからなかったため、ホームを表示しました`, `default`, { duration: 4000 });
     // 公開版: 最初の画面を描いたら、手の空いたときに詳細の読み込みを始める
@@ -209,8 +305,6 @@ window.Router = (function () {
   function showPending(name, seq) {
     pending = true;
     currentView = name;
-    // 読み込み中の表示のあとに描く画面(届いた画面・戻ったホーム)には、入るアニメーションを付けない
-    renderedView = null;
     clearTimeout(scrollTimer);
     document.body.classList.remove(`exam-active`);
     if (window.TTS && TTS.stop) TTS.stop();
@@ -219,6 +313,11 @@ window.Router = (function () {
     if (subnav) viewRoot.appendChild(subnav);
     viewRoot.appendChild(pendingEl());
     window.scrollTo(0, 0);
+    // 押したリンク(画面の中)が消えてフォーカスが <body> に落ちないよう、読み込み中の見出しへ(描けたら新しい画面の見出しへ移る)
+    if (!firstRender) {
+      const h = viewRoot.querySelector(`.view-pending h2`);
+      if (h) { h.setAttribute(`tabindex`, `-1`); h.focus({ preventScroll: true }); }
+    }
     if (window.Nav) Nav.update(name);
     const app = appName();
     document.title = app ? `読み込み中|${app}` : `読み込み中`;
@@ -244,7 +343,6 @@ window.Router = (function () {
       if (seq !== renderSeq) return;
       // 読み込めなかった: エラー画面(再読み込み・ホームへ)。ナビは使える
       pending = false;
-      renderedView = name;
       viewRoot.innerHTML = ``;
       const sub = window.Nav ? Nav.subnavFor(name) : null;
       if (sub) viewRoot.appendChild(sub);
@@ -259,25 +357,14 @@ window.Router = (function () {
   if (window.AppData && AppData.onDetail) {
     AppData.onDetail(() => {
       if (!viewRoot) return;
-      window.removeEventListener(`hashchange`, render);
-      window.addEventListener(`hashchange`, render);
+      window.removeEventListener(`hashchange`, onHashChange);
+      window.addEventListener(`hashchange`, onHashChange);
     });
-  }
-
-  // 同じタブの中で奥へ進む移動か(#topics → #topics/topicK、メニュー → 設定 など)
-  // PC は左のサイドバーの項目がそれぞれ入口なので、別の画面への移動はすべて切替として扱う(同じ画面の中で奥へ進むときだけ)
-  function isDrillIn(prev, next) {
-    if (!prev || !window.Nav || !Nav.tabOf) return false;
-    if (prev !== next && window.matchMedia && window.matchMedia(`(min-width: 1024px)`).matches) return false;
-    if (Nav.tabOf(prev) !== Nav.tabOf(next)) return false;
-    // サブナビでの横の切替(トピック ⇔ 用語集、4択 ⇔ ○× など)は除く
-    if (prev !== next && Nav.subnavOf && Nav.subnavOf(prev) && Nav.subnavOf(next)) return false;
-    return true;
   }
 
   function init(rootEl) {
     viewRoot = rootEl;
-    window.addEventListener(`hashchange`, render);
+    window.addEventListener(`hashchange`, onHashChange);
     if (!location.hash) history.replaceState(null, ``, `#${DEFAULT_VIEW}`);
     // 初回ガイド(画面全体を覆うダイアログ)を開いているときは、その下の最初の画面を次のタスクで描く
     // (ガイドの表示と最初の画面の描画・レイアウトを1つの長いタスクにしない。起動直後の操作の待ちを短くする)。

@@ -29,7 +29,7 @@
 .seg-bold {
   gap: 6px;
   padding: 6px 6px 10px;
-  border-radius: 18px;
+  border-radius: var(--radius-tile);
   background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 2px var(--color-border);
 }
@@ -60,7 +60,8 @@
 }
 .topics-view .topic-group { margin-bottom: var(--sp-5); }
 .topics-view .topic-group-head { align-items: center; margin: var(--sp-6) 0 var(--sp-3); }
-.topics-view .topic-group-head h3 { font-size: var(--fs-lg); }
+/* 画面の中の区切りの見出し(カードの外の h3)はどの画面も 20px(ホーム・トピック詳細と同じ。カードの見出しは 18px・ページの見出しは 24px) */
+:is(.topics-view .topic-group-head, .fig-group-head, .bm-section-head) h3, .sources-view .source-category { font-size: var(--fs-xl); }
 .topics-view .topic-group-meta { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-sm); color: var(--color-text-muted); }
 .topics-view .topic-grid { gap: var(--sp-3); }
 /* トピックのカード: 押せるカード(下のふちで沈む)+分野の色のステッカーと進捗バー */
@@ -106,7 +107,7 @@
 /* 問題への入口: 大きなふちのあるボタン(4択は緑の塗り、一問一答は白) */
 .topic-practice { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin: 0 0 var(--sp-2); }
 .topic-practice .btn { flex: 1 1 200px; min-height: 60px; justify-content: flex-start; gap: var(--sp-3); padding: var(--sp-2) var(--sp-4); text-align: left; }
-.topic-practice .btn > .icon { width: 24px; height: 24px; stroke-width: 2.2; }
+.topic-practice .btn > .icon { width: 24px; height: 24px; }
 .topic-practice .btn > .icon:last-child:not(:first-child) { margin-left: auto; width: 20px; height: 20px; }
 .topic-practice-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; font-size: var(--fs-base); white-space: nowrap; }
 .topic-practice-count { font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 700; font-variant-numeric: tabular-nums; opacity: .92; }
@@ -300,7 +301,7 @@
   font-size: var(--fs-md);
   text-decoration: none;
 }
-.basics-card-hint > span:not(.sticker) { flex: 1 1 auto; min-width: 0; }
+.basics-card-hint > span:not(.sticker) { flex: 1 1 auto; min-width: 0; text-wrap: balance; word-break: auto-phrase; }
 .basics-card-hint > .icon:last-child { color: var(--color-text-muted); }
 .card-grid[hidden] { display: none; }
 
@@ -452,7 +453,9 @@
 .figures-view .fig-pager-link:active { transform: translateY(var(--lip-h)); box-shadow: 0 0 0 var(--lip-neutral); }
 @media (hover: hover) { .figures-view .fig-pager-link:hover { border-color: var(--color-border-strong); box-shadow: 0 var(--lip-h) 0 var(--lip-neutral); } }
 .figures-view .fig-pager-link .icon { flex-shrink: 0; stroke-width: 2.4; }
-.fig-detail .fig-desc-card .card-title .icon { color: var(--color-primary); }
+/* 「この図の説明」の見出しのアイコンは、ほかのカードの見出しと同じ丸いステッカーの形(「試験のポイント」の小さなステッカーと同じ描き方) */
+.fig-detail .fig-desc-card .card-title { gap: 10px; }
+.fig-detail .fig-desc-card .card-title .icon { width: 32px; height: 32px; padding: 6px; border-radius: 50%; background: var(--sticker-primary); color: var(--sticker-fg); stroke-width: 2.4; --icon-cut: var(--sticker-primary); }
 /* スマホでは図解の詳細の枠の左右の余白を詰める(図は幅に合わせて縮むので、図の中の文字を少しでも大きく。
    iPhone 13 で図の中の小さい文字が約9.9px → 約10.4px)。features.css の .fig-detail-figure .figure より優先する */
 @media (max-width: 480px) {
@@ -502,6 +505,8 @@
   :root[data-theme="dark"] .review-view .grade-btn:hover { filter: brightness(1.08); }
 }
 /* 横向きのスマホでは1行の低いトレイ(practice.css)なので、トレイの余白とボタンの中のすき間を詰める */
+/* 320px などの狭い画面では「もう一度」が2行に割れないよう、字間を詰めて1行に */
+@media (max-width: 359px) { .review-view .grade-btn { letter-spacing: 0; white-space: nowrap; } }
 @media (max-width: 1023px) and (max-height: 500px) and (orientation: landscape) {
   .review-view .review-grade-row { padding: var(--sp-1); }
   .review-view .grade-btn { gap: var(--sp-1); }
@@ -513,7 +518,8 @@
 .rv-done-mascot { width: 112px; height: 112px; }
 .review-view .rv-done-title { font-family: var(--font-display); font-weight: var(--fw-display); font-size: var(--fs-2xl); color: var(--color-heading); }
 .review-view .rv-done-stat { gap: 4px; padding: var(--sp-3) var(--sp-1) var(--sp-3); border: 2px solid var(--color-border); border-radius: var(--radius-card); background: var(--color-surface); box-shadow: 0 2px 0 var(--color-border); }
-.review-view .rv-done-stat strong { font-family: var(--font-display); font-size: 2rem; font-weight: var(--fw-display); line-height: 1.1; color: var(--color-primary); letter-spacing: 0; }
+.review-view .rv-done-stat strong { font-family: var(--font-display); font-size: 2rem; font-weight: var(--fw-display); line-height: 1.1; color: var(--color-primary); letter-spacing: 0; white-space: nowrap; }
+@media (max-width: 359px) { .review-view .rv-done-stat strong { font-size: 1.75rem; } }
 .review-view .rv-done-stat strong small { font-size: var(--fs-md); }
 .review-view .rv-done-stat span:not(.sticker) { font-weight: 600; }
 /* 連続日数はごほうびの金色(炎のステッカー) */
@@ -528,13 +534,14 @@
 /* ---------- ブックマーク ---------- */
 .bookmarks-view .bm-filter { margin-bottom: var(--sp-4); max-width: 460px; }
 .bookmarks-view .bm-filter .segmented-item { min-height: 44px; gap: 6px; }
-.bookmarks-view .bm-count { display: inline-grid; place-items: center; min-width: 0; font-family: var(--font-display); font-size: var(--fs-sm); font-weight: var(--fw-display); opacity: .8; }
+.bookmarks-view .bm-count { display: inline-grid; place-items: center; min-width: 0; font-family: var(--font-display); font-size: var(--fs-sm); font-weight: var(--fw-display); }
 .bookmarks-view .bm-section-head h3 { display: flex; align-items: center; gap: var(--sp-2); }
 .bookmarks-view .bm-section-head .sticker .icon { color: var(--sticker-fg); width: 18px; height: 18px; }
 .bm-sec-count { font-family: var(--font-display); font-size: var(--fs-base); font-weight: var(--fw-display); color: var(--color-text-muted); }
 
 /* ---------- 作品で学ぶ ---------- */
-.works-view .works-notice { display: flex; flex-direction: column; gap: var(--sp-1); border: 2px solid var(--color-border); background: var(--color-surface-muted); box-shadow: none; border-radius: var(--radius-card); }
+/* 注意の囲みは PC でも 680px まで(文が1行に長く並びすぎないように。下の一覧は幅いっぱい) */
+.works-view .works-notice { display: flex; flex-direction: column; gap: var(--sp-1); max-width: 680px; border: 2px solid var(--color-border); background: var(--color-surface-muted); box-shadow: none; border-radius: var(--radius-card); }
 .works-view .works-notice-title { font-family: var(--font-display); font-weight: var(--fw-display); }
 .works-view .works-notice-title .sticker { width: 28px; height: 28px; }
 .works-view .works-notice-title .sticker .icon { width: 16px; height: 16px; }
@@ -563,4 +570,4 @@
 }
 
 /* ---------- 文中のリンクボタン(行の高さを乱さない) ---------- */
-.view-desc .link-btn, .episode-empty-state .link-btn { display: inline; min-height: 0; vertical-align: baseline; }
+.view-desc .link-btn { display: inline; min-height: 0; vertical-align: baseline; }

@@ -1713,9 +1713,8 @@ window.Views.exam = (function () {
           : `<p class="exam-next-lead">${catRows.length ? `すべての分野で正答率7割以上でした。` : ``}${isRetry ? `模擬試験でも確かめてみましょう。` : entry.mode === `short` ? `次はフル(50問)で、時間配分も含めて試してみましょう。` : `この調子で、間隔をあけてもう一度受けてみましょう。`}</p>`}
       </section>`;
 
-    const timeText = entry.timed && Number.isInteger(entry.limitMin) && entry.limitMin > 0
-      ? `${fmtDuration(entry.durationSec || 0)}(制限${entry.limitMin}分)`
-      : `${fmtDuration(entry.durationSec || 0)}(時間制限なし)`;
+    // 制限時間は「1問あたり」の目安と同じ小さな添え書き(かっこの中で行が割れないように)
+    const timeHtml = `${esc(fmtDuration(entry.durationSec || 0))}<small class="nowrap">${entry.timed && Number.isInteger(entry.limitMin) && entry.limitMin > 0 ? `(制限${entry.limitMin}分)` : `(時間制限なし)`}</small>`;
     const guide = isRetry ? null : guideSecPerQuestion(entry.mode);
     const perQ = entry.durationSec >= entry.total ? entry.durationSec / entry.total : null;
     const flagCount = flaggedNos ? flaggedNos.length : 0;
@@ -1745,7 +1744,7 @@ window.Views.exam = (function () {
         <dl class="exam-result-meta">
           <div><dt>実施</dt><dd>${esc(fmtDateTime(entry.finishedAt || entry.startedAt))}</dd></div>
           <div><dt>形式</dt><dd>${esc(modeText(entry.mode, entry.total))}</dd></div>
-          <div><dt>時間</dt><dd>${esc(timeText)}</dd></div>
+          <div><dt>時間</dt><dd>${timeHtml}</dd></div>
           <div><dt>正答率</dt><dd class="num">${pct}%</dd></div>
           ${perQ ? `<div><dt>1問あたり</dt><dd class="num">${fmtPer(perQ)}${guide ? `<small>(目安${fmtPer(guide)})</small>` : ``}</dd></div>` : ``}
         </dl>

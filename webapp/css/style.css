@@ -7,9 +7,53 @@
          分野の色(--cat-*)はアイコンのステッカーと進捗バーで同じものを使う。
    形: 押せる物(ボタン・選択肢・押せるカード)は下に「ふち」(--lip-*)の厚みがあり、押すと沈む。
        置いてあるだけの面は 1px の線+外側の線(合わせて 2px)と下 2px の厚み。ぼかした影・淡いグラデーションは使わない。
-   文字の太さ: 本文 400 / ボタン以外のラベル 600〜700 / 見出し・ボタン・大きな数字 800(--font-display)
-   (iPhone のヒラギノは 600〜800 が W6。丸ゴシックは W4 だけなので 800 は端末が太字を合成する)
+   文字の太さ: 本文 400 / ボタン以外のラベル 600〜700 / 見出し・ボタン・大きな数字 800(--font-display = M PLUS Rounded 1c ExtraBold。600〜900 の指定は 800 の字形、500 以下は端末の書体)
    ========================================================= */
+
+/* 見出し用の書体(--font-display の先頭): M PLUS Rounded 1c ExtraBold(SIL Open Font License 1.1。fonts/OFL.txt)を、
+   アプリで使う文字だけに絞ったもの(tools/font_subset.js が作る。文言・名前に新しい文字を足したら作り直す。tools/check.js が警告する)。
+   ファイルは「かな・英数字・記号」と「漢字」の2つ(unicode-range。tools/font_subset.js の SLICES と同じ範囲)。ブラウザは画面に出た文字の
+   ファイルだけを読み込むので、起動画面(「ふどまな」)は小さい方だけで描け、初回の表示に要るファイルの読み込みを邪魔しない。
+   読み込みを待たずに端末の書体で先に表示し、届いたら差し替える(swap)。太さは 800 の1つだけ(600〜900 の指定はこの字形をそのまま使い、
+   太字を合成しない)。フォントにない文字(「○×」の × ÷ はこの書体だと小さいので、わざと入れていない)は --font-display の次の書体で
+   表示される。Service Worker が保存するのでオフラインでも使える */
+@font-face {
+  font-family: "Fudomana Rounded";
+  src: url("../fonts/fudomana-rounded-800-base.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0-33FF, U+4DC0-4DFF, U+A000-F8FF, U+FB00-FFFF;
+}
+@font-face {
+  font-family: "Fudomana Rounded";
+  src: url("../fonts/fudomana-rounded-800-kanji.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+20000-3FFFF;
+}
+/* 最初の画面(起動画面・ホーム・ナビ・読み込み中)に出うる漢字だけの小さなファイル。上の漢字の面より後に書く(後に書いた面が先に使われる)。
+   unicode-range は node tools/font_subset.js が書き込む(手で直さない)。ここにない漢字は上の面(残りの漢字)から */
+@font-face {
+  font-family: "Fudomana Rounded";
+  src: url("../fonts/fudomana-rounded-800-kanji-core.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4E00, U+4E09-4E0B, U+4E0D-4E0E, U+4E26, U+4E2D, U+4E86, U+4E88-4E89, U+4E8B-4E8C, U+4EA4, U+4EBA, U+4ECA-4ECB, U+4ED5-4ED6, U+4ED8, U+4EE3-4EE5, U+4EEE, U+4EF6, U+4EFB, U+4F1A, U+4F38, U+4F4F, U+4F53, U+4F55, U+4F5C, U+4F7F, U+4F8B, U+4FA1, U+4FC2-4FC3, U+4FDD, U+4FE1, U+500B, U+501F, U+5024, U+5074, U+50B5, U+50CF, U+512A, U+5143, U+5148, U+514D, U+5165, U+5168, U+516C, U+5171, U+5177-5178, U+5185, U+518D, U+51E6, U+51FA, U+5206-5207, U+5217, U+521D, U+5224-5225, U+5229, U+5236, U+524D, U+5272, U+529B, U+52A0, U+52B9, U+52C9, U+52D5, U+52D8-52D9, U+533A, U+5341, U+5352, U+5354, U+5358, U+5370, U+5374, U+53BB, U+53CA, U+53CD, U+53D6-53D7, U+53E4, U+53EF, U+53F7, U+5408, U+540C-540D, U+542B, U+544A, U+5473, U+548C, U+54C1, U+5546, U+554F, U+55B6, U+56DB, U+56DE, U+56F2-56F3, U+56FA, U+56FD, U+571F, U+5728, U+5730, U+57FA, U+5831, U+5897, U+58EB, U+58F2, U+5909, U+5916, U+591A, U+591C, U+5927, U+5931, U+5951, U+59CB, U+5A92, U+5B50, U+5B57-5B58, U+5B66, U+5B85, U+5B89, U+5B8C, U+5B9A, U+5B9F, U+5BB6, U+5BB9, U+5BE9, U+5BFE, U+5C0F, U+5C11, U+5C4B, U+5C65, U+5E02, U+5E2F, U+5E45, U+5E74, U+5E81, U+5E83, U+5EA6, U+5EC3, U+5EFA, U+5F0F, U+5F15, U+5F31, U+5F35, U+5F37, U+5F53, U+5F62, U+5F79, U+5F85, U+5F8B-5F8C, U+5F97, U+5FA9, U+5FC3, U+5FC5, U+5FD8, U+5FDC, U+601D, U+6027, U+60C5, U+60F3, U+610F, U+614B, U+61B6, U+6210, U+6226, U+623B, U+6240, U+624B, U+629E, U+62B5, U+62BC, U+62C5, U+62E0, U+6301, U+6311, U+6357, U+63A2, U+63A7-63A8, U+63AA, U+63F4, U+64CD, U+64EC, U+652F, U+6539, U+653E, U+6557, U+6570, U+6574, U+6587, U+6599, U+65AD, U+65B0, U+65B9, U+65BD, U+65E5, U+660E, U+6613, U+6620, U+6642, U+666E-666F, U+66AE, U+66F4, U+66F8, U+66FF-6700, U+6708-6709, U+671F, U+6728, U+672A-672C, U+6761, U+6765, U+6790, U+679A, U+679C, U+67FB, U+6839, U+683C, U+6848, U+691C, U+696D, U+6982, U+69CB, U+6A19, U+6A21, U+6A29, U+6A5F, U+6B21, U+6B3A, U+6B62-6B63, U+6B74, U+6B8A-6B8B, U+6BCE, U+6C11, U+6C17, U+6C34, U+6C7A, U+6CD5, U+6CE8, U+6D41, U+6D88, U+6E08, U+6E21, U+6E2C, U+6E80, U+6E90, U+6E96, U+6F14, U+706B, U+70B9-70BA, U+7121, U+7136, U+719F, U+7247-7248, U+7269, U+7279, U+72B6, U+72EC, U+7372, U+7387, U+7406, U+7455, U+751F, U+7523, U+7528, U+7531, U+7533, U+753B, U+754C, U+756A, U+75B2, U+75B5, U+767A-767B, U+7684, U+76DB, U+76E3, U+76EE, U+76F4, U+76F8, U+7701, U+7740, U+7763, U+77E5, U+77ED, U+78BA, U+790E, U+793A, U+79D1-79D2, U+79DF, U+79FB, U+7A0B, U+7A0E, U+7A2E, U+7A7A, U+7ACB, U+7AEF, U+7AF6, U+7B2C, U+7B49, U+7B54, U+7B56, U+7B97, U+7BA1, U+7BC0, U+7BC4, U+7BC9, U+7C21, U+7D04, U+7D0D, U+7D19-7D1B, U+7D22, U+7D30, U+7D39, U+7D42, U+7D44, U+7D50, U+7D71, U+7D99-7D9A, U+7DAD, U+7DCF, U+7DE8, U+7E3E, U+7F6E, U+7FA9, U+7FD2, U+8005, U+805E, U+80A2, U+80FD, U+8155, U+81EA, U+81F4, U+822C, U+82E6, U+843D, U+878D, U+884C, U+8868, U+88C1, U+88CF, U+88DC, U+8907, U+8981, U+8987, U+898B, U+898F, U+899A, U+89A7, U+89E3, U+8A08, U+8A18, U+8A2D, U+8A31, U+8A3C, U+8A50, U+8A55, U+8A66, U+8A73, U+8A8D, U+8A9E, U+8AA4, U+8AAC-8AAD, U+8AB2, U+8ABF, U+8AC7, U+8AD6, U+8AF8, U+8B58, U+8B66, U+8B72, U+8B77, U+8C61, U+8CAC, U+8CB7-8CB8, U+8CBB, U+8CC3, U+8CC7, U+8CEA, U+8CFC, U+8D08, U+8D77, U+8D85, U+8DB3, U+8DF5, U+8EAB, U+8FB2, U+8FBC, U+8FD1, U+8FD4, U+8FF0, U+8FFD, U+9000-9001, U+9006, U+901A, U+9020, U+9023, U+9031-9032, U+9045, U+904B, U+904E, U+9054-9055, U+9069, U+9078, U+907F, U+90E8, U+90FD, U+914D, U+916C, U+91CD-91CF, U+91D1, U+9332, U+9451, U+9577, U+9580, U+9589, U+958B, U+9593, U+95A2, U+9632, U+9650, U+9664, U+967A, U+9694, U+96A3, U+96C6, U+96E3, U+975E, U+9762, U+9805-9806, U+9808, U+9811, U+984C-984D, U+985E, U+9A13, U+9AD8;
+}
+/* 細い指定(500 以下。大きな数字の横の単位「/20」「%」・切り替えの件数など)は、この書体の 800 にせず端末の書体(--font-display の次)で
+   表示する: どの文字にも当たらない範囲(U+0)の面を細い太さに置くと、細い指定はこの面が選ばれ、文字がないので次の書体に移る
+   (この面のファイルは読み込まれない) */
+@font-face {
+  font-family: "Fudomana Rounded";
+  src: url("../fonts/fudomana-rounded-800-base.woff2") format("woff2");
+  font-weight: 100 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0;
+}
 
 /* ---------- 1. トークン ---------- */
 :root {
@@ -17,8 +61,9 @@
 
   /* 文字 */
   --font-sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
-  /* 見出し・ボタン・数字だけに使う(短い文字だけ。読む文章には使わない)。Windows では Yu Gothic UI の太字になる */
-  --font-display: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  /* 見出し・ボタン・数字だけに使う(短い文字だけ。読む文章には使わない)。どの端末でも同じ丸ゴシック(上の @font-face)。
+     読み込み中とフォントにない文字は、iPhone・Mac はヒラギノ丸ゴ、Windows は Yu Gothic UI の太字 */
+  --font-display: "Fudomana Rounded", "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, Menlo, monospace;
   --fs-2xs: .6875rem;
   --fs-xs: .75rem;
@@ -58,8 +103,10 @@
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
-  /* ボタン・選択肢 */
+  /* ボタン・選択肢・カードの中の色の付いた囲み */
   --radius-btn: 16px;
+  /* 押せるタイル(ホームの小さいタイル・今週やること・目的の札・初回ガイドの選択肢など。高さ 60〜170px) */
+  --radius-tile: 18px;
   /* カード・グループ化したリスト */
   --radius-card: 20px;
   /* シート・ダイアログ */
@@ -399,12 +446,18 @@ h2[tabindex="-1"]:focus { outline: none; }
 }
 
 .view-desc { color: var(--color-text-muted); font-size: var(--fs-md); line-height: var(--lh-snug); margin: 0 0 var(--sp-4); }
+/* 説明の文は1行 46 字ほどまで(タブレット・PC で行が長くなりすぎないように。スマホは幅いっぱいのまま)。
+   面の色が付いた冒頭の注意(設定の .settings-intro)は面ごと縮まないよう除く */
+:is(.view-desc:not(.settings-intro), .calc-note, .prog-note, .calc-disclaimer, .settings-answer-help, .ask-ai-privacy) { max-width: 46em; }
 /* 見出し・ボタンの文字は行ごとの長さをそろえ、最後の行に1〜2文字だけ残らないように */
 h2, .card-title, .empty-state-title, .todo-title, .hero-primary-title, .sheet-title, .btn-lg, .btn-block { text-wrap: balance; }
 /* 見出しは語の途中(「用語/集」「上/限」)で折り返さず、文節の切れ目で折り返す(Chrome系のみ。ほかのブラウザでは無視される) */
 h2, .card-title, .sheet-title { word-break: auto-phrase; }
 /* 行の中の短い説明(メニュー・設定の選択肢・ホームの行)も「バックア/ップ」のように語の途中で切らない */
-:is(.list-row-sub, .more-row-desc, .profile-option-desc, .todo-sub, .tile-desc) { word-break: auto-phrase; }
+:is(.list-row-sub, .more-row-desc, .profile-option-desc, .todo-sub) { word-break: auto-phrase; }
+/* カード・行・タイルの短い題名も同じ(語の途中で2行に分けない)。用語名・法令名・基礎知識の項目名のような長い複合語は、
+   1つの語が1行に収まらないと「…マンショ/ン」のように最後の1字だけ落ちるので対象にしない */
+:is(.topic-card-title, .basics-section-name, .fig-card-title, .more-row-title, .settings-card-title, .profile-option-title, .empty-state-title, .calc-title, .continue-title, .prog-topic-name, .ana-cat-name, .source-category) { word-break: auto-phrase; }
 /* 操作部品は長押しで文字選択・メニューが出ないように(本文は選択できるまま) */
 :is(.btn, .chip, .segmented, .subnav, .bottom-nav, .side-nav-item) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .text-muted { color: var(--color-text-muted); }
@@ -467,7 +520,7 @@ h2, .card-title, .sheet-title { word-break: auto-phrase; }
   width: 100%;
   min-height: 44px;
   padding: var(--sp-2) var(--sp-3) var(--sp-2) 40px;
-  border: 2px solid var(--color-border);
+  border: 2px solid var(--color-border-control);
   border-radius: var(--radius-md);
   font-size: var(--fs-md);
   background: var(--color-surface-muted);
@@ -561,7 +614,10 @@ h2, .card-title, .sheet-title { word-break: auto-phrase; }
 @media (hover: hover) { .side-nav-item:hover { background: var(--color-surface-muted); color: var(--color-text); } }
 /* 表示中: 下部タブと同じく緑の文字とアイコン。PC は場所が分かるよう面と 2px の枠も付ける */
 .side-nav-item[aria-current="page"] { background: var(--color-primary-soft); color: var(--color-primary); box-shadow: inset 0 0 0 2px var(--color-primary-line); font-family: var(--font-display); font-weight: var(--fw-display); }
-.side-nav-item[aria-current="page"] .icon { stroke-width: 2.25; }
+.side-nav-item[aria-current="page"] .icon { stroke-width: 2.5; }
+/* アイコンのうすい塗り(.i-t)は表示中の項目だけ */
+.side-nav-item .icon .i-t { fill-opacity: 0; }
+.side-nav-item[aria-current="page"] .icon .i-t { fill-opacity: .3; }
 .side-nav-item .badge-count { margin-left: auto; }
 .side-nav-bottom { margin-top: auto; padding-top: var(--sp-3); border-top: 2px solid var(--color-border); }
 
@@ -601,8 +657,10 @@ h2, .card-title, .sheet-title { word-break: auto-phrase; }
   transition: transform var(--dur-1) var(--ease-std);
 }
 .bottom-nav-icon .icon { width: 26px; height: 26px; transition: stroke-width var(--dur-1); }
+.bottom-nav-icon .icon .i-t { fill-opacity: 0; transition: fill-opacity var(--dur-1); }
 .bottom-nav-item[aria-current="page"] { color: var(--color-primary); font-family: var(--font-display); font-weight: var(--fw-display); }
-.bottom-nav-item[aria-current="page"] .bottom-nav-icon .icon { stroke-width: 2.4; }
+.bottom-nav-item[aria-current="page"] .bottom-nav-icon .icon { stroke-width: 2.5; }
+.bottom-nav-item[aria-current="page"] .bottom-nav-icon .icon .i-t { fill-opacity: .3; }
 .bottom-nav-item .badge-count { position: absolute; top: 3px; left: calc(50% + 8px); }
 
 body { padding-bottom: calc(var(--bottom-nav-h) + var(--safe-bottom)); }
@@ -718,14 +776,14 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 .card-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-2); margin-top: var(--sp-3); }
 
 /* カードを並べるリスト: 余白は gap で管理する */
-.quiz-list, .card-list, .law-row-grid, .source-row-grid, .basics-checklist, .episode-checklist,
-.card-grid, .topic-grid, .stat-grid, .home-grid, .tile-grid {
+.quiz-list, .card-list, .law-row-grid, .source-row-grid, .basics-checklist,
+.card-grid, .topic-grid, .stat-grid {
   display: grid;
   gap: var(--sp-3);
 }
-:is(.quiz-list, .card-list, .law-row-grid, .source-row-grid, .basics-checklist, .episode-checklist,
-.card-grid, .topic-grid, .stat-grid, .home-grid, .tile-grid) > * { margin: 0; }
-.basics-checklist, .episode-checklist { list-style: none; padding: 0; margin: 0 0 var(--sp-5); }
+:is(.quiz-list, .card-list, .law-row-grid, .source-row-grid, .basics-checklist,
+.card-grid, .topic-grid, .stat-grid) > * { margin: 0; }
+.basics-checklist { list-style: none; padding: 0; margin: 0 0 var(--sp-5); }
 
 /* ボタン
    塗りの下に濃い同系色の「ふち」(--btn-lip、厚さ --lip-h)があり、押すとその分だけ沈む。
@@ -771,6 +829,9 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 @media (hover: hover) { .btn-gold:hover { background: var(--gold); filter: brightness(1.05); } }
 .btn-sm { --lip-h: 3px; min-height: 36px; padding: var(--sp-1) var(--sp-3); font-size: var(--fs-sm); border-radius: var(--radius-md); }
 .btn-lg { min-height: 52px; padding: var(--sp-3) var(--sp-5); font-size: var(--fs-base); border-radius: var(--radius-btn); }
+/* ふちの厚さは大きさの段階ごとに1つ: 小さいボタン 3px / ふつう・大きいボタン 4px(--lip-h の既定)/
+   画面の主な開始ボタン(高さ 60px 以上: ホームの「つづける」・トピックの問題への入口・○×と模擬試験の開始)5px */
+:is(.home-go, .topic-practice .btn, .ox-view .ox-start, .exam-view .exam-start) { --lip-h: 5px; border-radius: var(--radius-btn); }
 .btn-block { width: 100%; }
 .btn-icon {
   --lip-h: 0px;
@@ -814,8 +875,8 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 /* 文中のリンクボタンは行の高さを広げない(押せる範囲は ::after で上下に広げる) */
 @media (hover: hover) { .link-btn:hover { text-decoration: underline; } }
 /* 文中のリンクボタンは文中のリンクと同じく下線付き */
-:is(.view-desc, .episode-empty-state, p) > .link-btn { display: inline; min-height: 0; padding: 0; vertical-align: baseline; position: relative; text-decoration: underline; text-decoration-thickness: 1px; }
-:is(.view-desc, .episode-empty-state, p) > .link-btn::after { content: ""; position: absolute; inset: -10px -2px; }
+:is(.view-desc, p) > .link-btn { display: inline; min-height: 0; padding: 0; vertical-align: baseline; position: relative; text-decoration: underline; text-decoration-thickness: 1px; }
+:is(.view-desc, p) > .link-btn::after { content: ""; position: absolute; inset: -10px -2px; }
 
 /* チップ(絞り込みの切り替え)。錠剤型をやめ、角の丸い札に。選択中は淡い緑の面+緑の枠と文字(塗りつぶさない) */
 .chip-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
@@ -926,7 +987,8 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
   width: 100%;
   min-height: 44px;
   padding: var(--sp-2) var(--sp-3);
-  border: 2px solid var(--color-border-strong);
+  /* 入力欄の枠は操作部品の線(面に対して 3:1 以上。計算機の入力欄と同じ) */
+  border: 2px solid var(--color-border-control);
   border-radius: var(--radius-md);
   font-size: var(--fs-base);
   background: var(--color-surface);
@@ -949,8 +1011,6 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
 .progress-bar { flex: 1; height: 12px; background: var(--color-surface-muted); border-radius: var(--radius-pill); overflow: hidden; }
 .progress-bar-lg { height: 16px; }
 .progress-bar-fill { height: 100%; background: var(--cat, var(--color-primary-fill)); width: 0%; border-radius: inherit; transition: width var(--dur-3) var(--ease-out); }
-.progress-bar-fill.fill-understood, .progress-bar-fill.fill-accent { background: var(--color-accent); }
-.progress-bar-fill.fill-video { background: var(--color-video); }
 .progress-bar-fill.fill-success { background: var(--gold); }
 
 /* 統計タイル */
@@ -989,7 +1049,7 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
   display: grid;
   place-items: center;
 }
-.empty-state-icon .icon { width: 34px; height: 34px; stroke-width: 2.1; }
+.empty-state-icon .icon { width: 34px; height: 34px; stroke-width: 2.25; }
 .empty-state-title { font-family: var(--font-display); font-weight: var(--fw-display); color: var(--color-heading); font-size: var(--fs-lg); margin: 0; }
 .empty-state-body { font-size: var(--fs-md); max-width: 38ch; margin: 0; line-height: var(--lh-snug); }
 
@@ -1216,7 +1276,7 @@ body:not(.app-ready) .app-footer { visibility: hidden; }
   place-items: center;
   flex-shrink: 0;
 }
-.topic-icon .icon { stroke-width: 2.1; }
+.topic-icon .icon { stroke-width: 2.4; }
 .topic-card-title { font-family: var(--font-display); font-weight: var(--fw-display); color: var(--color-heading); line-height: var(--lh-tight); font-feature-settings: "palt"; }
 .topic-card .episode-summary { font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); margin: 0; flex: 1; }
 .topic-progress-row { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--color-text-muted); }
@@ -1261,24 +1321,11 @@ a.topic-card { text-decoration: none; color: inherit; }
 .episode-chip-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin: var(--sp-2) 0; }
 .video-links { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); flex-wrap: wrap; }
 .specials-section { margin-top: var(--sp-5); }
-.specials-section summary { cursor: pointer; font-weight: 700; padding: var(--sp-2) 0; color: var(--color-heading); min-height: 44px; display: flex; align-items: center; gap: var(--sp-2); }
-.ep-link {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  text-decoration: none;
-  cursor: pointer;
-  font-size: var(--fs-md);
-  font-weight: 600;
-  flex: 1 0 160px;
-  text-align: left;
-  padding: var(--sp-2) 0;
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
-@media (hover: hover) { .ep-link:hover { text-decoration: underline; } }
+.specials-section summary { cursor: pointer; font-weight: 700; padding: var(--sp-2) 0; color: var(--color-heading); min-height: 44px; display: flex; align-items: center; gap: var(--sp-2); list-style: none; }
+/* 開閉できることが分かるよう、トピックの基礎知識と同じ下向きの矢印(開くと上向き) */
+.specials-section summary::-webkit-details-marker { display: none; }
+.specials-section summary .chevron { display: inline-flex; margin-left: auto; color: var(--color-text-muted); transition: transform var(--dur-2) var(--ease-std); }
+.specials-section[open] summary .chevron { transform: rotate(180deg); }
 .law-row { padding: var(--sp-3) var(--sp-4); }
 .law-name { font-weight: 700; color: var(--color-heading); display: flex; align-items: center; gap: var(--sp-2); }
 .law-desc { font-size: var(--fs-md); margin: var(--sp-1) 0; line-height: var(--lh-snug); }
@@ -1454,8 +1501,7 @@ a.topic-card { text-decoration: none; color: inherit; }
 .cat-bar-meta { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
 
 /* ---------- 6. アニメーション ---------- */
-/* 画面の切替: 奥へ進むときだけ短く(タブの切替・戻るでは付けない。router.js 側で判定) */
-@keyframes view-enter { from { opacity: .6; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* 画面の切替の動きは css/motion.css(View Transitions) */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes sheet-up { from { transform: translateY(32px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -1465,9 +1511,7 @@ a.topic-card { text-decoration: none; color: inherit; }
 /* 正解のチェック・ステッカーが「ぽん」と出る動き(0.6 → 1.15 → 1。.anim-pop で使える) */
 @keyframes pop-check { 0% { transform: scale(.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
 .anim-pop { animation: pop-check 250ms var(--ease-out); }
-.anim-shake { animation: shake-x 300ms var(--ease-std); }
 
-.view-enter { animation: view-enter 160ms var(--ease-out); }
 /* シートの閉じる動き・つまみで引いて閉じる操作・下端に固定する操作欄(.sheet-foot)は css/shell.css */
 
 @media (prefers-reduced-motion: reduce) {
@@ -1526,7 +1570,7 @@ a.topic-card { text-decoration: none; color: inherit; }
   h2 { font-size: var(--fs-3xl); }
   h3 { font-size: var(--fs-xl); }
 
-  .card-list, .quiz-list, .basics-checklist, .episode-checklist, .law-row-grid, .source-row-grid {
+  .card-list, .quiz-list, .basics-checklist, .law-row-grid, .source-row-grid {
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     align-items: start;
   }
@@ -1609,7 +1653,7 @@ a.topic-card { text-decoration: none; color: inherit; }
 .recommend-head .link-btn { font-size: var(--fs-sm); }
 
 /* 説明文の最後の行に1〜2文字だけ残る改行を避ける(対応ブラウザのみ) */
-.todo-sub, .view-desc, .calc-note, .empty-state-body, .tile-desc, .quiz-explanation { text-wrap: pretty; }
+.todo-sub, .view-desc, .calc-note, .empty-state-body, .quiz-explanation { text-wrap: pretty; }
 
 /* タップの手応え(iPhoneでは app.js の touchstart 登録で :active が効く)。
    どの塗りの上にも重ねられるよう、半透明の影を背景画像として重ねる */
@@ -1706,7 +1750,7 @@ a.topic-card { text-decoration: none; color: inherit; }
 :is(a, button).list-row:active { background-image: linear-gradient(var(--color-press), var(--color-press)); }
 /* 行のアイコン: 丸いステッカー(要注意は赤みのある色、済み・ごほうびは金色。分野の色は親の .cat-* で変わる) */
 .list-row-icon { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--sticker-bg, var(--cat, var(--sticker-primary))); color: var(--sticker-fg); flex-shrink: 0; }
-.list-row-icon .icon { stroke-width: 2.1; }
+.list-row-icon .icon { stroke-width: 2.4; }
 .list-row-icon.is-warn { --sticker-bg: var(--sticker-warn); }
 .list-row-icon:is(.is-ok, .is-warm) { --sticker-bg: var(--gold); color: var(--gold-ink); }
 .list-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.45; }
@@ -1747,6 +1791,8 @@ a.topic-card { text-decoration: none; color: inherit; }
 .about-section-title[tabindex="-1"]:focus { outline: none; }
 .about-section p { margin: 0 0 var(--sp-3); line-height: var(--lh-snug); }
 .about-section > :last-child { margin-bottom: 0; }
+/* 文の間のボタン(情報源の一覧へ)は、下のふちの分まで次の文から離す */
+.about-section > .card-actions:not(:last-child) { margin: var(--sp-1) 0 var(--sp-5); }
 .about-section ul, .about-section ol { margin: 0 0 var(--sp-3); padding-left: 1.3em; display: grid; gap: var(--sp-1); line-height: var(--lh-snug); }
 .about-sub { font-size: var(--fs-md); margin: var(--sp-4) 0 var(--sp-2); }
 .about-lead { font-weight: 700; color: var(--color-heading); }
@@ -1788,13 +1834,12 @@ a.topic-card { text-decoration: none; color: inherit; }
 .sticker { width: 44px; height: 44px; flex-shrink: 0; display: inline-grid; place-items: center; border-radius: 50%; background: var(--sticker-bg, var(--cat, var(--sticker-primary))); color: var(--sticker-fg); }
 .sticker-sm { width: 32px; height: 32px; }
 .sticker-lg { width: 56px; height: 56px; }
-.sticker-xl { width: 72px; height: 72px; }
 .sticker-gold { --sticker-bg: var(--gold); color: var(--gold-ink); }
 .sticker-warn { --sticker-bg: var(--sticker-warn); }
 /* 塗りのアイコン(*-fill)をステッカーに入れたときは、中の線をステッカーの色で抜く */
 :is(.sticker, .list-row-icon, .tile-icon, .todo-icon, .topic-icon) { --icon-cut: var(--sticker-bg, var(--cat, var(--sticker-primary))); }
 /* ステッカーの中のアイコンは線を太く(小さくても形が分かるように) */
-:is(.sticker, .tile-icon, .todo-icon) .icon { stroke-width: 2.1; }
+:is(.sticker, .tile-icon, .todo-icon) .icon { stroke-width: 2.4; }
 
 /* 分野の色: 要素か親に付けると、ステッカーと進捗バー(.progress-bar-fill)がその色になる */
 .cat-gyoho { --cat: var(--cat-gyoho); }
