@@ -88,7 +88,7 @@ B.test('解き直しの「図解で確認」→ 図解の詳細 → 戻る: 同�
   }
 });
 
-B.test('検索: 個数・組合せの記述ア〜エで問題が見つかる・新しい画面の言葉は1番目にその画面', async (t) => {
+B.test('検索: 個数・組合せの記述ア〜エで問題が見つかる・新しい画面の言葉は1番目にその画面・v14 の比較表・数字まとめ・条文穴埋め', async (t) => {
   const p = await t.open('home', { device: 'desktop' });
   const styled = await p.evaluate(() => {
     const out = [];
@@ -104,12 +104,40 @@ B.test('検索: 個数・組合せの記述ア〜エで問題が見つかる・�
   t.ok(styled.n > 0, '個数・組合せの問題がある', styled.n);
   t.eq(styled.notFound.slice(0, 5), [], `記述ア〜エ(${styled.n}問 × 4)はどれも検索で問題が見つかる`);
   const SCREEN_Q = [['学習計画', '#plan'], ['計画', '#plan'], ['今週やること', '#plan'], ['合格予測', '#progress'], ['予測', '#progress'], ['バッジ', '#progress'], ['学習時間', '#progress'],
-    ['1日の目標', '#settings'], ['１日の目標', '#settings'], ['目標', '#settings'], ['AIに聞く', '#settings'], ['ＡＩ', '#settings'], ['模試', '#exam'], ['バックアップ', '#settings']];
+    ['1日の目標', '#settings'], ['１日の目標', '#settings'], ['目標', '#settings'], ['AIに聞く', '#settings'], ['ＡＩ', '#settings'], ['模試', '#exam'], ['バックアップ', '#settings'],
+    // v14 の新しい画面
+    ['今日のチャレンジ', '#challenge'], ['チャレンジ', '#challenge'], ['タイムアタック', '#challenge'], ['レベル', '#progress'], ['経験値', '#progress'], ['XP', '#progress'],
+    ['出題頻度', '#freq'], ['頻出', '#freq'], ['ランク', '#freq'], ['よく出る', '#freq'], ['数字まとめ', '#numbers'], ['数字', '#numbers'], ['金額', '#numbers'],
+    ['比較表', '#compare'], ['比較', '#compare'], ['違い', '#compare'], ['条文穴埋め', '#joubun'], ['条文', '#joubun'], ['穴埋め', '#joubun'], ['理論', '#joubun']];
   const scr = await p.evaluate((qs) => qs.map(([q, want]) => { const r = GlobalSearch.search(q, 8); return { q, want, top: r.slice(0, 2).map((x) => `${x.type}:${x.title}→${x.nav}`), first: r[0] ? r[0].nav : null }; }), SCREEN_Q);
   scr.forEach((s) => t.ok(s.first === s.want || (s.first || '').startsWith(`${s.want}/`), `「${s.q}」→ 1番目が ${s.want}`, s));
   const once = await p.evaluate(() => GlobalSearch.search('学習計画', 8).filter((r) => r.nav === '#plan').length);
   t.eq(once, 1, '「学習計画」で #plan は1回だけ');
   t.ok(await p.evaluate(() => GlobalSearch.search('逆算', 8).some((r) => r.nav === '#plan')), '「逆算」でも #plan');
+  t.eq(await p.evaluate(() => GlobalSearch.search('レベル', 8)[0].nav), '#progress/level', '「レベル」→ 進捗のレベルのカード(#progress/level)');
+  t.ok(await p.evaluate(() => GlobalSearch.search('過去問', 8).some((r) => r.nav === '#freq')), '「過去問」でも #freq');
+  // v14: 比較表(表の名前)・数字まとめ(まとまりの名前と文)・条文穴埋め(見出し)も結果に出て、その画面を開く
+  const v14 = await p.evaluate(() => {
+    const D = APP_DATA;
+    const has = (q, nav) => GlobalSearch.search(q, 8).some((r) => r.nav === nav);
+    const t = D.compareTables[0];
+    const n = D.numbers[0];
+    const j = D.joubun.items[0];
+    return {
+      cmp: has(t.title, `#compare/${t.id}`),
+      // 数字まとめの行き先はそのまとまり(#numbers/list/<分野>/<まとまり>)
+      numGroup: has(n.group, `#numbers/list/${n.cat}/${encodeURIComponent(n.group)}`),
+      numText: GlobalSearch.search(String(n.q).replace('{}', n.a).slice(0, 14), 100000).some((r) => r.nav === `#numbers/list/${n.cat}/${encodeURIComponent(n.group)}`),
+      jb: has(j.title, `#joubun/${j.id}`),
+      tables: D.compareTables.filter((x) => !GlobalSearch.search(x.title, 100000).some((r) => r.nav === `#compare/${x.id}`)).map((x) => x.id),
+      items: D.joubun.items.filter((x) => !GlobalSearch.search(x.title, 100000).some((r) => r.nav === `#joubun/${x.id}`)).map((x) => x.id),
+      types: [...new Set(GlobalSearch.search('営業保証金', 8).map((r) => r.type))],
+    };
+  });
+  t.ok(v14.cmp && v14.numGroup && v14.numText && v14.jb, '比較表・数字まとめ・条文穴埋めの項目が検索で見つかる', v14);
+  t.eq(v14.tables.concat(v14.items), [], 'どの比較表・条文穴埋めの項目も名前で見つかる');
+  await p.evaluate(() => { location.hash = GlobalSearch.search(APP_DATA.compareTables[0].title, 8).find((r) => r.type === '比較表').nav; });
+  t.ok(await p.waitFor(() => /^#compare\//.test(location.hash) && !!document.querySelector('#view-root .view') && !document.querySelector('#view-root .error-view')), '比較表の結果から表の画面が開く');
   // 検索の欄に打つと結果が出る
   await p.click('#global-search-input');
   await p.send('Input.insertText', { text: '敷金' });

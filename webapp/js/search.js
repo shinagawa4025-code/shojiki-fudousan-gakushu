@@ -1,12 +1,12 @@
-// サイト全体検索: 画面/トピック/用語/基礎知識/図解/クイズ/情報源/作品で学ぶ(動画)を横断検索
+// サイト全体検索: 画面/トピック/用語/基礎知識/図解/クイズ/情報源/作品で学ぶ(動画)と、v14 の比較表・数字まとめ・条文穴埋めを横断検索
 // 全角・半角(NFKC)とカタカナ・ひらがなの違い、中黒・空白の有無(クーリング・オフ = クーリングオフ)、
 // 送りがなと法令の漢字表記のゆれ(引き渡し = 引渡し、建ぺい率 = 建蔽率。fold)を吸収して照合する
 window.GlobalSearch = (function () {
   let index = null;
   let indexKey = null;
 
-  // 同じ順位のときの並び: 学ぶ内容(画面・トピック・基礎知識・用語) > 図解 > クイズ > 情報源
-  const TYPE_ORDER = { 画面: 0, トピック: 0, 基礎知識: 0, 用語: 0, 図解: 1, クイズ: 2, 情報源: 3 };
+  // 同じ順位のときの並び: 学ぶ内容(画面・トピック・基礎知識・用語) > 図解・比較表・数字まとめ・条文 > クイズ > 情報源
+  const TYPE_ORDER = { 画面: 0, トピック: 0, 基礎知識: 0, 用語: 0, 図解: 1, 比較表: 1, 数字まとめ: 1, 条文: 1, クイズ: 2, 情報源: 3 };
   // 任意のコーナー(作品で学ぶ)の動画は、一致の度合いにかかわらず最後に出す
   const LAST_TYPES = new Set([`作品で学ぶ`]);
 
@@ -27,6 +27,12 @@ window.GlobalSearch = (function () {
     exam: { desc: `本番形式の模擬試験(宅建士)`, words: [`模擬試験`, `模試`, `本試験`, `過去問形式`] },
     calculators: { desc: `住宅ローン・税金・諸費用の概算`, words: [`計算機`, `ローン`, `シミュレーション`, `税金計算`] },
     sources: { desc: `公的機関の一次情報・出典`, words: [`情報源`, `出典`, `一次情報`] },
+    // v14 の新しい画面(メニューの Nav.ITEMS にある)
+    challenge: { desc: `3分間の○×タイムアタック。自己ベストと経験値`, words: [`チャレンジ`, `タイムアタック`, `3分`, `腕試し`] },
+    freq: { desc: `宅建士試験の論点ごとの出題頻度(A・B・C)。よく出る論点から`, words: [`頻出`, `出題頻度`, `ランク`, `よく出る`, `過去問`, `出題傾向`, `頻度`] },
+    numbers: { desc: `期間・金額・面積・割合などの数字をカードと4択で`, words: [`数字`, `数字まとめ`, `数字ドリル`, `期間`, `金額`, `面積`, `割合`] },
+    compare: { desc: `似た制度を表で見比べ、穴埋めで確かめる`, words: [`比較`, `比較表`, `違い`, `見比べる`] },
+    joubun: { desc: `消費税法の条文の大事な語句を穴埋め(税理士試験の理論)`, words: [`条文`, `穴埋め`, `理論`, `消費税法`, `条文暗記`] },
     settings: { desc: `試験日・1日の目標・今日の復習・AIに聞く・テーマ・読み上げ・バックアップ`, words: [`設定`, `バックアップ`, `エクスポート`, `インポート`, `復元`, `テーマ`, `ダークモード`, `試験日`, `目標`, `1日の目標`, `AIに聞く`, `読み上げ`, `新しい用語の数`] },
   };
 
@@ -37,6 +43,7 @@ window.GlobalSearch = (function () {
     { view: `progress`, title: `バッジ`, nav: `#progress/badges`, desc: `学習の節目でもらえるバッジの一覧`, words: [`実績`] },
     { view: `settings`, title: `1日の目標`, nav: `#settings/goal`, desc: `ホームの「今日の学習」の目標(回数か学習時間)`, words: [`目標`, `学習の目標`, `ノルマ`] },
     { view: `settings`, title: `AIに聞く`, nav: `#settings/answer`, desc: `解説の「AIに聞く」ボタンを出すかどうか`, words: [`AI`, `ChatGPT`, `Claude`, `Gemini`] },
+    { view: `progress`, title: `レベルと経験値`, nav: `#progress/level`, desc: `学習でたまる経験値とレベル・直近7日の経験値`, words: [`レベル`, `経験値`, `XP`, `レベルアップ`] },
   ];
 
   // メニュー(Nav.ITEMS)に無いときに使う画面名
@@ -167,6 +174,26 @@ window.GlobalSearch = (function () {
         idx.push(entry(`図解`, d.title, d.caption || d.alt || ``, `#figures/${id}`, [], d.alt));
       });
     }
+    // v14: 比較表(表ごと)・数字まとめ(分野のまとまりごと)・条文穴埋め(項目ごと)。公開版では詳細の束のデータなので、届いてから(届く前は null)
+    const A = window.APP_DATA;
+    (Array.isArray(A.compareTables) ? A.compareTables : []).forEach((t) => {
+      idx.push(entry(`比較表`, t.title, t.intro || ``, `#compare/${t.id}`, [], (t.rows || []).map((r) => r.label).concat(t.cols || []).join(` `)));
+    });
+    const groups = new Map();
+    (Array.isArray(A.numbers) ? A.numbers : []).forEach((n) => {
+      const k = `${n.cat}|${n.group}`;
+      if (!groups.has(k)) groups.set(k, { cat: n.cat, name: n.group, list: [] });
+      groups.get(k).list.push(String(n.q || ``).replace(`{}`, n.a));
+    });
+    groups.forEach((g) => {
+      const label = window.Cloze && Cloze.cat ? Cloze.cat(g.cat).label : g.cat;
+      // 行き先はそのまとまり(一覧の中の位置。js/views/numbers.js の #numbers/list/<分野>/<まとまり>)
+      idx.push(entry(`数字まとめ`, g.name, `${label}の数字 ${g.list.length}項目`, `#numbers/list/${g.cat}/${encodeURIComponent(g.name)}`, [], g.list.join(` `)));
+    });
+    (A.joubun && Array.isArray(A.joubun.items) ? A.joubun.items : []).forEach((it) => {
+      // 条の見出し(e-Gov のまま。caption)でも見つかるように
+      idx.push(entry(`条文`, it.title, `消費税法 ${it.article}`, `#joubun/${it.id}`, [], `${it.group} ${it.article} ${it.caption || ``}`));
+    });
     if (!partial) {
       window.APP_DATA.episodes.forEach((e) => {
         idx.push(entry(`作品で学ぶ`, `${e.displayLabel} ${e.theme}`, e.summary, `#works/${e.id}`, [], (e.terms || []).map((x) => x.term).join(` `)));

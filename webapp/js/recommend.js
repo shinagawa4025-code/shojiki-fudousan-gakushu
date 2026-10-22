@@ -219,7 +219,7 @@ window.Recommend = (function () {
       const done = answeredToday >= n;
       steps.push({
         id: `ox`,
-        title: useWeak ? `苦手の○×` : fq ? `頻出Aの○×` : `○×で腕試し`,
+        title: useWeak ? `苦手の○×` : fq ? `よく出る論点の○×` : `○×で腕試し`,
         sub: done ? `今日${answeredToday}問に回答` : useWeak ? `間違えたことがある文から${n}問` : `${fb.scope ? `${fb.scope}・` : ``}${n}問`,
         minutes: done ? 0 : menuMinutes(n * MENU_SEC.ox),
         nav: useWeak ? `#ox/weak/${MENU_OX}` : fb.nav,
@@ -242,7 +242,7 @@ window.Recommend = (function () {
         id: `basic`,
         title: `新しい基礎知識を1テーマ`,
         sub: done ? `「${AppIndex.termsById[doneId].name}」を学習済み`
-          : `${theme.freq ? `頻出A・` : ``}${theme.topic.name}「${theme.basic ? theme.basic.name : theme.topic.name}」`,
+          : `${theme.freq ? `よく出る・` : ``}${theme.topic.name}「${theme.basic ? theme.basic.name : theme.topic.name}」`,
         minutes: done ? 0 : menuMinutes(MENU_SEC.basic),
         nav: theme ? `#topics/${theme.topic.id}/${theme.basicId}` : doneTopic ? `#topics/${doneTopic.id}/${doneId}` : `#topics`,
         done,

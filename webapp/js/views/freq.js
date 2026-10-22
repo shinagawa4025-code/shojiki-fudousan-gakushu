@@ -231,7 +231,7 @@ window.FreqUi = (function () {
     const sub = m.answered ? `正答率 ${pct}%・解いた数 ${m.answered}` : `まだ解いていません`;
     const btns = [
       Freq.quizIdsOf(t.id).length ? `<a class="btn btn-sm freq-btn-mini" href="#quiz/freq/${encodeURIComponent(t.id)}" data-role="start-mc" aria-label="「${esc(t.name)}」を4択で解く">${ic(`pencil-check`, 16)}<span>4択</span></a>` : ``,
-      Freq.statementCountOf(t.id) ? `<a class="btn btn-sm btn-secondary freq-btn-mini" href="#ox/freq/${encodeURIComponent(t.id)}" data-role="start-ox" aria-label="「${esc(t.name)}」を○×で解く"><span>○×</span></a>` : ``,
+      Freq.statementCountOf(t.id) ? `<a class="btn btn-sm btn-secondary freq-btn-mini" href="#ox/freq/${encodeURIComponent(t.id)}" data-role="start-ox" aria-label="「${esc(t.name)}」を○×で解く">${ic(`o-x`, 16)}<span>○×</span></a>` : ``,
     ].join(``);
     return `
       <li class="freq-prog-row cat-${esc(t.cat)}" data-role="freq-prog-row" data-theme-id="${esc(t.id)}">

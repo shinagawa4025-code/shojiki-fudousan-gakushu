@@ -20,8 +20,7 @@
 // 5. sw.js をひな形から作る: CACHE_NAME = shojiki-gakushu-<ハッシュ>、BUILD_ID、PRECACHE_URLS(index.html・manifest・まとめたファイル・
 //    詳細の束(JS・CSS)・CSS が url() で参照するファイル(見出し用の書体 fonts/*.woff2。ハッシュは付けずにコピー)・index.html のアイコン)
 // 6. index.html・manifest が参照するファイルと、プリキャッシュのファイルがすべて出力先にあることを確かめる
-// 7. 大きさの表を出す(初回の表示に要る JS と CSS の gzip 合計が 240KB・そのうち CSS が 25KB、詳細を含めた合計が 1,000KB を
-//    超えたら警告。下の BUDGET_*)
+// 7. 大きさの表を出す(初回の表示に要る JS と CSS の gzip 合計・そのうち CSS・詳細を含めた合計が、下の BUDGET_* を超えたら警告)
 // どこかで失敗したら終了コード1で終わり、出力先は作らない(途中までのサイトを残さない)。CI はそのとき元のファイルのまま公開する。
 'use strict';
 const fs = require('fs');
@@ -45,7 +44,12 @@ const BUDGET_FIRST_CSS = 25 * 1024;
 // 800KB → 1,000KB に見直した(2026-10 時点で約900KB。v12.2 で詳細の CSS(元の CSS の全部。最初の表示の CSS と重なる約19KB を含む)
 // が加わり約960KB)。詳細はホームを描いたあとに読み込むので、ホームの速さは上の BUDGET_FIRST で見る
 // v13 で問題が約1,000問になり約1,090KB になったため 1,150KB に見直した
-const BUDGET_TOTAL = 1150 * 1024;
+// v14(2026-10-22): 新しい機能のデータ(数字まとめ・比較表・条文穴埋め・出題頻度ランク。詳細の束の中で gzip 約57KB、元のファイルでは
+// 約70KB)と、その画面のコード・CSS(約50KB)を詳細の束に入れ(オフラインでも使えるように Service Worker が最初に保存する)、
+// 約1,200KB になったため 1,250KB に見直した。初回の表示(ホーム)に要るものはほぼ増やしていない(本体に入れた新しいコードは
+// 経験値の js/xp.js と、ホームのお知らせ・検索の言葉だけ。更新履歴(changelog)を詳細の束に回して(tools/lib/split.js の DETAIL_KEYS)、
+// 2026-10-22 時点で約246KB。BUDGET_FIRST はそのまま)
+const BUDGET_TOTAL = 1250 * 1024;
 const SKIP_DIRS = new Set(['js', 'css', 'data']); // まとめたので公開しない(古い Service Worker が新旧のファイルを混ぜて保存しないように)
 const JUNK = /^(desktop\.ini|thumbs\.db|\..*)$/i;
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');

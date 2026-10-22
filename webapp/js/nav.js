@@ -24,8 +24,8 @@ window.Nav = (function () {
     // (tilesHtml)とメニューから開く(開いたときは下部タブの「問題」「学ぶ」を選んだ状態にする)。
     // short: タイルの名前(なければ label)/ desc: タイルの小さな説明(広い画面では省く)/ tag: 名前の横の札 / tone: ステッカーの色(既定は緑)
     { view: `challenge`, label: `今日のチャレンジ`, icon: `bolt`, mobile: `practice`, section: `practice`, desc: `3分で○×に挑戦`, tone: `sticker-gold` },
-    { view: `freq`, label: `出題頻度ランク`, icon: `star`, mobile: `practice`, section: `practice`, desc: `よく出る論点から` },
-    { view: `numbers`, label: `数字まとめドリル`, short: `数字まとめ`, icon: `percent`, mobile: `practice`, section: `practice`, desc: `期間・金額など` },
+    { view: `freq`, label: `出題頻度ランク`, icon: `star`, mobile: `practice`, section: `practice`, desc: `よく出る論点から`, tag: `宅建士` },
+    { view: `numbers`, label: `数字まとめドリル`, short: `数字まとめ`, icon: `percent`, mobile: `practice`, section: `practice`, desc: `期間・金額など`, tag: `宅建士` },
     { view: `compare`, label: `比較表で覚える`, short: `比較表`, icon: `grid`, mobile: `learn`, section: `learn`, desc: `制度を見比べる` },
     { view: `joubun`, label: `条文穴埋め(消費税法)`, short: `条文穴埋め`, icon: `scale`, mobile: `practice`, section: `practice`, desc: `消費税法の理論`, tag: `税理士` },
   ];

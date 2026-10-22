@@ -426,7 +426,9 @@ window.Views.review = (function () {
       const graded = Srs.grade(term.id, g);
       const counted = activityCount(day) > actBefore;
       // v14: 経験値(今日の復習の評価。4択・○×で間違えたときの Srs.grade(…, 1, { silent }) は数えない)。g: 1 もう一度 / 2 難しい / 3 普通 / 4 簡単
-      try { if (window.Xp) Xp.award(`review`, { id: term.id, correct: g >= 2, unsure: g === 2, grade: g }); } catch (e) { console.error(`[復習] 経験値を記録できませんでした`, e); }
+      // (付いた XP は「元に戻す」で取り消すために覚えておく)
+      let xp = 0;
+      try { if (window.Xp) xp = Number(Xp.award(`review`, { id: term.id, correct: g >= 2, unsure: g === 2, grade: g })) || 0; } catch (e) { console.error(`[復習] 経験値を記録できませんでした`, e); }
       // 別のタブでの変更を消さないよう、保存前に最新の値を読み直してから反映する
       const latestKnown = Storage.get(`flashcards`, {});
       Object.keys(known).forEach((k) => { if (!(k in latestKnown)) delete known[k]; });
@@ -449,7 +451,7 @@ window.Views.review = (function () {
       } else {
         session.done += 1;
       }
-      undoStack.push({ term, prevCard, prevKnown, item, g, isNew, day, counted });
+      undoStack.push({ term, prevCard, prevKnown, item, g, isNew, day, counted, xp });
       if (undoStack.length > 20) undoStack.shift();
       renderQueue();
       showCardTop();
@@ -475,6 +477,8 @@ window.Views.review = (function () {
       Srs.restore(last.term.id, last.prevCard);
       // 評価で付けた学習記録も1回分取り消す(評価し直すと二重に数えるため)
       if (last.counted) uncountActivity(last.day);
+      // 評価で付けた経験値も取り消す(評価し直すと、はじめての評価と同じ XP が付く)
+      if (last.xp && window.LevelUi && LevelUi.revoke) LevelUi.revoke(`review`, last.term.id, last.xp, last.day);
       if (last.prevKnown) known[last.term.id] = true; else delete known[last.term.id];
       Storage.set(`flashcards`, known);
       if (last.isNew && !last.prevCard) {

@@ -39,7 +39,7 @@ B.test('札: 4択のカード・○×の文・トピックの小見出しと基�
     const c = document.querySelector(`.quiz-card[data-quiz-id="${id}"] .quiz-card-head .freq-chip`);
     return c && { rank: c.dataset.rank, text: c.querySelector('[aria-hidden="true"]').textContent, sr: c.querySelector('.sr-only').textContent };
   }, {}, k.id);
-  t.ok(chip && chip.rank === k.rank && chip.text === `頻出${k.rank}` && /^出題頻度[ABC]\(直近\d+回中\d+回\)$/.test(chip.sr), '4択のカードの見出しに札(読み上げは回数つき)', chip);
+  t.ok(chip && chip.rank === k.rank && chip.text === `${k.rank === 'C' ? '頻度' : '頻出'}${k.rank}` && /^出題頻度[ABC]\(令和\d+年度までの\d+回中\d+回\)$/.test(chip.sr), '4択のカードの見出しに札(読み上げは回数つき)', chip);
   await p.go(`quiz/q/${k.life}`);
   const none = await p.waitFor((id) => { const c = document.querySelector(`.quiz-card[data-quiz-id="${id}"]`); return c ? { chip: !!c.querySelector('.freq-chip') } : null; }, {}, k.life);
   t.ok(none && !none.chip, '宅建士の分野のない問題には札なし', none);

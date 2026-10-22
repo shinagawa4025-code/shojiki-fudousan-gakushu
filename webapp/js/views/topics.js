@@ -14,6 +14,10 @@ window.Views.topics = (function () {
   ];
   // v14: 一覧の上に出す、覚えるためのツールの入口(js/nav.js の ITEMS の画面名)
   const HUB_VIEWS = [`compare`, `numbers`];
+  // 税理士試験(消費税法)が目的の人の「覚えるためのツール」は 条文穴埋め・比較表(数字まとめは宅建士試験の数字)
+  function zeiGoal() {
+    try { return Stats.goalExamTypeId() === `zeirishi`; } catch (e) { return false; }
+  }
   // 暮らし・取引のまとまり(まだないトピックは表示しない)
   const LIFE_GROUPS = [
     { id: `rent`, name: `住まいを借りる`, ids: [`topicI`, `topicA`] },
@@ -143,7 +147,7 @@ window.Views.topics = (function () {
         <h2>学習トピック</h2>
         <button type="button" class="btn btn-icon learn-info-btn" data-role="info" aria-label="学習トピックについて" aria-haspopup="dialog">${ic(`info`)}</button>
       </div>
-      ${window.Nav && Nav.tilesHtml ? Nav.tilesHtml(HUB_VIEWS, `覚えるためのツール`) : ``}
+      ${window.Nav && Nav.tilesHtml ? Nav.tilesHtml(zeiGoal() ? [`joubun`, `compare`] : HUB_VIEWS, `覚えるためのツール`) : ``}
       <div class="segmented seg-bold topic-tracks" role="group" aria-label="表示するトピック">
         ${TRACKS.map((t) => `<button type="button" class="segmented-item" data-track="${t.id}" aria-pressed="${t.id === track}">${t.label}</button>`).join(``)}
       </div>
@@ -232,10 +236,14 @@ window.Views.topics = (function () {
     const extraTerms = termIds.filter((id) => !topic.basicIds.includes(id)).map((id) => AppIndex.termsById[id]).filter((t) => t && t.worksOnly !== true);
     // 基礎知識も用語もまだないトピック(執筆中)では、自動生成クイズ(用語から作る)と用語集への案内を出さない
     const hasTerms = order.length > 0 || extraTerms.length > 0;
+    const jb = window.APP_DATA.joubun && Array.isArray(window.APP_DATA.joubun.items) ? window.APP_DATA.joubun.items : [];
+    const joubunN = jb.filter((it) => it && it.topicId === topic.id).length;
     const practiceHtml = [
       quizzes.length ? `<a class="btn btn-lg topic-practice-main" href="#quiz/${topic.id}">${ic(`pencil-check`, 24)}<span class="topic-practice-text"><span>${quizLabel}</span><span class="topic-practice-count">${quizzes.length}問</span></span>${ic(`arrow-right`, 20)}</a>` : ``,
       oxCount ? `<a class="btn btn-secondary btn-lg" href="#ox/topic/${topic.id}">${ic(`o-x`, 24)}<span class="topic-practice-text"><span><span class="sr-only">○×</span>一問一答</span><span class="topic-practice-count">${oxCount}問</span></span></a>` : ``,
       !quizzes.length && hasTerms ? `<a class="btn btn-secondary btn-lg" href="#quiz/auto/${topic.id}">${ic(`sparkles`, 24)}<span class="topic-practice-text"><span>自動生成クイズ</span></span></a>` : ``,
+      // v14: 消費税法のトピック(topicR・S・T)は、この分野の条文を穴埋めで覚える(条文穴埋め)
+      joubunN ? `<a class="btn btn-secondary btn-lg" href="#joubun" data-role="to-joubun">${ic(`scale`, 24)}<span class="topic-practice-text"><span>条文穴埋め</span><span class="topic-practice-count">この分野の条文 ${joubunN}項目</span></span></a>` : ``,
     ].join(``);
 
     // 戻る/再読み込みで帰ってきたときは、開いていた項目・表示件数・絞り込みを元に戻す(履歴エントリごとに保存)

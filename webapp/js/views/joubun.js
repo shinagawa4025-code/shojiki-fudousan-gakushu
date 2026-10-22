@@ -45,10 +45,22 @@ window.Views.joubun = (function () {
   function blankCount(it) {
     return it.parts.filter((p) => p && Number.isInteger(p.b)).length;
   }
+  // 条文の画面の見出しは、その条の e-Gov の見出し(caption。「（課税標準）」のように括弧ごとそのまま)。
+  // 項目の見出し(title)が条の見出しと違うとき(第2項以降・号など)だけ、その下に小さく添える
+  function capSub(it) {
+    if (!it.title) return false;
+    if (!it.caption) return false;
+    return it.title !== String(it.caption).replace(/^（(.*)）$/, `$1`);
+  }
   // 次に練習する条文(苦手の順。except は除く)
   function nextWeak(except) {
     const ids = Cloze.weakOrder(items().map((it) => it.id), Cloze.stats(KEY)).filter((id) => id !== except);
     return ids[0] || null;
+  }
+
+  // 「練習」のリンクで開くやり方(最後に使ったやり方。全文を読む・知らないやり方なら 選んで埋める)
+  function practiceMode(m) {
+    return m !== `read` && MODES.some((x) => x.id === m) ? m : `choose`;
   }
 
   const GRADE_TEXT = { 2: `言えた`, 1: `あいまい`, 0: `言えなかった` };
@@ -97,7 +109,7 @@ window.Views.joubun = (function () {
       <div class="tl-progress-head"><span class="tl-progress-label">覚えた条文</span><span class="tl-progress-num"><strong class="num">${knownN}</strong><span class="num"> / ${list.length}</span></span></div>
       <div class="progress-bar" role="progressbar" aria-label="覚えた条文の割合" aria-valuemin="0" aria-valuemax="${list.length}" aria-valuenow="${knownN}"><div class="progress-bar-fill${knownN === list.length ? ` fill-success` : ``}" style="width:${Cloze.pct(knownN, list.length)}%"></div></div>
       <p class="tl-progress-sub">${weakN ? `復習したい条文 <b class="num">${weakN}</b>・` : ``}まだ <b class="num">${list.filter((it) => !st[it.id] || st[it.id].grade == null).length}</b></p>
-      ${first ? `<a class="btn btn-lg btn-block tl-start" href="#joubun/${encodeURIComponent(first)}${MODES.some((m) => m.id === pref) ? `/${pref}` : ``}" data-role="start-weak">${ic(`play`, 20)}<span>${weakN ? `苦手な条文から練習` : `次の条文を練習`}</span></a>` : ``}
+      ${first ? `<a class="btn btn-lg btn-block tl-start" href="#joubun/${encodeURIComponent(first)}/${practiceMode(pref)}" data-role="start-weak">${ic(`play`, 20)}<span>${weakN ? `苦手な条文から練習` : `次の条文を練習`}</span></a>` : ``}
       <p class="tl-law-src">${ic(`library`, 14)}<span>${esc(l.name || `消費税法`)}${l.num ? `(${esc(l.num)})` : ``}${asOfText() ? `・${esc(asOfText())}の条文` : ``}。出典: e-Gov 法令検索</span></p>
       ${lawLinkHtml()}`;
     wrap.appendChild(prog);
@@ -119,14 +131,14 @@ window.Views.joubun = (function () {
             <li>
               <a class="list-row cat-shohi" href="#joubun/${encodeURIComponent(it.id)}" data-id="${esc(it.id)}">
                 <span class="list-row-icon${s && s.grade === 2 ? ` is-ok` : s && s.grade === 0 ? ` is-warn` : ``}" aria-hidden="true">${ic(s && s.grade === 2 ? `check` : `scale`, 20)}</span>
-                <span class="list-row-main"><span class="list-row-title">${esc(it.article || ``)}<span class="tl-row-cap">${esc(it.title || ``)}</span></span><span class="list-row-sub">空欄 ${blankCount(it)}か所</span></span>
+                <span class="list-row-main"><span class="list-row-title"><span class="tl-row-art">${esc(it.article || ``).replace(/([条項])(?=第)/g, `$1<wbr>`)}</span><span class="tl-row-cap">${esc(it.title || ``)}</span></span><span class="list-row-sub">空欄 ${blankCount(it)}か所</span></span>
                 ${statusHtml(s)}${ic(`chevron-right`)}
               </a>
             </li>`;
           }).join(``)}
         </ul>`;
       return sec;
-    }, { chunk: 4 });
+    }, { chunk: 4, size: (g) => g.items.length, unit: `項目` });
   }
 
   // ---------- 条文 ----------
@@ -140,13 +152,14 @@ window.Views.joubun = (function () {
         k += 1;
         const open = !!opened && opened.has(k);
         const id = `jb-omit-${++omitSeq}`;
-        return `<span class="tl-omit-text" id="${id}"${open ? `` : ` hidden`}>${esc(p.omit)}</span><button type="button" class="tl-omit" aria-expanded="${open}" aria-controls="${id}" data-role="omit" data-k="${k}">${omitLabel(open)}</button>`;
+        return `<span class="tl-omit-text" id="${id}"${open ? `` : ` hidden`}>${esc(p.omit)}</span><button type="button" class="tl-omit" aria-label="括弧書き" aria-expanded="${open}" aria-controls="${id}" data-role="omit" data-k="${k}">${omitLabel(open)}</button>`;
       }
       return ``;
     }).join(``);
   }
+  // 見た目の文字だけ(読み上げはボタンの名前「括弧書き」と、開いているか(aria-expanded))
   function omitLabel(open) {
-    return `${open ? `たたむ` : `（略）`}<span class="sr-only">${open ? `括弧書きをたたむ` : `括弧書きを開く`}</span>`;
+    return open ? `たたむ` : `（略）`;
   }
 
   // 「（略）」を押すとその場で開く(もう一度押すとたたむ)。開いた番号は opened に覚え、空欄に答えて文を描き直しても開いたまま
@@ -185,14 +198,15 @@ window.Views.joubun = (function () {
     wrap.innerHTML = `
       <a class="btn back-btn" href="#joubun">${ic(`chevron-left`)}条文の一覧</a>
       <p class="tl-eyebrow"><span class="tl-tag"><span class="tl-tag-dot" aria-hidden="true"></span>${esc(it.group || `消費税法`)}</span><span class="hub-tile-badge tl-badge">税理士</span></p>
-      <h2 class="tl-article"><span class="tl-article-num">${esc(law().name || `消費税法`)} ${esc(it.article || ``)}</span> <span class="tl-article-cap">${esc(it.title || ``)}</span></h2>
+      <h2 class="tl-article"><span class="tl-article-num">${esc(law().name || `消費税法`)} ${esc(it.article || ``)}</span> <span class="tl-article-cap${Array.from(String(it.caption || it.title || ``)).length > 24 ? ` is-long` : ``}">${esc(it.caption || it.title || ``)}</span></h2>
+      ${capSub(it) ? `<p class="tl-article-sub" data-role="item-title">${esc(it.title)}</p>` : ``}
       <div class="segmented seg-bold tl-seg tl-mode" role="group" aria-label="やり方" data-role="modes">
         ${MODES.map((m) => `<button type="button" class="segmented-item" data-mode="${m.id}" aria-pressed="${m.id === mode}"${!it.blanks.length && m.id !== `read` ? ` disabled` : ``}>${ic(m.icon, 16)}${m.label}</button>`).join(``)}
       </div>
       <section class="card tl-law" aria-label="条文">
         <div class="tl-law-tools">
           <span class="tl-law-hint" data-role="hint"></span>
-          ${hasOmit ? `<button type="button" class="link-btn tl-omit-all" data-role="omit-all" aria-pressed="false">括弧書きを全部ひらく</button>` : ``}
+          ${hasOmit ? `<button type="button" class="link-btn tl-omit-all" data-role="omit-all">括弧書きを全部ひらく</button>` : ``}
         </div>
         <p class="tl-law-text" data-role="text" lang="ja"></p>
       </section>
@@ -220,8 +234,8 @@ window.Views.joubun = (function () {
       if (!omitAll) return;
       const btns = Array.from(textEl.querySelectorAll(`[data-role="omit"]`));
       openAll = btns.length > 0 && btns.every((b) => b.getAttribute(`aria-expanded`) === `true`);
+      // 名前が「ひらく / たたむ」で変わるので、押されている状態(aria-pressed)は付けない(読み上げが食い違わないように)
       omitAll.textContent = openAll ? `括弧書きを全部たたむ` : `括弧書きを全部ひらく`;
-      omitAll.setAttribute(`aria-pressed`, String(openAll));
     }
     if (omitAll) {
       omitAll.addEventListener(`click`, () => {
@@ -270,7 +284,7 @@ window.Views.joubun = (function () {
         ${opts.head}
         ${opts.xp ? `<p class="tl-xp"><span class="sticker sticker-sm sticker-gold" aria-hidden="true">${ic(`bolt`, 16)}</span><span>経験値 <b class="num">+${opts.xp}</b></span></p>` : ``}
         <div class="tl-result-actions">
-          ${nwItem ? `<a class="btn btn-lg btn-block" href="#joubun/${encodeURIComponent(nwItem.id)}/${mode}" data-role="next-weak"><span class="tl-btn-2l"><span>次の条文へ</span><small>${esc(nwItem.article || ``)} ${esc(nwItem.title || ``)}</small></span>${ic(`arrow-right`, 20)}</a>` : ``}
+          ${nwItem ? `<a class="btn btn-lg btn-block" href="#joubun/${encodeURIComponent(nwItem.id)}/${practiceMode(mode)}" data-role="next-weak"><span class="tl-btn-2l"><span>次の条文へ</span><small>${esc(nwItem.article || ``)} ${esc(nwItem.title || ``)}</small></span>${ic(`arrow-right`, 20)}</a>` : ``}
           <button type="button" class="btn btn-secondary btn-block" data-role="again">${ic(`refresh`, 18)}<span>もう一度</span></button>
           ${opts.extra || ``}
         </div>`;
@@ -288,11 +302,12 @@ window.Views.joubun = (function () {
       wrap.style.setProperty(`--tl-panel-h`, `${panel.offsetHeight}px`);
     }
 
-    function keepVisible(el, panel) {
-      if (!el) return;
+    // el(いまの空欄)が下に貼り付く欄の裏・画面の上に隠れていれば見える所へ。smooth: 答えたあと(開いた直後はすぐ動かす)
+    function keepVisible(el, panel, smooth) {
+      if (!el || !el.isConnected) return;
       const r = el.getBoundingClientRect();
-      const pr = panel ? panel.getBoundingClientRect() : { top: window.innerHeight };
-      if (r.bottom > pr.top - 8 || r.top < 0) el.scrollIntoView({ block: `nearest`, behavior: UI.prefersReducedMotion() ? `auto` : `smooth` });
+      const pr = panel && panel.isConnected ? panel.getBoundingClientRect() : { top: window.innerHeight };
+      if (r.bottom > pr.top - 8 || r.top < 0) el.scrollIntoView({ block: `nearest`, behavior: smooth && !UI.prefersReducedMotion() ? `smooth` : `auto` });
     }
 
     // 選んで埋める
@@ -309,7 +324,8 @@ window.Views.joubun = (function () {
           const b = run[n];
           if (!b) return ``;
           if (!b.done) return `<button type="button" class="tl-blank is-q${n === cur ? ` is-current` : ``}" data-b="${n}" aria-label="空欄 ${n + 1}"${n === cur ? ` aria-current="true"` : ``}>${nb(n)}<span aria-hidden="true">？</span></button>`;
-          return `<span class="tl-blank is-filled ${b.ok ? `is-ok` : `is-ng`}${long(b.answer)}">${nb(n)}${esc(b.answer)}<span class="sr-only">(${b.ok ? `正解` : `不正解。あなたの回答は ${esc(b.picked)}`})</span></span>`;
+          // 読み上げ用の判定は札の外(すぐ後ろ)に置く(札の中の最後にあると、行末で折り返すときに中身のない小さな札が次の行にできる)
+          return `<span class="tl-blank is-filled ${b.ok ? `is-ok` : `is-ng`}${long(b.answer)}">${nb(n)}${esc(b.answer)}</span><span class="sr-only">(${b.ok ? `正解` : `不正解。あなたの回答は ${esc(b.picked)}`})</span>`;
         }, opened);
         wireOmits(textEl, opened, syncOmitAll);
         textEl.querySelectorAll(`button.tl-blank`).forEach((btn) => btn.addEventListener(`click`, () => {
@@ -337,7 +353,10 @@ window.Views.joubun = (function () {
         b.ok = b.opts[i] === b.answer;
         Cloze.update(KEY, it.id, (s) => {
           const p = s || { c: 0, w: 0 };
-          return Object.assign({}, p, { c: (p.c || 0) + (b.ok ? 1 : 0), w: (p.w || 0) + (b.ok ? 0 : 1), last: DateUtil.today() });
+          const next = Object.assign({}, p, { c: (p.c || 0) + (b.ok ? 1 : 0), w: (p.w || 0) + (b.ok ? 0 : 1), last: DateUtil.today() });
+          // 終えるまでは点(grade)を付けない(前の点があればそのまま。null は残さない)
+          if (next.grade == null) delete next.grade;
+          return next;
         });
         xp += Cloze.answered(`joubun`, `${it.id}:${b.n}`, b.ok ? 2 : 0);
         lastNote = { ok: b.ok, text: b.answer };
@@ -394,8 +413,10 @@ window.Views.joubun = (function () {
         };
         slot.appendChild(panel);
         setPanelH(panel);
+        // いまの空欄が下に貼り付く欄の裏に隠れないように(開いた直後も。Router が上へ戻したあとのフレームで確かめる)
+        const curEl = textEl.querySelector(`.tl-blank.is-current`);
+        requestAnimationFrame(() => keepVisible(curEl, panel, !!afterAnswer));
         if (afterAnswer) {
-          keepVisible(textEl.querySelector(`.tl-blank.is-current`), panel);
           const ae = document.activeElement;
           if (!ae || ae === document.body || !ae.isConnected || slot.contains(ae) || textEl.contains(ae)) list.querySelector(`.choice-btn`).focus({ preventScroll: true });
         }
@@ -500,7 +521,7 @@ window.Views.joubun = (function () {
         slot.innerHTML = ``;
         wrap.style.removeProperty(`--tl-panel-h`);
         const box = resultBox({
-          head: `<p class="tl-graded is-g${g}">${Cloze.markSvg({ 2: `o`, 1: `t`, 0: `x` }[g], 28)}<span class="tl-result-title" tabindex="-1">${g === 2 ? `言えました!` : g === 1 ? `あいまいでした` : `次はきっと言えます`}</span></p>
+          head: `<div class="tl-graded is-g${g}">${Cloze.markSvg({ 2: `o`, 1: `t`, 0: `x` }[g], 28)}<h3 class="tl-result-title" tabindex="-1">${g === 2 ? `言えました!` : g === 1 ? `あいまいでした` : `次はきっと言えます`}</h3></div>
             <p class="tl-graded-sub">${g === 2 ? `この調子で次の条文へ進みましょう。` : `苦手な条文として、次に練習するときに先に出します。`}</p>`,
           xp,
         });

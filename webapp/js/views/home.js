@@ -681,7 +681,11 @@ window.Views.home = (function () {
       // 直前期は解き直しを優先。それ以外は弱点分析の優先順(すでに出したリンクは除く)
       const pool = acts.filter((a) => !used.has(a.nav) && !sameOxCatUsed(used, a));
       const pick = (urgent && pool.find(isWeakKind)) || pool.find((a) => a.kind !== `ox`) || pool[0] || null;
-      if (pick) {
+      // v14: 税理士試験(消費税法)が目標の人には、解き直しなどの苦手の行き先でなければ、条文穴埋め(理論)のタイル
+      if (ctx.typeId === `zeirishi` && !used.has(`#joubun`) && !(pick && isWeakKind(pick))) {
+        tiles.push(quickHtml(`#joubun`, `scale`, `条文穴埋め`, `消費税法の理論`, `cat-shohi`));
+        used.add(`#joubun`);
+      } else if (pick) {
         const s = shortAction(ctx, pick);
         tiles.push(quickHtml(pick.nav, pick.icon, s.label, s.scope, isWeakKind(pick) ? `is-warn` : catCls(pick.categoryId)));
         used.add(pick.nav);
@@ -1125,54 +1129,38 @@ window.Views.home = (function () {
 
   // ---- アプリが新しくなりました(既存の利用者に1度だけ) ----
   function whatsNewCard() {
-    const version = (window.Onboarding && Onboarding.WHATS_NEW) || `v10`;
+    const version = (window.Onboarding && Onboarding.WHATS_NEW) || `v14`;
     if (Storage.get(`seenWhatsNew`, null) === version || !Storage.get(`onboardingDone`, null)) return null;
-    const name = window.SITE && typeof SITE.name === `string` ? SITE.name : ``;
-    const log = window.APP_DATA && Array.isArray(APP_DATA.changelog) && APP_DATA.changelog[0] && typeof APP_DATA.changelog[0] === `object` ? APP_DATA.changelog[0] : null;
+    const D = window.APP_DATA || {};
+    const log = Array.isArray(D.changelog) && D.changelog[0] && typeof D.changelog[0] === `object` ? D.changelog[0] : null;
     const isMc = (q) => !!q && (window.QuizEngine && QuizEngine.isMcItem ? QuizEngine.isMcItem(q) : q.format === `mc`);
-    const mcCount = window.APP_DATA && Array.isArray(APP_DATA.quiz) ? APP_DATA.quiz.filter(isMc).length : 0;
+    const quiz = Array.isArray(D.quiz) ? D.quiz : [];
+    const mcCount = quiz.filter(isMc).length;
     // 以前から使っている人は学ぶ目的が未設定(ホームは暮らし向けの表示になる)ので、設定の場所を案内する
     const profileHint = Stats.getProfile && !Stats.getProfile() ? `<a href="#settings/profile">学ぶ目的</a>(宅建士試験・暮らし・仕事・税理士試験)を選ぶと、ホームのおすすめが目的に合わせて変わります` : ``;
-    const styledCount = window.APP_DATA && Array.isArray(APP_DATA.quiz) ? APP_DATA.quiz.filter((q) => isMc(q) && q.style).length : 0;
-    // v13(onboarding.js の WHATS_NEW を v13 にしたとき): 消費税法の全体・個数問題/組合せ問題の増量・模擬試験の枠
-    const shohihoCount = window.APP_DATA && Array.isArray(APP_DATA.quiz) ? APP_DATA.quiz.filter((q) => isMc(q) && q.examCats && q.examCats.zeirishi === `shohiho`).length : 0;
+    const styledCount = quiz.filter((q) => isMc(q) && q.style).length;
+    const shohihoCount = quiz.filter((q) => isMc(q) && q.examCats && q.examCats.zeirishi === `shohiho`).length;
     // 3桁区切り(更新履歴の「約1,000問」と表記をそろえる)
     const comma = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, `,`);
-    // v12 より前の版から直接更新した人(v12 のお知らせを見ていない)には、v12 で追加した機能も1行で案内する
+    // v14: 新しい機能の数はデータから数える。公開版ではデータが詳細の束にあるので、届く前は数を出さない(届いたら watchDetail が作り直す)
+    const len = (a) => (Array.isArray(a) ? a.length : 0);
+    const nExam = len(D.frequency && D.frequency.exams);
+    const nNum = len(D.numbers);
+    const nCmp = len(D.compareTables);
+    const nJb = len(D.joubun && D.joubun.items);
+    // 前の版のお知らせを見ていない人(v13 より前から直接更新した人)には、その版で追加した機能も1行ずつ案内する
     const seen = Storage.get(`seenWhatsNew`, null);
-    const missedV12 = seen !== `v12` && seen !== `v13`;
-    const items = version === `v13` ? [
-      shohihoCount ? `税理士試験の<a href="#topics/topicR">消費税法</a>を、法律の全体(課税の対象・納税義務・税額の計算・簡易課税・申告・インボイスなど)に広げました。新しいトピック3つと4択${shohihoCount}問(計算問題を含む)です` : ``,
-      styledCount ? `本試験と同じ形式の「個数問題」「組合せ問題」を${styledCount}問に増やし、模擬試験(本番形式)では宅建業法6問・権利関係1問・法令上の制限2問を出します` : ``,
-      mcCount >= 300 ? `4択問題は全部で約${comma(Math.round(mcCount / 50) * 50)}問になりました` : ``,
-      missedV12 ? `前の版では<a href="#progress/predict">合格予測</a>・試験日から逆算した<a href="#plan">学習計画</a>・1日の目標と<a href="#progress/badges">バッジ</a>も追加しています` : ``,
+    const missedV13 = seen !== `v13` && seen !== `v14`;
+    const missedV12 = missedV13 && seen !== `v12`;
+    const items = [
+      `過去${nExam ? `${nExam}回の` : `の`}本試験で論点ごとに出た回数を数えた<a href="#freq">出題頻度ランク</a>(A・B・C)を追加しました(宅建士)`,
+      `宅建士試験で覚える期間・金額などの数字${nNum ? `${nNum}項目` : ``}をカードと4択で覚える<a href="#numbers">数字まとめドリル</a>を追加しました`,
+      `似た制度を表で見比べる<a href="#compare">比較表</a>(${nCmp ? `${nCmp}枚・` : ``}マスを隠す穴埋めつき)を追加しました`,
+      `学ぶたびに経験値がたまる<a href="#progress/level">レベル</a>と、3分間の○×タイムアタック<a href="#challenge">今日のチャレンジ</a>を追加しました`,
+      `税理士試験の理論向けに、消費税法の条文${nJb ? `${nJb}項目` : ``}の大事な語句を埋める<a href="#joubun">条文穴埋め</a>を追加しました`,
+      missedV13 ? `前の版では<a href="#topics/topicR">消費税法</a>を法律の全体に広げ${shohihoCount ? `(4択${shohihoCount}問)` : ``}、「個数問題」「組合せ問題」${styledCount ? `を${styledCount}問` : ``}に増やしました${mcCount >= 300 ? `(4択は全部で約${comma(Math.round(mcCount / 50) * 50)}問)` : ``}` : ``,
+      missedV12 ? `その前の版では<a href="#progress/predict">合格予測</a>・試験日から逆算した<a href="#plan">学習計画</a>・1日の目標と<a href="#progress/badges">バッジ</a>も追加しています` : ``,
       profileHint,
-    ].filter(Boolean) : version === `v12` ? [
-      mcCount >= 300 ? `4択問題を約${Math.round(mcCount / 50) * 50}問に増やしました${styledCount ? `(本試験と同じ形式の「個数問題」「組合せ問題」${styledCount}問を含む)` : ``}` : ``,
-      `<a href="#progress/predict">合格予測</a>を追加しました。最近の4択・模擬試験の分野別の正答率から、得点の見込みを幅つきで表示します(アプリ独自の推定です)`,
-      `試験日から逆算した<a href="#plan">学習計画</a>を追加しました。いまの時期と「今週やること」がホームにも出ます`,
-      `1日の目標(回数か学習時間)と、<a href="#progress/time">学習時間</a>・<a href="#progress/badges">バッジ</a>を追加しました`,
-      `4択で正解しても自信がなかったときは「勘で当たった」を押すと、3日後の解き直しに入ります`,
-      profileHint,
-    ].filter(Boolean) : version !== `v10` ? [
-      // v11: 苦手を自動で潰す仕組みを中心に案内する
-      name ? `アプリの名前を「${esc(name)}」に変えました(商標の確認によるものです)。URL・学習の記録はそのままです` : ``,
-      `ホームの一番上に<strong>今日のメニュー(約15分)</strong>を追加しました。復習・解き直し・苦手の○×・新しい基礎知識を順に案内し、終わった手順にチェックが付きます`,
-      `間違えた4択を1→3→7→21日後に出し直す<a href="#quiz/due">解き直し</a>を追加しました(4択・模擬試験・○×で間違えた問題が対象)`,
-      `模擬試験の結果から、間違えた問題の論点を○×で確認できるようになりました`,
-      // 枚数は図解の一覧の「全n点」(学習内容の図。アプリの使い方の図は除く)と合わせる
-      `<a href="#figures">図解</a>を15枚追加しました(全26枚)。4択の解答後に「図解で確認」から開けます`,
-      `<a href="#topics/topicO">不動産と消費税</a>に基礎知識12項目・4択25問を追加しました`,
-      profileHint,
-    ].filter(Boolean) : [
-      name ? `アプリの名前を「${esc(name)}」に変えました。URL・学習の記録はそのままです` : ``,
-      `<a href="#about">このアプリについて</a>(運営者・プライバシー・免責事項・更新履歴)を追加`,
-      profileHint,
-      window.Report && typeof Report.enabled === `function` && Report.enabled() ? `問題や解説の<a href="#about/report">誤りを報告</a>できるようになりました` : ``,
-      `これまでの動画一覧は<a href="#works">作品で学ぶ</a>コーナーにまとめました`,
-      // 問題数はデータから数える(約50問単位)
-      mcCount >= 300 ? `4択問題を約${Math.round(mcCount / 50) * 50}問に増やしました` : ``,
-      `デザインを新しくしました`,
     ].filter(Boolean);
     // 小さく出す: 見出しと「新しくなった点」の開閉(中身はこれまでと同じ)
     const card = el(`section`, `card home-news`);
@@ -1453,6 +1441,7 @@ window.Views.home = (function () {
     const news = notices(ctx);
     const menu = {};
     const hero = {};
+    let plan = null;
     if (ctx.variant === `exam`) {
       const analysis = analysisSection(ctx);
       place(main, menuCard(ctx, null, used, menu), 0);
@@ -1466,7 +1455,7 @@ window.Views.home = (function () {
       place(side, analysis, 5);
       place(side, examCard(ctx, used), 6);
     } else {
-      const plan = generalPlan(ctx);
+      plan = generalPlan(ctx);
       place(main, menuCard(ctx, plan, used, menu), 0);
       place(main, generalHero(ctx, plan, used, hero), 1);
       news.forEach((n) => place(main, n, 2));
@@ -1492,11 +1481,58 @@ window.Views.home = (function () {
     head.appendChild(levelMount());
     head.appendChild(greetEl(ctx, st, go));
     if (!side.children.length) wrap.querySelector(`.home-layout`).classList.add(`is-single`);
-    live = { wrap, main, ctx, day: DateUtil.today() };
+    live = { wrap, main, ctx, plan, day: DateUtil.today() };
     if (st && st.allDone) celebrate(wrap);
     watchInstallPrompt();
     watchDay();
     watchBadges();
+    watchDetail();
+  }
+
+  // v14: 公開版では出題頻度ランク(js/freq.js・data/frequency.js)と新しい機能のデータが詳細の束にあり、ホームの最初の表示では使えない。
+  // 詳細が届いたら1回だけ、表示中のホームの今日のメニュー(宅建士が目標のときは頻出の論点を先に出す)と「新しくなりました」(新しい機能の数)を
+  // 作り直す。中身が同じなら何もしない。メニューのいまの手順が変わったら、大きな主ボタンの行き先と文も合わせる。
+  // 差し替えたカードの中にフォーカスがあれば、新しいカードの同じ所へ移す(ほかのカード・ヒーローは描き直さない)
+  let watchingDetail = false;
+  function watchDetail() {
+    if (watchingDetail || !window.AppData || typeof AppData.onDetail !== `function` || typeof AppData.hasDetail !== `function` || AppData.hasDetail()) return;
+    watchingDetail = true;
+    // ほかの onDetail(問題エンジン・検索の作り置きの捨て直し)のあとで作る
+    AppData.onDetail(() => setTimeout(() => safe(refreshAfterDetail, null), 0));
+  }
+
+  function swapCard(old, fresh, focusSel) {
+    const had = old.contains(document.activeElement) ? document.activeElement : null;
+    const open = old.querySelector(`details[open]`);
+    if (open) { const d = fresh.querySelector(`details`); if (d) d.open = true; }
+    if (fresh.innerHTML === old.innerHTML) return false;
+    fresh.style.order = old.style.order;
+    old.replaceWith(fresh);
+    if (had) {
+      const sel = focusSel(had);
+      const to = (sel && fresh.querySelector(sel)) || fresh.querySelector(`a, button, summary`);
+      if (to) to.focus({ preventScroll: true });
+    }
+    return true;
+  }
+
+  function refreshAfterDetail() {
+    if (!live || !live.wrap.isConnected) return;
+    const oldMenu = live.main.querySelector(`.home-menu`);
+    if (oldMenu) {
+      const info = {};
+      const card = menuCard(live.ctx, live.plan, new Set(), info);
+      const step = (a) => (a.dataset && a.dataset.step ? `[data-step="${a.dataset.step}"]` : null);
+      if (card && swapCard(oldMenu, card, step) && info.st && info.st.next) {
+        const btn = live.wrap.querySelector(`.home-go.is-dup`);
+        const sub = btn && btn.querySelector(`small`);
+        if (btn) btn.setAttribute(`href`, info.st.next.nav);
+        if (sub) sub.textContent = `${info.st.next.title}・約${info.st.next.minutes}分`;
+      }
+    }
+    const oldNews = live.main.querySelector(`.home-news`);
+    const news = oldNews ? whatsNewCard() : null;
+    if (news) swapCard(oldNews, news, (a) => (a.matches(`summary`) ? `summary` : a.dataset && a.dataset.role ? `[data-role="${a.dataset.role}"]` : null));
   }
 
   // バッジは起動の数秒後に判定される(js/badges.js)。判定でバッジが増えたら('badges:change')、表示中のカウンターの数だけ書き換える

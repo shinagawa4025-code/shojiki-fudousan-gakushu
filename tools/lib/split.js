@@ -30,7 +30,9 @@ const DETAIL_FIELDS = {
 const CODE_FILES = ['js/siteConfig.js', 'data/contentPack.js'];
 // v14: 丸ごと詳細に回す APP_DATA の項目(出題頻度ランク・数字まとめ・比較表・条文穴埋め。使う画面と js/freq.js などは詳細の束にあり、
 // 本体のコード(ホーム・js/recommend.js など)は null のときは使わない。詳細が届いたら 'appdata:detail' で描き直す)
-const DETAIL_KEYS = ['frequency', 'numbers', 'compareTables', 'joubun'];
+// 更新履歴(changelog)も: 全部を出すのは詳細の束の #about だけ。ホームのお知らせは「更新履歴を見る」のリンク(閉じた「新しくなった点」の中)
+// にあるかどうかだけに使い、詳細が届いたらお知らせを作り直す(js/views/home.js の refreshAfterDetail)。本体を約3.7KB(gzip)軽くする
+const DETAIL_KEYS = ['frequency', 'numbers', 'compareTables', 'joubun', 'changelog'];
 const WHOLE = '$whole';
 const BASE_GLOBALS = ['console', 'location', 'window'];
 

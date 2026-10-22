@@ -171,7 +171,10 @@ window.Views.quiz = (function () {
 
     okRun = 0;
     // v14: 「問題」のタブの最初の画面(#quiz)だけ、ほかの練習の入口のタイルを出す(問題・トピックを指定して開いたときは出さない)
-    const hubTiles = !param && window.Nav && Nav.tilesHtml ? Nav.tilesHtml(HUB_VIEWS, `ほかの練習`) : ``;
+    // 税理士試験(消費税法)が目的の人は、条文穴埋めを先頭に(宅建士試験向けの出題頻度・数字まとめは後ろへ)
+    let zei = false;
+    try { zei = !param && Stats.goalExamTypeId() === `zeirishi`; } catch (e) { zei = false; }
+    const hubTiles = !param && window.Nav && Nav.tilesHtml ? Nav.tilesHtml(zei ? [`joubun`, `challenge`, `compare`, `freq`, `numbers`] : HUB_VIEWS, `ほかの練習`) : ``;
     const wrap = document.createElement(`div`);
     wrap.className = `view quiz-view quiz-stepper`;
     wrap.innerHTML = `

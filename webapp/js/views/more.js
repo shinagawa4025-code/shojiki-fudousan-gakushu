@@ -16,7 +16,7 @@ window.Views.more = (function () {
   const TOOL_ROWS = [
     { nav: `#challenge`, icon: `bolt`, tone: `sticker-gold`, title: `今日のチャレンジ`, desc: `3分間の○×タイムアタック。自己ベストと経験値` },
     { nav: `#freq`, icon: `star`, title: `出題頻度ランク`, desc: `宅建士試験の論点ごとの出題頻度(A・B・C)` },
-    { nav: `#numbers`, icon: `percent`, title: `数字まとめドリル`, desc: `期間・金額・面積・割合などの数字をカードと4択で` },
+    { nav: `#numbers`, icon: `percent`, title: `数字まとめドリル`, desc: `宅建士試験で覚える期間・金額・面積・割合などの数字をカードと4択で` },
     { nav: `#compare`, icon: `grid`, title: `比較表で覚える`, desc: `似た制度を表で見比べて、穴埋めで確かめる` },
     { nav: `#joubun`, icon: `scale`, title: `条文穴埋め(消費税法)`, badge: `税理士`, desc: `理論の条文の大事な語句を穴埋めで覚える` },
   ];

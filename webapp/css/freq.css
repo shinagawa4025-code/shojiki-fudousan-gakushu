@@ -67,6 +67,9 @@
   .freq-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .freq-row { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; margin: 0; }
+/* 画面の外の行は、見えるところに近づくまで配置を計算しない(業法・権利の 26〜29 行で、はじめて開くときに重くならないように)。
+   大きさの目安は1行の高さ(描いたあとは実際の高さを覚える) */
+.freq-list > .freq-row { content-visibility: auto; contain-intrinsic-size: auto 280px; }
 .freq-row:focus { outline: none; }
 .freq-row:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .freq-row-top { display: flex; align-items: flex-start; gap: var(--sp-2); }
@@ -75,7 +78,8 @@
 .freq-row-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-3); margin: 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); }
 .freq-row-hits { color: var(--color-text); font-weight: 600; }
 .freq-row-hits b { margin: 0 1px; font-family: var(--font-display); font-size: var(--fs-lg); font-weight: var(--fw-display); color: var(--color-heading); }
-.freq-row-meta > .link-btn.freq-row-read { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; text-decoration: none; }
+/* 押せる高さは 44px(上下の負の余白で行の高さは変えない) */
+.freq-row-meta > .link-btn.freq-row-read { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; margin-block: -12px; margin-left: auto; padding-inline: var(--sp-1); text-decoration: none; }
 .freq-row-none { font-size: var(--fs-sm); color: var(--color-text-muted); }
 
 /* 自分の正答率(バーは分野の色。8割以上は金色、6割未満は数字を赤で) */
@@ -89,8 +93,10 @@
 .freq-mastery.is-none { font-size: var(--fs-sm); color: var(--color-text-muted); }
 
 .freq-row-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
-.freq-row-actions .btn { flex: 1 1 8.5em; min-width: 0; gap: var(--sp-1); }
-.freq-btn-count { font-size: var(--fs-xs); font-weight: 600; opacity: .85; }
+/* ボタンの文字は語の途中で折り返さない(収まらなければ2つのボタンを上下2段に) */
+.freq-row-actions .btn { flex: 1 1 auto; min-width: 0; gap: var(--sp-1); white-space: nowrap; }
+/* 件数は文字を薄くしない(緑の面の白い小さな文字で 4.5:1 以上) */
+.freq-btn-count { font-size: var(--fs-xs); font-weight: 600; }
 
 /* ---- 学習の進捗のカード(FreqUi.renderProgress) ---- */
 .freq-prog-list { list-style: none; margin: 0; padding: 0; }

@@ -9,7 +9,8 @@ window.Onboarding = (function () {
   const PREFIX = `shojikiLearn.v1.`;
   // ホームの「アプリが新しくなりました」の版。内容を変えたらここを変えると、既存の利用者に1度だけ表示される
   // (v12: 4択約800問・個数/組合せ・合格予測・学習計画・目標/学習時間/バッジ・「勘で当たった」。文言は views/home.js の whatsNewCard)
-  const WHATS_NEW = `v13`;
+  // (v14: 出題頻度ランク・数字まとめドリル・比較表・レベルと今日のチャレンジ・条文穴埋め。v13 以前のお知らせを見ていない人には前の版の行も足す)
+  const WHATS_NEW = `v14`;
   // 起動時に自動で書き込まれる・ガイド自身が使うキー、学習記録ではないキーは「既存ユーザー」の判定に含めない
   const IGNORE_KEYS = [`themePreference`, `ttsRate`, `oxPrefs`, `quizPrefs`, `srsMigrated`, `schemaVersion`, `onboardingDone`, `seenWhatsNew`,
     `lastBackupAt`, `backupNoteDismissedAt`, `installNoteDismissedAt`, `learnerProfile`, `seenReviewTip`, `glossaryMode`, `audience`,
@@ -561,6 +562,7 @@ window.Onboarding = (function () {
             <li>${sticker(`repeat`, `sticker-sm onb-point-icon`, 18)}<span>毎日まず<strong>「今日の復習」</strong>を開きましょう(下のタブの「復習」)。用語カードで「もう一度・難しい・普通・簡単」を選ぶと、次に復習する日が自動で決まり、その日になると今日の復習に並びます。</span></li>
             <li>${sticker(`x`, `sticker-sm sticker-warn onb-point-icon`, 18)}<span>問題で<strong>間違えた用語は自動で</strong>今日の復習に追加されます。</span></li>
             <li>${sticker(`flame-fill`, `sticker-sm sticker-gold onb-point-icon`, 18)}<span>1日1問でも続けると<strong>連続学習日数</strong>が伸びます。ホームで記録を確認できます。</span></li>
+            <li>${sticker(`star-fill`, `sticker-sm sticker-gold onb-point-icon`, 18)}<span>4択・○×・復習などで<strong>経験値</strong>がたまり、レベルが上がります。3分間の○×<strong>「今日のチャレンジ」</strong>もどうぞ(下のタブの「問題」)。</span></li>
           </ul>`;
       },
       next: () => ({ label: `閉じる`, icon: `check` }),

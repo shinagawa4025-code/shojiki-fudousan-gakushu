@@ -29,17 +29,28 @@ B.test('誰に出すか: 新しい利用者・途中で閉じて開き直し・�
   // B: 前の版の利用者(初回ガイド済み・お知らせは前の版・記録あり)
   p = await t.open('', { fresh: true, seed: { onboardingDone: { v: 2, at: 1 }, seenWhatsNew: 'v11', quizHistory: { [`quiz-K-01`]: 'ok' }, activityLog: { '2026-10-10': 3 }, schemaVersion: 2 } });
   t.ok(!(await p.exists('.onb-overlay')), 'B 前の版の利用者: 初回ガイドなし');
-  const news = await p.waitFor(() => { const e = document.querySelector('.home-news'); return e && e.textContent.replace(/\s+/g, ' '); });
-  t.ok(news && /新しくなりました/.test(news) && /消費税法/.test(news) && /個数問題/.test(news) && /約\d{1,3},\d{3}問/.test(news), 'B お知らせのカード(新しくなった点に v13 の消費税法・個数問題・約1,000問の3桁区切り)', news && news.slice(0, 160));
-  t.ok(news && /合格予測/.test(news) && /学習計画/.test(news), 'B v11 から直接更新した人には v12 の合格予測・学習計画も1行で案内', news && news.slice(0, 400));
+  // v14 の新しい機能の数はデータから数える(公開版では詳細が届いてから。届いたらカードを作り直す)
+  const counts = await p.evaluate(() => ({ exams: APP_DATA.frequency.exams.length, numbers: APP_DATA.numbers.length, tables: APP_DATA.compareTables.length, joubun: APP_DATA.joubun.items.length }));
+  const newsText = () => p.waitFor((c) => { const e = document.querySelector('.home-news'); const x = e && e.textContent.replace(/\s+/g, ' '); return x && x.includes(`数字${c.numbers}項目`) && x; }, {}, counts);
+  const news = await newsText();
+  t.ok(news && /新しくなりました/.test(news) && /出題頻度ランク/.test(news) && /数字まとめドリル/.test(news) && /比較表/.test(news) && /今日のチャレンジ/.test(news) && /条文穴埋め/.test(news), 'B お知らせのカード(v14 の5つの機能)', news && news.slice(0, 400));
+  t.ok(news && news.includes(`過去${counts.exams}回`) && news.includes(`${counts.tables}枚`) && news.includes(`条文${counts.joubun}項目`), 'B v14 の数はデータから(本試験の回数・比較表の枚数・条文の項目数)', { counts, news: news && news.slice(0, 400) });
+  const links = await p.evaluate(() => Array.from(document.querySelectorAll('.home-news a')).map((a) => a.getAttribute('href')));
+  t.ok(['#freq', '#numbers', '#compare', '#challenge', '#joubun', '#progress/level'].every((h) => links.includes(h)), 'B 5つの機能はそれぞれの画面へのリンク', links);
+  t.ok(news && /法律の全体/.test(news) && /個数問題/.test(news) && /約\d{1,3},\d{3}問/.test(news), 'B v11 から直接更新した人には v13 の消費税法・個数問題・約1,000問(3桁区切り)も1行で案内', news && news.slice(0, 600));
+  t.ok(news && /合格予測/.test(news) && /学習計画/.test(news), 'B …v12 の合格予測・学習計画も1行で案内', news && news.slice(0, 600));
   await p.evaluate(() => document.querySelector('.home-news [data-role="dismiss"]').click());
   await p.waitFor(() => !document.querySelector('.home-news'));
   await p.reload();
   t.ok(!(await p.exists('.home-news')) && (await p.get('seenWhatsNew')) === W, `B 閉じたら次から出さない(seenWhatsNew = ${W})`);
   // B2: v12 のお知らせを見た利用者には、v12 の機能の行は出さない
   p = await t.open('', { fresh: true, seed: { onboardingDone: { v: 2, at: 1 }, seenWhatsNew: 'v12', quizHistory: { [`quiz-K-01`]: 'ok' }, schemaVersion: 2 } });
-  const news12 = await p.waitFor(() => { const e = document.querySelector('.home-news'); return e && e.textContent.replace(/\s+/g, ' '); });
-  t.ok(news12 && /消費税法/.test(news12) && !/合格予測/.test(news12), 'B2 v12 から更新した人: v13 の点だけ(合格予測の行なし)', news12 && news12.slice(0, 400));
+  const news12 = await newsText();
+  t.ok(news12 && /出題頻度ランク/.test(news12) && /法律の全体/.test(news12) && !/合格予測/.test(news12), 'B2 v12 から更新した人: v14 と v13 の点(合格予測の行なし)', news12 && news12.slice(0, 600));
+  // B3: v13 のお知らせを見た利用者には、v14 の点だけ
+  p = await t.open('', { fresh: true, seed: { onboardingDone: { v: 2, at: 1 }, seenWhatsNew: 'v13', quizHistory: { [`quiz-K-01`]: 'ok' }, schemaVersion: 2 } });
+  const news13 = await newsText();
+  t.ok(news13 && /条文穴埋め/.test(news13) && !/法律の全体/.test(news13) && !/合格予測/.test(news13), 'B3 v13 から更新した人: v14 の点だけ', news13 && news13.slice(0, 600));
   // C: 記録のある古い利用者(初回ガイドの記録がない)
   p = await t.open('', { fresh: true, seed: { flashcards: { basicA01: true } } });
   t.ok(!(await p.exists('.onb-overlay')), 'C 記録のある古い利用者: 初回ガイドなし');

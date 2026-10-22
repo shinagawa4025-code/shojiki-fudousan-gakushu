@@ -5,6 +5,7 @@
 // 「テーマ別の進捗」(気になるテーマごとの学習済み・次に読む基礎知識・○×)を先頭に出す(テーマ表示)
 // ルート: #progress / #progress/weak(弱点分析までスクロール) / #progress/exam(テーマ表示の人も試験の分野別の分析を見る)
 //        v12: #progress/predict(合格予測) / #progress/time(学習時間) / #progress/badges(バッジ)までスクロール
+//        v14: #progress/level(レベルと経験値)までスクロール
 // v12: 合格予測(js/predict.js。アプリ独自の推定)・直近7日の学習時間(StudyTime)・バッジ(Badges)のカード。
 //      自信なしの正解は0.5問として数えるため、正解数は「12.5」のように小数になることがある
 // 言葉の使い分け: 「学習済み」= 記憶済み(★)・学習済み(✓)にしたもの / 「着手」= 一度でも学習・出題したもの
@@ -1219,11 +1220,12 @@ window.Views.progress = (function () {
     const time = safeCard(studyTimeCard);
     const badges = safeCard(badgeCard);
     // 記録のカウンターを先頭に(試験の表示と同じ並び)。v14: そのあとにレベル、苦手なポイントのあとに出題頻度ランク
-    const cards = [summaryCard(themeScope(ids, isLearned)), levelMount(), theme, weak, freqMount(), time, srsCard(), heatmapCard()];
+    const level = levelMount();
+    const cards = [summaryCard(themeScope(ids, isLearned)), level, theme, weak, freqMount(), time, srsCard(), heatmapCard()];
     if (examPoints().length) cards.push(examCard());
     cards.push(badges, otherThemesCard(chosen.length ? ids : LIFE_ORDER), dataNote());
     cards.filter(Boolean).forEach((el) => grid.appendChild(el));
-    const jump = param === `weak` ? weak || theme : param === `time` ? time : param === `badges` ? badges : null;
+    const jump = param === `weak` ? weak || theme : param === `time` ? time : param === `badges` ? badges : param === `level` ? level : null;
     if (jump) requestAnimationFrame(() => jump.scrollIntoView({ block: `start`, behavior: `auto` }));
   }
 
@@ -1279,9 +1281,10 @@ window.Views.progress = (function () {
     const predictFirst = state.typeId === `takken`;
     // 並び: 記録のカウンター → レベル(v14) → (合格予測) → 弱点分析 → 出題頻度ランク(v14) → (合格予測) → 模擬試験の推移 → 学習時間 →
     //       定着度 → カレンダー → バッジ → トピック別
-    [summaryCard(), levelMount(), predictFirst ? predict : null, analysis, freqMount(), predictFirst ? null : predict, examCard(), time, srsCard(), heatmapCard(), badges, topicCard(), dataNote()]
+    const level = levelMount();
+    [summaryCard(), level, predictFirst ? predict : null, analysis, freqMount(), predictFirst ? null : predict, examCard(), time, srsCard(), heatmapCard(), badges, topicCard(), dataNote()]
       .filter(Boolean).forEach((el) => grid.appendChild(el));
-    const jumps = { weak: analysis, predict, time, badges };
+    const jumps = { weak: analysis, predict, time, badges, level };
     const jump = param && Object.prototype.hasOwnProperty.call(jumps, param) ? jumps[param] : null;
     if (jump) {
       requestAnimationFrame(() => jump.scrollIntoView({ block: `start`, behavior: `auto` }));

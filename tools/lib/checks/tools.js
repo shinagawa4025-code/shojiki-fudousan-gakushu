@@ -1,23 +1,21 @@
 // 数字まとめ(APP_DATA.numbers)・比較表(APP_DATA.compareTables)・条文穴埋め(APP_DATA.joubun)のデータの確認(v14。tools/check.js の 9. から呼ばれる)
 //   module.exports = function (ctx, info) → { errors: [文字列], warnings: [文字列] }
-//   形の確認はいつも行う。条文の照合(つなげた文 = e-Gov の本文)は、e-Gov から取った消費税法の JSON があるときだけ行う
-//   (CI など JSON がない所では何も言わずに省く)。JSON の場所: 環境変数 SHOHIHO_JSON、なければ LAW_JSON_CANDIDATES の順(リポジトリ・作業用フォルダ)
+//   形の確認はいつも行う。条文の照合(つなげた文 = e-Gov の本文)は、リポジトリに置いた e-Gov の消費税法の JSON
+//   (tools/fixtures/law/shohiho.json。出典と時点は同じフォルダの README.txt)で行う。CI(tools/check.js)でも照合し、違えばエラー。
+//   JSON の場所: 環境変数 SHOHIHO_JSON(別の時点の JSON で試すとき)、なければ LAW_JSON。条文穴埋めの項目があるのに JSON が
+//   見つからないときもエラー(照合しないまま公開しない)。info.lawJson に null を渡したときだけ照合を省く(単体テストの形の確認用)
 //   JSON の形: { asOf, articles: { '30': { paragraphs: { '1': { sentence, items: { '8': 文 }, subitems: { '1': { 'イ': 文 } } } } } } }
 //   条文の項目の ref: { art: '30', para: '1', item?: '8', sub?: 'イ' }。ref がなければ article('第30条第1項' など)から読む
 'use strict';
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 
 const CATS = ['gyoho', 'kenri', 'horei', 'zei', 'menjo'];
 const CMP_CATS = CATS.concat(['shohiho']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CELL_MAX = 28;
-// 1. リポジトリに置いたとき(tools/fixtures/law/shohiho.json。置けば CI でも照合する) 2. 作業用フォルダ(round 9 の取得分)
-const LAW_JSON_CANDIDATES = [
-  path.join(__dirname, '..', '..', 'fixtures', 'law', 'shohiho.json'),
-  path.join(os.tmpdir(), 'claude', 'C--Users-shina-Documents---------', 'fa41962d-841f-4ec8-8dbd-eafe3d4fe7c2', 'scratchpad', 'r9', 'law', 'shohiho.json'),
-];
+// リポジトリに置いた e-Gov の消費税法(2026-10-01 時点。tools/fixtures/law/README.txt)
+const LAW_JSON = path.join(__dirname, '..', '..', 'fixtures', 'law', 'shohiho.json');
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const isStr = (v) => typeof v === 'string' && v.trim().length > 0;
@@ -197,7 +195,7 @@ function diffAt(a, b) {
 function findLawJson() {
   const env = process.env.SHOHIHO_JSON;
   if (env) return fs.existsSync(env) ? env : null;
-  return LAW_JSON_CANDIDATES.find((p) => fs.existsSync(p)) || null;
+  return fs.existsSync(LAW_JSON) ? LAW_JSON : null;
 }
 
 function validateJoubun(data, L, out, opts) {
@@ -233,6 +231,8 @@ function validateJoubun(data, L, out, opts) {
     checkRefs(where, it, L, errors, { needSources: false });
     (Array.isArray(it.sources) ? it.sources : []).forEach((s) => { if (!L.source(s)) errors.push(`${where}: 存在しない出典 ${s}`); });
     if (it.note != null && typeof it.note !== 'string') errors.push(`${where}: note は文字列です`);
+    if (it.caption != null && !isStr(it.caption)) errors.push(`${where}: caption(条の見出し)は文字列です`);
+    checkReviewBy(where, it, opts.today, warnings, errors);
     // 空欄: parts の { b: n } と blanks の番号がそろっている(どの空欄もちょうど1回使う)
     if (!Array.isArray(it.parts) || !it.parts.length) { errors.push(`${where}: parts がありません`); return; }
     if (!Array.isArray(it.blanks)) { errors.push(`${where}: blanks がありません`); return; }
@@ -283,6 +283,9 @@ function validateJoubun(data, L, out, opts) {
       it.parts.forEach((p, pi) => {
         if (isObj(p) && typeof p.omit === 'string' && !got.text.includes(p.omit)) errors.push(`${where} parts[${pi}]: omit の文が e-Gov の本文にありません`);
       });
+      // 条の見出し(画面の見出しに出す)は e-Gov の見出しそのまま(（）・「なつた」なども)
+      const art = json.articles && json.articles[String(ref.art)];
+      if (isStr(it.caption) && art && typeof art.caption === 'string' && it.caption !== art.caption) errors.push(`${where}: caption「${it.caption}」が e-Gov の見出し「${art.caption}」と違います`);
     }
   });
 }
@@ -295,11 +298,17 @@ function run(ctx, info) {
   try { today = ctx && ctx.DateUtil ? ctx.DateUtil.today() : null; } catch (e) { today = null; }
   validateNumbers(D.numbers, L, out, today);
   validateCompare(D.compareTables, L, out, today);
-  const lawJson = info && Object.prototype.hasOwnProperty.call(info, 'lawJson') ? info.lawJson : findLawJson();
-  validateJoubun(D.joubun, L, out, { lawJson });
+  const skip = !!info && Object.prototype.hasOwnProperty.call(info, 'lawJson') && info.lawJson == null;
+  const lawJson = info && info.lawJson ? info.lawJson : skip ? null : findLawJson();
+  validateJoubun(D.joubun, L, out, { lawJson, today });
+  // 照合を省くと決めていないのに JSON がない(消した・SHOHIHO_JSON の場所にない)ときは、照合しないまま公開しない
+  const items = isObj(D.joubun) && Array.isArray(D.joubun.items) ? D.joubun.items.length : 0;
+  if (!lawJson && !skip && items) {
+    out.errors.push(`条文穴埋めの ${items}項目を照合する e-Gov の JSON がありません(${process.env.SHOHIHO_JSON ? `SHOHIHO_JSON=${process.env.SHOHIHO_JSON}` : path.relative(process.cwd(), LAW_JSON)})。tools/fixtures/law/README.txt を見てください`);
+  }
   // tools/check.js から呼ばれたときは、条文を照合したかを1行で知らせる
   if (info && info.webapp && !info.quiet) {
-    console.log(lawJson ? `tools.js: 条文穴埋めの ${out.joubunChecked || 0}項目を e-Gov の本文と照合しました(${path.basename(lawJson)})` : 'tools.js: e-Gov の JSON がないため、条文の照合は省きました(形の確認だけ)');
+    console.log(lawJson ? `tools.js: 条文穴埋めの ${out.joubunChecked || 0}項目を e-Gov の本文と照合しました(${path.basename(lawJson)})` : 'tools.js: e-Gov の JSON がないため、条文の照合はできませんでした');
   }
   return { errors: out.errors, warnings: out.warnings, joubunChecked: out.joubunChecked || 0, lawJson: lawJson || null };
 }
@@ -309,3 +318,4 @@ module.exports.reconstruct = reconstruct;
 module.exports.refFromArticle = refFromArticle;
 module.exports.lawText = lawText;
 module.exports.findLawJson = findLawJson;
+module.exports.LAW_JSON = LAW_JSON;

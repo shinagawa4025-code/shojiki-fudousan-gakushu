@@ -8,7 +8,7 @@
 //   themeOfBasic(id) / rankOfBasic(id)  基礎知識のテーマ / ランク
 //   themesBySection(topicId, section)   トピックの小見出しのテーマ(section を省くとトピックのすべて)
 //   sectionBest(topicId, section, basicIds)  小見出しの中でいちばん高いランクのテーマ(小見出しの名前か、基礎知識が重なるテーマから)
-//   chipHtml(rank, { hits, total })     ランクの札「頻出A」(読み上げは「出題頻度A(直近12回中11回)」)/ chipFor(theme) 回数つきの札
+//   chipHtml(rank, { hits, total })     ランクの札「頻出A」(読み上げは「出題頻度A(令和7年度までの12回中11回)」)/ chipFor(theme) 回数つきの札
 //   mastery(themeId) / masteryAll()     テーマの成績 { answered, correct, rate, mc: { answered, correct }, ox: { answered, correct } }
 //                              (4択は quizHistory の最後の結果、○×は oxStats の文ごとの最後の結果。1問・1文を1と数える)
 //   quizIdsOf(themeId) / statementCountOf(themeId)  テーマの4択問題(今ある問題だけ・データの順)/ ○×で出せる文の数
@@ -167,16 +167,20 @@ window.Freq = (function () {
     return list[0] || null;
   }
 
-  // ランクの札。見た目は「頻出A」、読み上げは「出題頻度A(直近12回中11回)」(回数が分かるときだけ回数も)
+  // ランクの札。見た目は「頻出A」「頻出B」(C は出ることが少ない論点なので「頻度C」)、読み上げは「出題頻度A(令和7年度までの12回中11回)」
+  // (回数が分かるときだけ回数も)
   // opts: { hits, total, cls(足すクラス), prefix(読み上げの前置き。例「この中で最も高いランクは」)}
   function chipHtml(rank, opts) {
     if (!RANKS.includes(rank)) return ``;
     const o = opts || {};
     const tot = Number(o.total);
     const hits = Number(o.hits);
-    const label = `出題頻度${rank}${tot > 0 && Number.isFinite(hits) ? `(直近${tot}回中${hits}回)` : ``}`;
+    // 数えた回のうち最も新しい回の名前(令和8年度の試験はまだ数えていないので「直近」とは言わない)
+    const i = tot > 0 && Number.isFinite(hits) ? info() : null;
+    const upto = i && i.last && i.last.label ? `${i.last.label}までの` : ``;
+    const label = `出題頻度${rank}${tot > 0 && Number.isFinite(hits) ? `(${upto}${tot}回中${hits}回)` : ``}`;
     const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-    return `<span class="freq-chip is-${rank.toLowerCase()}${o.cls ? ` ${esc(o.cls)}` : ``}" data-rank="${rank}" title="${label}"><span aria-hidden="true">頻出${rank}</span><span class="sr-only">${o.prefix ? esc(o.prefix) : ``}${label}</span></span>`;
+    return `<span class="freq-chip is-${rank.toLowerCase()}${o.cls ? ` ${esc(o.cls)}` : ``}" data-rank="${rank}" title="${label}"><span aria-hidden="true">${rank === `C` ? `頻度` : `頻出`}${rank}</span><span class="sr-only">${o.prefix ? esc(o.prefix) : ``}${label}</span></span>`;
   }
 
   function chipFor(t, opts) {

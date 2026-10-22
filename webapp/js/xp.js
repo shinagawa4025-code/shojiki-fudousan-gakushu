@@ -7,7 +7,7 @@
 // 保存: Storage `xp` = { total, days: { 'YYYY-MM-DD': その日の XP }(400日分), seeded: true, seen: お祝いしたレベル,
 //   seed: はじめに付けた XP, seedAt, goal: 目標の XP を付けた日, ch: チャレンジのボーナスを付けた日, ids: { d: 日付, h: 今日答えた問題の印 } }
 // はじめの XP(seedIfNeeded): 初めて使うときに1回だけ、これまでの学習の記録から付ける(数え方は LevelUi.seedValue。記録のない人は 0。
-//   二度は付けない)。本体を軽くするため数え方は詳細の束(js/views/challenge.js の LevelUi)にあり、届くまでは付けない(ホームのレベルも出さない)
+//   二度は付けない)。本体を軽くするため数え方は詳細の束(js/views/challenge.js の LevelUi)にあり、届くまでは付けない(ホームのレベルは「計算しています」)
 // レベルアップのお祝い・進捗のカードも LevelUi。どれも例外を投げない
 window.Xp = (function () {
   const KEY = `xp`;
@@ -135,24 +135,22 @@ window.Xp = (function () {
   }
 
   // ホームの記録のカウンターの下: レベルの札・次のレベルまでのバー・今日の XP と「今日のチャレンジ」(今日のベスト)。
-  // はじめの XP を付けるまでは空(CSS で隠す)。XP が変わったら描き直す(画面から外れたら監視をやめる)
+  // はじめの XP を付けるまでは同じ形の「計算しています」(詳細の束が届いて付けたら描き直す。札の分の場所を先に取り、あとから下の主ボタンを動かさない)。
+  // XP が変わったら描き直す(画面から外れたら監視をやめる)
   function renderHome(box) {
     if (!box || !window.UI) return;
     const paint = () => {
-      if (!load().seeded) return;
-      const lv = level();
-      const td = today();
-      const c = Storage.get(`challenge`, {});
-      const cd = obj(c.days) && obj(c.days[DateUtil.today()]) ? c.days[DateUtil.today()] : {};
+      const x = load();
+      const ok = x.seeded;
+      const lv = levelOf(x.total);
+      const t = DateUtil.today();
+      const td = x.days[t] || 0;
+      // 今日のチャレンジの記録(Storage `challenge`.days[今日]。壊れた値は「まだ」)
+      const cd = Object(Object(Object(Storage.get(`challenge`, {})).days)[t]);
       const best = n0(cd.runs) ? `今日のベスト ${n0(cd.best)}問` : `3分で○×`;
-      const next = lv.max ? `最高レベルです` : `次のレベルまで あと${lv.rest} XP`;
-      box.innerHTML = `<div class="xp-home">
-        <a class="xp-main" href="#progress" aria-label="レベル${lv.level}。${next}。今日の経験値 ${td} XP">
-          <span class="xp-medal" aria-hidden="true"><small>Lv.</small><b>${lv.level}</b></span>
-          <span class="xp-body" aria-hidden="true"><span class="xp-next">${next}</span><span class="xp-bar"><span style="width:${lv.pct}%"></span></span><span class="xp-today">${td ? `今日 +${td} XP` : `今日はこれから`}</span></span>
-        </a>
-        <a class="xp-ch" href="#challenge" aria-label="今日のチャレンジ(${best})">${UI.icon(`bolt`, { size: 20 })}<span aria-hidden="true"><b>今日のチャレンジ</b><small>${best}</small></span></a>
-      </div>`;
+      const next = !ok ? `経験値を計算しています` : lv.max ? `最高レベルです` : `次のレベルまで あと${lv.rest.toLocaleString(`ja-JP`)} XP`;
+      // (縮めても空白が残るので、HTML は1行で書く)
+      box.innerHTML = `<div class="xp-home"><a class="xp-main" href="#progress/level" aria-label="${ok ? `レベル${lv.level}。${next}。今日の経験値 ${td} XP` : next}"><span class="xp-medal" aria-hidden="true"><small>Lv.</small><b>${ok ? lv.level : `-`}</b></span><span class="xp-body" aria-hidden="true"><span class="xp-next">${next}</span><span class="xp-bar"><span style="width:${lv.pct}%"></span></span><span class="xp-today">${td ? `今日 +${td} XP` : `今日はこれから`}</span></span></a><a class="xp-ch" href="#challenge" aria-label="今日のチャレンジ(${best})">${UI.icon(`bolt`, { size: 20 })}<span aria-hidden="true"><b>今日のチャレンジ</b><small>${best}</small></span></a></div>`;
     };
     paint();
     const off = onChange(() => { if (box.isConnected) paint(); else off(); });

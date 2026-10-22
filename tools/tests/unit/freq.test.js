@@ -87,8 +87,10 @@ test('引く: テーマ・問題(○×の文の id も)・基礎知識・小見�
   t.eq(F.sectionBest('topicK', K.sections[0].name, K.sections[0].ids).id, 'fq-gyoho-01', '同じランクなら出た回数の多いテーマ');
   t.ok(F.sectionBest('topicK', 'ない小見出し', []) === null, 'テーマのない小見出しは null');
   const chip = F.chipFor(F.theme('fq-gyoho-01'));
-  t.ok(/class="freq-chip is-a"/.test(chip) && /aria-hidden="true">頻出A</.test(chip) && /sr-only">出題頻度A\(直近12回中11回\)</.test(chip), '札: 見た目は「頻出A」・読み上げは回数つき', chip);
+  t.ok(/class="freq-chip is-a"/.test(chip) && /aria-hidden="true">頻出A</.test(chip) && /sr-only">出題頻度A\(第12回までの12回中11回\)</.test(chip), '札: 見た目は「頻出A」・読み上げは回数つき(数えた最も新しい回まで。「直近」とは言わない)', chip);
   t.ok(/is-c/.test(F.chipHtml('C')) && /sr-only">出題頻度C</.test(F.chipHtml('C')) && F.chipHtml('D') === '' && F.chipHtml('<b>') === '', 'ランクだけの札・知らないランクは空');
+  // C は「出ることが少ない論点」なので、見た目は「頻出C」ではなく「頻度C」(A・B は「頻出A」「頻出B」)
+  t.ok(/aria-hidden="true">頻度C</.test(F.chipHtml('C')) && /aria-hidden="true">頻出B</.test(F.chipHtml('B')), '札の見た目: 頻出A・頻出B・頻度C');
   t.ok(/sr-only">この中で出題頻度B/.test(F.chipHtml('B', { prefix: 'この中で' })) && !/<i>/.test(F.chipHtml('A', { cls: '<i>' })), '読み上げの前置き・クラスは文字として入れる');
   t.ok(F.matchLevel(qA, 'A') && F.matchLevel(qA, 'AB') && F.matchLevel(qA, 'all'), 'A の問題は Aだけ・AとB に入る');
   const qB = Object.keys(f.quizTheme).find((id) => f.quizTheme[id] === 'fq-gyoho-02');
@@ -189,10 +191,10 @@ test('今日のメニュー(Recommend.todayMenu): 宅建士が目標なら④は
   const steps = ctx.Recommend.todayMenu();
   const basic = steps.find((s) => s.id === 'basic');
   const p = F.menuPick('basic');
-  t.ok(basic && basic.nav === `#topics/${p.topicId}/${p.basicId}` && /^頻出A・/.test(basic.sub), '④ 頻出Aのテーマの基礎知識(「頻出A・」を付ける)', basic);
+  t.ok(basic && basic.nav === `#topics/${p.topicId}/${p.basicId}` && /^よく出る・/.test(basic.sub), '④ 頻出Aのテーマの基礎知識(はじめての人にも分かる「よく出る・」を付ける)', basic);
   const ox = steps.find((s) => s.id === 'ox');
   const pick = F.menuPick('ox', { min: 10, count: 10 });
-  if (pick) t.ok(ox.title === '頻出Aの○×' && ox.nav === pick.nav && ox.sub === `${pick.name}・10問`, '③ 頻出Aのテーマの○×', ox);
+  if (pick) t.ok(ox.title === 'よく出る論点の○×' && ox.nav === pick.nav && ox.sub === `${pick.name}・10問`, '③ 頻出Aのテーマの○×(「よく出る論点の○×」)', ox);
   else t.ok(ox.title === '○×で腕試し', '③ 10文に届くテーマがなければ今までどおり', ox);
   // 間違えた文があれば③は今までどおり「苦手の○×」
   const s = ctx.QuizEngine.allStatements()[0];
@@ -202,17 +204,17 @@ test('今日のメニュー(Recommend.todayMenu): 宅建士が目標なら④は
   // 税理士が目標なら頻出は使わない
   setKey(ctx, 'examTargets', [{ id: 'et2', name: '税理士試験', examTypeId: 'zeirishi', date: '2027-08-03', primary: true, createdAt: Date.UTC(2026, 0, 1) }]);
   const z = ctx.Recommend.todayMenu().find((x) => x.id === 'basic');
-  t.ok(z && !/^頻出A/.test(z.sub) && !/^#topics\/topicK\//.test(z.nav), '税理士が目標なら今までどおり', z);
+  t.ok(z && !/^よく出る/.test(z.sub) && !/^#topics\/topicK\//.test(z.nav), '税理士が目標なら今までどおり', z);
   // js/freq.js がない(公開版で詳細が届く前)ときも今までどおり
   setKey(ctx, 'examTargets', [{ id: 'et1', name: '宅建士試験', examTypeId: 'takken', date: '2027-10-17', primary: true, createdAt: Date.UTC(2026, 0, 1) }]);
   setKey(ctx, 'oxStats', {});
   const keep = ctx.Freq;
   ctx.Freq = undefined;
   const plain = ctx.Recommend.todayMenu();
-  t.ok(!/^頻出A/.test(plain.find((x) => x.id === 'basic').sub) && plain.find((x) => x.id === 'ox').title === '○×で腕試し', 'Freq がなければ今までどおり');
+  t.ok(!/^よく出る/.test(plain.find((x) => x.id === 'basic').sub) && plain.find((x) => x.id === 'ox').title === '○×で腕試し', 'Freq がなければ今までどおり');
   ctx.Freq = keep;
   ctx.APP_DATA.frequency = null;
-  t.ok(!/^頻出A/.test(ctx.Recommend.todayMenu().find((x) => x.id === 'basic').sub), 'データが null でも今までどおり');
+  t.ok(!/^よく出る/.test(ctx.Recommend.todayMenu().find((x) => x.id === 'basic').sub), 'データが null でも今までどおり');
 });
 
 test('データの確認(tools/lib/checks/freq.js): 見本は通る・形の誤りはエラー', (t) => {

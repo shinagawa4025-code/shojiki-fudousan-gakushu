@@ -199,6 +199,30 @@ test('LevelUi: 今日のチャレンジの記録を整えて読む・直近の�
   t.eq(d, [{ date: '2026-10-12', xp: 0 }, { date: '2026-10-13', xp: 0 }, { date: T, xp: 10 }], '直近3日(古い順)');
 });
 
+test('LevelUi.revoke: 今日の復習の「元に戻す」で付けた XP を取り消す・評価し直すと はじめてと同じ XP(1枚 3XP のまま)', (t) => {
+  const { ctx } = fresh();
+  const X = ctx.Xp;
+  X.seedIfNeeded();
+  X.award('mc', { id: 'q', correct: true });
+  const g = X.award('review', { id: 'term-a', correct: true, grade: 3 });
+  t.eq([g, X.total(), X.today()], [3, 13, 13], '評価で 3XP');
+  t.eq(ctx.LevelUi.revoke('review', 'term-a', g, T), 3, '取り消した XP');
+  t.eq([X.total(), X.today()], [10, 10], '合計と今日の XP は評価の前に戻る');
+  t.eq(X.award('review', { id: 'term-a', correct: true, grade: 3 }), 3, '評価し直すと 3XP(2回目の 1XP にしない)');
+  t.eq(X.total(), 13, '1枚 3XP(4XP にならない)');
+  // 2回目(1XP)を取り消しても、1回目の印は残す(3回目の評価も 1XP)
+  t.eq(X.award('review', { id: 'term-a', correct: true, grade: 3 }), 1, '同じ日の2回目は 1XP');
+  t.eq(ctx.LevelUi.revoke('review', 'term-a', 1, T), 1, '2回目の 1XP を取り消す');
+  t.eq(X.award('review', { id: 'term-a', correct: true, grade: 3 }), 1, '1回目の分は付いたままなので 1XP');
+  // 昨日の評価を今日取り消す: 昨日の XP から引き、今日の印には触らない
+  setToday(ctx, '2026-10-15');
+  X.award('review', { id: 'term-b', correct: true, grade: 3 });
+  t.eq(ctx.LevelUi.revoke('review', 'term-a', 3, T), 3, '前の日の分');
+  t.eq(getKey(ctx, 'xp').days[T], 14 - 3, '前の日の XP から引く');
+  t.eq([ctx.LevelUi.revoke('review', 'x', 0), ctx.LevelUi.revoke('review', 'x', 'abc')], [0, 0], '0・数でない値は何もしない');
+  t.ok(ctx.LevelUi.revoke('review', 'x', 1e6) <= X.total() + 1e6 && X.total() === 0, '合計は 0 より下がらない', X.total());
+});
+
 test('Badges: レベル(5・10・20・30・50)・今日のチャレンジ(初挑戦・30問)', (t) => {
   const { ctx } = fresh();
   const B = ctx.Badges;

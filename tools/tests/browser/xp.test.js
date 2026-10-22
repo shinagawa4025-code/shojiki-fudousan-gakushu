@@ -29,7 +29,7 @@ B.test('ホーム: レベルの札(Lv・次のレベルまで・今日の XP・�
     const p = await t.open('home', { device, dark, seed: { xp: XP(), challenge: CH, badges: BADGES } });
     const h = await p.waitFor(HOME);
     t.ok(h && !h.hidden && h.medal === 'Lv.5' && /レベル5。次のレベルまで あと140 XP。今日の経験値 120 XP/.test(h.label) && h.today === '今日 +120 XP' && h.bar === '85%', `${tag}: Lv.5・あと140 XP・今日 +120 XP`, h);
-    t.ok(h.chHref === '#challenge' && h.ch === '今日のチャレンジ(今日のベスト 18問)' && h.mainHref === '#progress' && h.aria, `${tag}: 今日のチャレンジ(今日のベスト)・読み上げはリンクの名前で`, h);
+    t.ok(h.chHref === '#challenge' && h.ch === '今日のチャレンジ(今日のベスト 18問)' && h.mainHref === '#progress/level' && h.aria, `${tag}: 今日のチャレンジ(今日のベスト)・読み上げはリンクの名前で`, h);
     t.ok(h.sizes.every((x) => x >= 44), `${tag}: 押せる大きさ 44px 以上`, h.sizes);
     t.ok(!(await p.overflow()), `${tag}: はみ出しなし`);
     if (device === 'iphone') {

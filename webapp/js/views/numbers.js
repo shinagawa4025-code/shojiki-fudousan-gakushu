@@ -1,8 +1,9 @@
 // 数字まとめドリル(v14)。宅建士試験で覚える数字(期間・金額・面積・割合など)をカードと4択の穴埋めで覚える
 // ルート: #numbers(分野・まとまり・やり方・問題数を選ぶ)/ #numbers/run(出題中。組は画面の外に持つので、戻る→進むで続きから)/
-//         #numbers/list・#numbers/list/<分野>(答えを入れた文の一覧。押すと根拠)
-// やり方: カードでめくる(答えを見て ○ 覚えた / △ あいまい / × まだ)・4択で埋める(正解 / 誤り)。問題数 10・20・すべて
-// 出す順: 前回まちがえた → あいまい → まだ → 覚えた(古い順)から問題数だけ選び、混ぜて出す。結果から「間違えたものだけもう一度」
+//         #numbers/list・#numbers/list/<分野>(答えを入れた文の一覧。押すと根拠)・#numbers/list/<分野>/<まとまり>(そのまとまりへ。検索から)
+// やり方: カードでめくる(答えを見て ○ 覚えた / △ あいまい / × 覚えていない)・4択で埋める(正解 / 誤り)。問題数 10・20・すべて
+// 出す順: 前回×(まちがえた・覚えていない)→ あいまい → まだ解いていない → 覚えた(古い順)から問題数だけ選び、混ぜて出す。
+//         結果から「間違えたものだけもう一度」
 // 記録: Storage `numbersStats` = { id: { c, w, last, grade } }(js/cloze.js)。好み: `toolPrefs`.numbers = { cat, group, mode, size }
 window.Views = window.Views || {};
 window.Views.numbers = (function () {
@@ -59,7 +60,7 @@ window.Views.numbers = (function () {
 
   function markHtml(st) {
     if (!st || st.grade == null) return `<span class="tl-mini-mark is-none" aria-hidden="true"></span>`;
-    const word = { 2: `前回: 覚えた`, 1: `前回: あいまい`, 0: `前回: まちがえた` }[st.grade];
+    const word = { 2: `前回: 覚えた`, 1: `前回: あいまい`, 0: `前回: ×(まちがえた・覚えていない)` }[st.grade];
     return `<span class="tl-mini-mark is-g${st.grade}">${Cloze.markSvg({ 2: `o`, 1: `t`, 0: `x` }[st.grade], 16)}<span class="sr-only">${word}</span></span>`;
   }
 
@@ -103,7 +104,7 @@ window.Views.numbers = (function () {
     prog.innerHTML = `
       <div class="tl-progress-head"><span class="tl-progress-label">覚えた数字</span><span class="tl-progress-num"><strong class="num">${knownN}</strong><span class="num"> / ${list.length}</span></span></div>
       <div class="progress-bar" role="progressbar" aria-label="覚えた数字の割合" aria-valuemin="0" aria-valuemax="${list.length}" aria-valuenow="${knownN}"><div class="progress-bar-fill${knownN === list.length ? ` fill-success` : ``}" style="width:${Cloze.pct(knownN, list.length)}%"></div></div>
-      <p class="tl-progress-sub">${wrongN ? `前回まちがえた <b class="num">${wrongN}</b>・` : ``}まだ <b class="num">${unseenN}</b></p>`;
+      <p class="tl-progress-sub">${wrongN ? `前回× <b class="num">${wrongN}</b>・` : ``}まだ解いていない <b class="num">${unseenN}</b></p>`;
     wrap.appendChild(prog);
 
     const setup = document.createElement(`section`);
@@ -121,7 +122,7 @@ window.Views.numbers = (function () {
       <h3 class="tl-label" id="num-size-label">問題数</h3>
       <div class="segmented seg-bold tl-seg" role="group" aria-labelledby="num-size-label" data-role="sizes"></div>
       <button type="button" class="btn btn-lg btn-block tl-start" data-role="start">${ic(`play`, 20)}<span>はじめる</span></button>
-      <p class="tl-start-note">前回まちがえた数字・まだの数字から先に出します。</p>`;
+      <p class="tl-start-note">前回×だった数字・まだ解いていない数字から先に出します。</p>`;
     wrap.appendChild(setup);
 
     const links = document.createElement(`div`);
@@ -312,7 +313,7 @@ window.Views.numbers = (function () {
           after.hidden = false;
           after.innerHTML = noteHtml();
           act.innerHTML = ``;
-          const row = Cloze.gradeRow({ labels: { 2: `覚えた`, 1: `あいまい`, 0: `まだ` }, onGrade: (g) => { finishItem(it, g); next(); } });
+          const row = Cloze.gradeRow({ labels: { 2: `覚えた`, 1: `あいまい`, 0: `覚えていない` }, onGrade: (g) => { finishItem(it, g); next(); } });
           act.appendChild(row);
           live.say(`答えは ${it.a}。${plainSentence(it)}`);
           row.querySelector(`[data-grade]`).focus({ preventScroll: true });
@@ -335,6 +336,13 @@ window.Views.numbers = (function () {
         const answerIdx = opts.indexOf(String(it.a).trim());
         const list = Cloze.choiceList(opts, { label: `空欄に入るもの`, onPick: (i, btn, e) => choose(i, e) });
         act.appendChild(list);
+        // 2問目からは問題の文にフォーカス(読み上げで新しい問題を伝える。選択肢には移さない: 「つづける」を Enter で2回押したとき、
+        // 2回目で選択肢1を答えてしまわないように。次の Tab で選択肢1へ)
+        if (s.index > 0) {
+          const qEl = card.querySelector(`.tl-q`);
+          qEl.setAttribute(`tabindex`, `-1`);
+          qEl.focus({ preventScroll: true });
+        }
         let answered = false;
         const choose = (i, e) => {
           if (answered) return;
@@ -393,7 +401,7 @@ window.Views.numbers = (function () {
           ${s.results.map((r) => {
             const it = s.list.find((x) => x.id === r.id);
             if (!it) return ``;
-            return `<li class="tl-result-item is-g${r.grade}">${Cloze.markSvg({ 2: `o`, 1: `t`, 0: `x` }[r.grade], 20)}<span class="sr-only">${{ 2: word, 1: `あいまい`, 0: s.mode === `card` ? `まだ` : `不正解` }[r.grade]}。</span><span>${sentenceHtml(it, `<b class="tl-ans">${esc(it.a)}</b>`)}</span></li>`;
+            return `<li class="tl-result-item is-g${r.grade}">${Cloze.markSvg({ 2: `o`, 1: `t`, 0: `x` }[r.grade], 20)}<span class="sr-only">${{ 2: word, 1: `あいまい`, 0: s.mode === `card` ? `覚えていない` : `不正解` }[r.grade]}。</span><span>${sentenceHtml(it, `<b class="tl-ans">${esc(it.a)}</b>`)}</span></li>`;
           }).join(``)}
         </ol>
         ${total > 10 ? `</details>` : ``}
@@ -404,6 +412,9 @@ window.Views.numbers = (function () {
         </div>`;
       stage.innerHTML = ``;
       stage.appendChild(card);
+      // 終わったので、上の「やめる」は設定の画面へ戻るリンクの名前に
+      const quit = wrap.querySelector(`[data-role="quit"]`);
+      if (quit) quit.innerHTML = `${ic(`chevron-left`)}数字まとめドリル`;
       const retry = card.querySelector(`[data-role="retry-missed"]`);
       if (retry) retry.addEventListener(`click`, () => start(Cloze.shuffle(missed.slice()), s.mode, s.from));
       card.querySelector(`[data-role="again"]`).addEventListener(`click`, () => {
@@ -422,7 +433,8 @@ window.Views.numbers = (function () {
   }
 
   // ---------- 一覧 ----------
-  function renderList(root, catParam) {
+  // groupParam: そのまとまりを描いて、そこへ移る(検索の「数字まとめ」から)
+  function renderList(root, catParam, groupParam) {
     const list = items();
     const cats = catsOf(list);
     const catId = cats.some((c) => c.id === catParam) ? catParam : ALL;
@@ -446,13 +458,14 @@ window.Views.numbers = (function () {
       return;
     }
     const groups = groupsOf(shown);
-    Cloze.lazyList(box, groups, (g) => {
+    const lazy = Cloze.lazyList(box, groups, (g) => {
       const c = Cloze.cat(g.cat);
       const sec = document.createElement(`section`);
       sec.className = `tl-group ${c.cls}`;
+      sec.dataset.group = g.name;
       const known = g.items.filter((it) => Cloze.known(st[it.id])).length;
       sec.innerHTML = `
-        <h3 class="tl-group-head"><span class="tl-tag-dot" aria-hidden="true"></span><span>${esc(g.name)}</span>${catId === ALL ? `<span class="tl-group-cat">${esc(c.label)}</span>` : ``}<span class="tl-group-n num">${known} / ${g.items.length}<span class="sr-only">覚えた</span></span></h3>
+        <h3 class="tl-group-head" tabindex="-1"><span class="tl-tag-dot" aria-hidden="true"></span><span>${esc(g.name)}</span>${catId === ALL ? `<span class="tl-group-cat">${esc(c.label)}</span>` : ``}<span class="tl-group-n num">${known} / ${g.items.length}<span class="sr-only">覚えた</span></span></h3>
         <ul class="tl-num-list">
           ${g.items.map((it) => `
             <li class="tl-num-item" data-id="${esc(it.id)}">
@@ -468,12 +481,25 @@ window.Views.numbers = (function () {
             </li>`).join(``)}
         </ul>`;
       return sec;
-    }, { chunk: 6 });
+    }, { chunk: 6, size: (g) => g.items.length, unit: `項目` });
+    // まとまりの指定があれば、そこまで描いて移る(戻る操作で戻ったときは Router が元の位置へ戻す)
+    if (groupParam && groups.some((g) => g.name === groupParam)) {
+      lazy.all();
+      const sec = Array.from(box.querySelectorAll(`.tl-group`)).find((x) => x.dataset.group === groupParam);
+      if (sec) {
+        requestAnimationFrame(() => {
+          if (!sec.isConnected) return;
+          sec.scrollIntoView({ block: `start` });
+          const h = sec.querySelector(`.tl-group-head`);
+          if (h) h.focus({ preventScroll: true });
+        });
+      }
+    }
   }
 
   function render(root, param) {
     const parts = String(param || ``).split(`/`);
-    if (parts[0] === `list`) renderList(root, parts[1] || null);
+    if (parts[0] === `list`) renderList(root, parts[1] || null, parts.slice(2).join(`/`) || null);
     else if (parts[0] === `run`) renderRun(root);
     else renderSetup(root);
   }

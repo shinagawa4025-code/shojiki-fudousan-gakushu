@@ -71,6 +71,20 @@ test('Cloze.weakOrder: 点 0 → 1 → まだ → 2(同じ段は古い順・ま�
   t.ok(ctx.Cloze.known({ grade: 2 }) && !ctx.Cloze.known({ grade: 1 }) && !ctx.Cloze.known(null), '覚えた = 最後の点が 2');
 });
 
+test('Cloze: 空欄の一部だけ答えて離れた記録(点 grade がない・null)は「まだ」のまま(0 = 言えなかった にしない)', (t) => {
+  const { ctx } = loadCloze();
+  const C = ctx.Cloze;
+  setKey(ctx, 'joubunStats', { half: { c: 2, w: 0, last: '2026-10-14', grade: null }, halfNg: { c: 0, w: 2, last: '2026-10-14' }, str: { c: 1, w: 0, grade: '2' }, zero: { c: 0, w: 1, grade: 0 } });
+  const st = C.stats('joubunStats');
+  t.eq([st.half.grade, st.halfNg.grade, st.str.grade, st.zero.grade], [null, null, 2, 0], 'null・なしは null のまま(数字の文字列と 0 はそのまま)');
+  // 苦手の順: 点 0 → 誤りの多い途中 → まだ答えていない・正解の多い途中 → 覚えた
+  st.done = { grade: 2, last: '2026-10-01' };
+  t.eq(Array.from(C.weakOrder(['done', 'new1', 'half', 'halfNg', 'zero', 'new2'], st)), ['zero', 'halfNg', 'new1', 'half', 'new2', 'done'], '正解の多い途中は「まだ」の段(覚えたより先)');
+  // 記録(update)で null の点を書かない画面の書き方(js/views/joubun.js・compare.js)
+  C.update('joubunStats', 'half', (s) => { const n = Object.assign({}, s, { c: s.c + 1 }); if (n.grade == null) delete n.grade; return n; });
+  t.ok(!('grade' in getKey(ctx, 'joubunStats').half) && C.stats('joubunStats').half.grade === null, '保存した記録に grade: null を残さない');
+});
+
 test('Cloze.answered / award: 1回で Xp.award を1回(correct・unsure)と学習の記録1回。Xp がなくても・例外でも止まらない', (t) => {
   const { ctx } = loadCloze();
   const calls = [];
@@ -123,17 +137,31 @@ const goodJoubun = (items, law) => ({ law: Object.assign({ name: '消費税法',
 const jItem = (o) => Object.assign({ id: 'jb-001-1', article: '第1条第1項', title: '趣旨', group: '総則', topicId: 'topicR', basicIds: [], ref: { art: '1', para: '1' },
   parts: ['この法律は、', { b: 0 }, 'について、', { omit: '(略した文)' }, '定める。'], blanks: [{ a: '消費税', alts: ['所得税', '法人税', '酒税'] }] }, o || {});
 
-test('データの確認: いまのデータはエラーなし(JSON があれば条文の照合も)', (t) => {
+test('データの確認: いまのデータはエラーなし(リポジトリの e-Gov の JSON で条文も照合)', (t) => {
   const ctx = base();
   const r = check(ctx, { lawJson: null });
   t.eq(r.errors, [], '形の確認でエラーなし');
+  // tools/fixtures/law/shohiho.json はリポジトリにあるので、CI でも必ず照合する(SHOHIHO_JSON で別の JSON を指したときはそれ)
   const json = check.findLawJson();
-  if (json) {
-    const r2 = check(ctx, {});
-    t.eq(r2.errors, [], '条文の照合もエラーなし');
-    const n = (ctx.APP_DATA.joubun && ctx.APP_DATA.joubun.items || []).length;
-    t.eq(r2.joubunChecked, n, `${n}項目すべて e-Gov の本文と一致`);
-  } else t.log('e-Gov の JSON がないので照合は省略');
+  t.ok(!!json, `e-Gov の JSON がある(${process.env.SHOHIHO_JSON ? 'SHOHIHO_JSON' : 'tools/fixtures/law/shohiho.json'})`);
+  if (!process.env.SHOHIHO_JSON) t.eq(json, check.LAW_JSON, '既定はリポジトリの tools/fixtures/law/shohiho.json');
+  const r2 = check(ctx, {});
+  t.eq(r2.errors, [], '条文の照合もエラーなし');
+  const n = (ctx.APP_DATA.joubun && ctx.APP_DATA.joubun.items || []).length;
+  t.eq(r2.joubunChecked, n, `${n}項目すべて e-Gov の本文と一致`);
+});
+
+test('データの確認: 条文穴埋めの項目があるのに e-Gov の JSON が見つからなければエラー(照合しないまま公開しない)', (t) => {
+  const ctx = base();
+  const prev = process.env.SHOHIHO_JSON;
+  process.env.SHOHIHO_JSON = path.join(os.tmpdir(), `no-such-shohiho-${process.pid}.json`);
+  try {
+    const r = check(ctx, {});
+    t.ok(r.errors.some((e) => /照合する e-Gov の JSON がありません/.test(e)), 'JSON がないとエラー', r.errors);
+    t.eq(check(ctx, { lawJson: null }).errors, [], 'lawJson: null を渡したときだけ照合を省く');
+  } finally {
+    if (prev == null) delete process.env.SHOHIHO_JSON; else process.env.SHOHIHO_JSON = prev;
+  }
 });
 
 test('データの確認(数字): 空欄が1つ・誤りの選択肢3つ(正解・互いと違う)・出典と基礎知識・id の重複・分野', (t) => {

@@ -33,7 +33,7 @@ window.APP_DATA.frequency = {
     { id: `H29`, label: `平成29年度`, date: `2017-10-15` },
     { id: `H28`, label: `平成28年度`, date: `2016-10-16` },
   ],
-  method: `不動産適正取引推進機構が公開している過去の試験問題を、このアプリが論点ごとに分けて数えました。1つの問題でほかの論点も問われたときはその論点も「出た回」に数え、令和2年度・3年度は10月と12月の試験をそれぞれ1回と数えています。`,
+  method: `不動産適正取引推進機構が公開している過去の試験問題を、このアプリが論点ごとに分けて数えました。1つの問題でほかの論点も問われたときはその論点も「出た回」に数え、令和2年度・3年度は10月と12月の試験をそれぞれ1回と数えています。開発許可や税・価格のように毎年出る分野でも、年ごとに論点が入れ替わると論点ごとのランクはBやCになるため、出題頻度を「Aだけ」に絞るとその分野の問題は出ません。`,
   rankRule: { A: 0.75, B: 0.4 },
   themes: [
     // ---- 宅建業法
@@ -255,7 +255,7 @@ window.APP_DATA.frequency = {
       basicIds: [`basicL35`],
       hits: 7, questions: 5, rank: `B`, last: `R7` },
     // 意思能力・公序良俗・無効と取消しの一般(追認・取消権の期間)・条件と期限・期間の計算・失踪宣告と不在者の財産管理など総則の規定と、契約の成立(申込みと承諾・意思表示の到達)。個々の意思表示の問題は fq-kenri-01
-    { id: `fq-kenri-29`, name: `法律行為の総則(無効・取消し・条件)`, cat: `kenri`, topicId: `topicL`, section: `債務不履行・契約・債権`,
+    { id: `fq-kenri-29`, name: `民法総則(無効・取消し・条件・不在者など)`, cat: `kenri`, topicId: `topicL`, section: `債務不履行・契約・債権`,
       basicIds: [`basicL39`],
       hits: 6, questions: 7, rank: `B`, last: `R6` },
     // ---- 法令上の制限
@@ -283,8 +283,8 @@ window.APP_DATA.frequency = {
     { id: `fq-horei-06`, name: `開発許可の手続・許可後の制限`, cat: `horei`, topicId: `topicJ`, section: `開発許可`,
       basicIds: [`basicJ19`, `basicJ20`],
       hits: 8, questions: 4, rank: `B`, last: `R7` },
-    // 適用除外・既存不適格・建築確認の対象と手続・検査、単体規定(採光・換気・避雷設備・昇降機・石綿など)
-    { id: `fq-horei-07`, name: `建築基準法(建築確認・単体規定)`, cat: `horei`, topicId: `topicJ`, section: `建築基準法`,
+    // 適用除外・既存不適格・建築確認の対象と手続・検査、単体規定(採光・換気・避雷設備・昇降機・石綿など)、建築協定
+    { id: `fq-horei-07`, name: `建築基準法(建築確認・単体規定など)`, cat: `horei`, topicId: `topicJ`, section: `建築基準法`,
       basicIds: [`basicJ37`, `basicJ22`, `basicJ27`],
       hits: 12, questions: 11, rank: `A`, last: `R7` },
     // 建築基準法上の道路・2項道路・接道義務と条例の付加・道路内の建築制限・私道の変更や廃止の制限
@@ -303,7 +303,7 @@ window.APP_DATA.frequency = {
     { id: `fq-horei-11`, name: `建築基準法(高さ制限)`, cat: `horei`, topicId: `topicJ`, section: `建築基準法`,
       basicIds: [`basicJ10`, `basicJ11`, `basicJ26`],
       hits: 9, questions: 3, rank: `A`, last: `R7` },
-    // 宅地造成等工事規制区域・特定盛土等規制区域での許可と届出・検査・定期報告・造成宅地防災区域・土地所有者等の責務
+    // 宅地造成等工事規制区域・特定盛土等規制区域での許可と届出・検査・定期報告・造成宅地防災区域・土地所有者等の責務(改正前の宅地造成等規制法の時期の問題を含む)
     { id: `fq-horei-12`, name: `盛土規制法`, cat: `horei`, topicId: `topicJ`, section: `盛土規制法・その他の法令`,
       basicIds: [`basicJ31`, `basicJ35`],
       hits: 12, questions: 12, rank: `A`, last: `R7` },
@@ -562,7 +562,7 @@ window.APP_DATA.frequency = {
     'quiz-L2-037': `fq-kenri-27`, 'quiz-L4-031': `fq-kenri-27`, 'quiz-L4-032': `fq-kenri-27`,
     // fq-kenri-28 贈与・使用貸借・消費貸借など
     'quiz-L2-035': `fq-kenri-28`, 'quiz-L2-036': `fq-kenri-28`, 'quiz-L2-038': `fq-kenri-28`,
-    // fq-kenri-29 法律行為の総則(無効・取消し・条件)
+    // fq-kenri-29 民法総則(無効・取消し・条件・不在者など)
     'quiz-L2-003': `fq-kenri-29`, 'quiz-L4-004': `fq-kenri-29`,
     // fq-horei-01 都市計画区域と区域区分
     'quiz-J2-001': `fq-horei-01`,
@@ -578,7 +578,7 @@ window.APP_DATA.frequency = {
     // fq-horei-06 開発許可の手続・許可後の制限
     'quiz-J2-006': `fq-horei-06`, 'quiz-J2-007': `fq-horei-06`, 'quiz-J4-006': `fq-horei-06`, 'quiz-J4-008': `fq-horei-06`,
     'quiz-J4-009': `fq-horei-06`, 'quiz-J5-003': `fq-horei-06`,
-    // fq-horei-07 建築基準法(建築確認・単体規定)
+    // fq-horei-07 建築基準法(建築確認・単体規定など)
     'quiz-J2-008': `fq-horei-07`, 'quiz-J2-009': `fq-horei-07`, 'quiz-J2-014': `fq-horei-07`, 'quiz-J4-011': `fq-horei-07`,
     'quiz-J4-017': `fq-horei-07`, 'quiz-J4-019': `fq-horei-07`, 'quiz-J4-020': `fq-horei-07`, 'quiz-J5-004': `fq-horei-07`,
     // fq-horei-08 建築基準法(道路・接道義務)

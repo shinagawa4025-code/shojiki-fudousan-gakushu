@@ -49,10 +49,10 @@ window.Cloze = (function () {
     return isObj(v) ? v : {};
   }
 
-  // 1件の記録を整えて返す(なければ null)
+  // 1件の記録を整えて返す(なければ null)。grade がない・null の記録(選んで埋めるの途中など)は null のまま(0 = 誤りにしない)
   function clean(s) {
     if (!isObj(s)) return null;
-    const g = Number(s.grade);
+    const g = s.grade == null ? null : Number(s.grade);
     return Object.assign({}, s, {
       c: int(s.c),
       w: int(s.w),
@@ -92,8 +92,9 @@ window.Cloze = (function () {
   }
 
   // 苦手の順: 点 0(古い順)→ 1(古い順)→ まだ答えていない(元の順)→ 2(古い順)。ids は元の順(一覧の順)
+  // 点のない記録(空欄の一部だけ答えて離れた・終えていない)は「まだ」の段。ただし誤りの方が多ければ点 0 と同じ段
   function rank(s) {
-    if (!s || s.grade == null) return s && (s.c || s.w) ? (s.w > s.c ? 0 : 3) : 2;
+    if (!s || s.grade == null) return s && (s.c || s.w) && s.w > s.c ? 0 : 2;
     return s.grade === 0 ? 0 : s.grade === 1 ? 1 : 3;
   }
   function weakOrder(ids, st) {
@@ -276,7 +277,8 @@ window.Cloze = (function () {
   function bindKeys(wrap, fn) {
     function onKey(e) {
       if (!wrap.isConnected) { off(); return; }
-      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      // キーの押しっぱなし(自動のくり返し)は受けない(答えるとすぐ次の空欄の選択肢が出るので、残りを同じ番号で答えてしまわないように)
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || e.isComposing) return;
       if (document.querySelector(`.modal-overlay, .sheet-backdrop, .onb-overlay`)) return;
       const ae = document.activeElement;
       if (ae && (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) || ae.isContentEditable)) return;
@@ -289,10 +291,12 @@ window.Cloze = (function () {
   }
 
   // 長い一覧を少しずつ描く(最初に chunk 件、下に近づいたら次の chunk 件)。IntersectionObserver がなければ「もっと見る」
+  // opts.size(まとまり) → 中の件数(「もっと見る(あと N表)」の数は中身の件数で数える。既定は1つ1件)・opts.unit: 単位(既定「件」)
   // 戻り値 { all() }: 残りを全部描く
   function lazyList(container, items, renderItem, opts) {
     opts = opts || {};
     const chunk = opts.chunk || 24;
+    const sizeOf = typeof opts.size === `function` ? opts.size : () => 1;
     let i = 0;
     let io = null;
     const more = document.createElement(`button`);
@@ -304,11 +308,10 @@ window.Cloze = (function () {
       items.slice(i, i + n).forEach((it, k) => { const el = renderItem(it, i + k); if (el) frag.appendChild(el); });
       i = Math.min(items.length, i + n);
       container.appendChild(frag);
-      const rest = items.length - i;
-      if (rest <= 0) {
+      if (i >= items.length) {
         if (io) io.disconnect();
         more.remove();
-      } else more.textContent = `もっと見る(あと${rest}件)`;
+      } else more.textContent = `もっと見る(あと${items.slice(i).reduce((n, g) => n + (Number(sizeOf(g)) || 0), 0)}${opts.unit || `件`})`;
     }
     step(chunk);
     if (i < items.length) {

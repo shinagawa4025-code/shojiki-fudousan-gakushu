@@ -5,6 +5,8 @@
 //                     途中・ほかのダイアログ・文字の入力中は待つ)にお祝いのダイアログを出す(1つのレベルにつき1回。Xp の seen)
 //   renderProgress(el) 進捗の画面(#progress)のカード: レベル・合計 XP・直近7日の XP・今日のチャレンジのベスト・経験値のため方
 //   readChallenge()   Storage `challenge` を整えて読む
+//   revoke(kind, id, n, day)  付けた XP を取り消す(今日の復習の「元に戻す」。評価し直すと、はじめての評価と同じ XP になるよう、
+//                     その日に答えた印も外す。印は js/xp.js の award と同じハッシュ)
 // チャレンジの文は ○×一問一答と同じ文(Views.ox の loadStatements・spreadByQuiz を使う)から、学ぶ目的(宅建士・税理士)に合わせて選ぶ
 // (はじめの画面で 宅建士 / 税理士(消費税法)/ すべて を選べる。選んだものは challenge.pool に残す)
 // 保存: Storage `challenge` = { best: 最後までやった回の最高の正解数, days: { 'YYYY-MM-DD': { best, runs: 最後までやった回数 } }(400日分), pool }
@@ -101,6 +103,37 @@ window.LevelUi = (function () {
     const x = window.Xp ? Xp._read() : { days: {} };
     const t = DateUtil.today();
     return Array.from({ length: n }, (_, i) => { const date = DateUtil.addDays(t, i - n + 1); return { date, xp: x.days[date] || 0 }; });
+  }
+
+  // ===== 付けた XP の取り消し(今日の復習の「元に戻す」) =====
+  // kind・id: Xp.award に渡したもの、n: そのときに付いた XP(戻り値)、day: 付けた日(既定は今日)。戻り値: 取り消した XP
+  // 2回目以降の 1XP(同じ日の同じ問題)を取り消すときは印を残す(まだ1回目の分が付いているため)
+  function revoke(kind, id, n, day) {
+    try {
+      const g = n0(n);
+      if (!g || !window.Xp || !Xp._read) return 0;
+      const x = Xp._read();
+      const d = DateUtil.isValid(day) ? day : DateUtil.today();
+      const cut = Math.min(g, x.total);
+      x.total -= cut;
+      if (x.days[d]) {
+        x.days[d] = Math.max(0, x.days[d] - g);
+        if (!x.days[d]) delete x.days[d];
+      }
+      if (id != null && g > 1 && x.ids.d === d) {
+        const k = `${kind}:${id}`;
+        let h = 2166136261;
+        for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 16777619);
+        h = (h >>> 0).toString(36);
+        const at = x.ids.h.lastIndexOf(h);
+        if (at >= 0) x.ids.h.splice(at, 1);
+      }
+      Xp._write(x);
+      return cut;
+    } catch (e) {
+      console.error(`[経験値] 取り消せませんでした`, e);
+      return 0;
+    }
   }
 
   // Storage `challenge` を整えて読む(壊れた値は捨てる)
@@ -207,6 +240,8 @@ window.LevelUi = (function () {
     Xp.seedIfNeeded();
     const x = Xp._read();
     if (!x.seeded) return;
+    // 進捗の画面(PC・タブレットは2列)では横いっぱい(中を2列: 左にレベル、右に直近7日)
+    if (el.classList && el.classList.contains(`prog-mount`)) el.classList.add(`span-all`);
     const lv = Xp.levelOf(x.total);
     const days = lastDays(7);
     const week = days.reduce((s, d) => s + d.xp, 0);
@@ -233,6 +268,7 @@ window.LevelUi = (function () {
             <p class="xp-prog-next">${esc(next)}</p>
           </div>
         </div>
+        <div class="xp-week">
         <div class="st-chart xp-chart" role="img" aria-label="${esc(`直近7日の経験値(古い順): ${days.map(label).join(`、`)}`)}" data-role="xp-chart">
           ${days.map((d) => {
             const dt = DateUtil.parse(d.date);
@@ -245,6 +281,8 @@ window.LevelUi = (function () {
           }).join(``)}
         </div>
         <p class="chart-readout" aria-live="polite" data-role="xp-detail">棒をタップすると、その日の経験値が表示されます。</p>
+        ${x.seed && x.seedAt && x.seedAt > DateUtil.addDays(t, -7) ? `<p class="prog-note xp-seed-note" data-role="xp-seed-note">経験値の記録は${esc(DateUtil.toJapanese(x.seedAt))}から始まりました。それまでの学習は、はじめの ${fmt(x.seed)} XP として合計に入っています。</p>` : ``}
+        </div>
         <a class="xp-ch-row" href="#challenge" data-role="xp-challenge">
           <span class="sticker sticker-sm sticker-gold" aria-hidden="true">${ic(`bolt`, 18)}</span>
           <span class="xp-ch-text"><b>今日のチャレンジ</b><small>${td ? `今日のベスト ${td.best}問(${td.runs}回)` : `今日はまだ`}${ch.best || Object.keys(ch.days).length ? `・自己ベスト ${ch.best}問` : ``}</small></span>
@@ -253,7 +291,7 @@ window.LevelUi = (function () {
         <details class="xp-how">
           <summary>${ic(`help`, 16)}<span>経験値のため方</span>${ic(`chevron-down`, 16)}</summary>
           <ul>
-            <li>4択: 正解 ${pts(`mc`)[0]}・自信なしの正解 ${pts(`mc`)[1]}・不正解 ${pts(`mc`)[2]} XP(模擬試験も)</li>
+            <li>4択(模擬試験も): 正解 ${pts(`mc`)[0]}・不正解 ${pts(`mc`)[2]} XP(模擬試験で見直しの印を付けた正解は ${pts(`mc`)[1]})</li>
             <li>○×: 正解 ${pts(`ox`)[0]}・不正解 ${pts(`ox`)[2]} XP / 今日の復習: 1枚 ${pts(`review`)[0]} XP</li>
             <li>数字まとめ・比較表・条文穴埋め: 正解 ${pts(`numbers`)[0]}・不正解 ${pts(`numbers`)[2]} XP</li>
             <li>今日のチャレンジ: 正解1問 2 XP、その日はじめて最後までやると +30 XP</li>
@@ -284,7 +322,7 @@ window.LevelUi = (function () {
     } catch (e) { console.error(`[経験値]`, e); }
   }, 0);
 
-  return { seedValue, celebrate, renderProgress, readChallenge, lastDays, _internal: { pending, markSeen, quiet } };
+  return { seedValue, celebrate, renderProgress, readChallenge, lastDays, revoke, _internal: { pending, markSeen, quiet } };
 })();
 
 window.Views.challenge = (function () {
@@ -412,10 +450,13 @@ window.Views.challenge = (function () {
       </section>`;
     const note = wrap.querySelector(`[data-role="pool-note"]`);
     const startBtn = wrap.querySelector(`[data-role="start"]`);
+    // 暮らし・仕事が目的の人の「すべて」は、ほとんどが試験向けの文であることを伝える
+    let life = false;
+    try { const prof = Stats.getProfile ? Stats.getProfile() : null; life = !!prof && (prof.goal === `life` || prof.goal === `work`); } catch (e) { life = false; }
     const paintPool = () => {
       const n = statementsFor(pool).length;
       const p = POOLS.find((x) => x.id === pool);
-      note.textContent = n ? `${p.name}の○×(${n.toLocaleString(`ja-JP`)}文)から出題します` : `出題できる文がありません`;
+      note.textContent = n ? `${p.name}の○×(${n.toLocaleString(`ja-JP`)}文)から出題します${pool === `all` && life ? `。宅建士試験向けの文が多く含まれます` : ``}` : `出題できる文がありません`;
       startBtn.disabled = !n;
       wrap.querySelectorAll(`[data-pool]`).forEach((b) => b.setAttribute(`aria-pressed`, String(b.dataset.pool === pool)));
     };
@@ -540,6 +581,8 @@ window.Views.challenge = (function () {
       b.removeAttribute(`aria-disabled`);
     });
     r.el.stage.classList.remove(`ch-flash-ok`, `ch-flash-ng`);
+    // 長い文でボタンまで下へ動かしたあとも、次の文は頭から見せる(上に貼り付くバーの裏に文の1行目が隠れないように)
+    if (window.scrollY > 0) window.scrollTo(0, 0);
     // 読み上げ・キーボードの人が次の文をすぐ聞けるよう、文にフォーカスを移す(画面は動かさない)
     r.el.text.focus({ preventScroll: true });
   }

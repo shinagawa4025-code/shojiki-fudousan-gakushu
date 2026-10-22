@@ -68,6 +68,18 @@
 .xp-how[open] summary > .icon:last-child { transform: rotate(180deg); }
 .xp-how ul { margin: 0 0 var(--sp-2); padding-left: 1.2em; font-size: var(--fs-sm); line-height: var(--lh-body); color: var(--color-text); }
 .xp-how .prog-note { margin: 0; }
+.xp-seed-note { margin: var(--sp-1) 0 0; }
+/* 進捗の画面の PC・タブレット(.prog-grid が2列)では横いっぱいにして(LevelUi が span-all を付ける)、中を2列:
+   左にレベルと今日のチャレンジ、右に直近7日の経験値 */
+@media (min-width: 768px) {
+  .xp-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "head head" "lv week" "ch week" "how how"; column-gap: var(--sp-6); align-items: start; }
+  .xp-card > .recommend-head { grid-area: head; }
+  .xp-card > .xp-prog-head { grid-area: lv; }
+  .xp-card > .xp-week { grid-area: week; }
+  .xp-card > .xp-week > .xp-chart { margin-top: var(--sp-3); }
+  .xp-card > .xp-ch-row { grid-area: ch; }
+  .xp-card > .xp-how { grid-area: how; }
+}
 
 /* ---------- 3. レベルアップのダイアログ(.fd-badge の形。メダルの代わりにマスコットと Lv. のメダル) ---------- */
 .xp-up-art { position: relative; width: 132px; height: 112px; margin: var(--sp-3) auto var(--sp-3); }
@@ -106,6 +118,11 @@
 .ch-pool-label { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text); }
 .ch-seg { display: flex; }
 .ch-seg .segmented-item { flex: 1 1 0; min-width: min-content; min-height: 44px; }
+/* 狭い画面(320〜380px)では、横にスクロールさせずに収める: 余白を詰め、長い名前(税理士(消費税法))の項目を広くする
+   (それでも入らなければ2行に折り返す。css/tools.css の .tl-seg と同じ) */
+@media (max-width: 380px) {
+  .ch-seg .segmented-item { flex: 1 1 auto; min-width: 0; padding: 0 4px; letter-spacing: 0; white-space: normal; line-height: 1.2; text-align: center; }
+}
 .ch-pool-note { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
 .ch-go { min-height: 60px; margin-top: var(--sp-5); gap: var(--sp-2); font-size: var(--fs-lg); letter-spacing: .08em; }
 
@@ -115,6 +132,20 @@
 .ch-score { display: inline-flex; flex-shrink: 0; align-items: center; gap: 2px; font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-display); color: var(--color-heading); }
 .ch-score .ox-glyph { width: 20px; height: 20px; color: var(--color-success); }
 .ch-time { min-width: 3em; }
+/* 出題中のスマホ・タブレット: 3分の時間制限があるので、模擬試験と同じフォーカスモード。アプリバーと下部タブを隠し、上のバーを
+   画面の上端に貼り付ける(○ / × のボタンが下部タブの裏に入って、時間内にスクロールしないと押せない、ということがないように)。
+   終えるのは上のバーの ×。CSS だけなので、結果の画面・ほかの画面へ移ると元に戻る(:has が使えない古いブラウザでは今までどおり) */
+@media (max-width: 1023px) {
+  body:has(.ch-view.is-run) { padding-bottom: 0; }
+  body:has(.ch-view.is-run) :is(.app-header, .bottom-nav) { display: none; }
+  html:has(.ch-view.is-run) { scroll-padding-top: 0; scroll-padding-bottom: 0; }
+  .ch-view.is-run .quiz-stepbar { top: 0; padding-top: calc(var(--sp-2) + var(--safe-top)); }
+}
+/* 高さの低いスマホ(iPhone SE など): ○ / × は記号と文字を横に並べた低いボタン(長い文でもボタンが最初の画面に入るように) */
+@media (max-width: 767px) and (max-height: 700px) {
+  .ch-view.is-run .ox-btn:not(.ox-btn-conf) { min-height: 72px; flex-direction: row; gap: var(--sp-2); }
+  .ch-view.is-run .ox-btn:not(.ox-btn-conf) .ox-glyph { width: 36px; height: 36px; }
+}
 .ch-stage { margin-top: var(--sp-3); }
 .ch-stage .ox-btn[aria-disabled="true"] { cursor: default; }
 .ch-stage .ox-btn[aria-disabled="true"]:not(.is-answer):not(.is-wrong) { opacity: .45; }

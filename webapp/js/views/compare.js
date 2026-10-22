@@ -2,7 +2,8 @@
 // ルート: #compare(分野ごとの表の一覧)/ #compare/<表の id>(表を見る)/ #compare/<表の id>/fill(穴埋め)
 // 表: 行の見出し+列。スマホ(599px 以下)では1行を1枚のカード(列の名前と値を縦に)にして、ページを横にはみ出させない。
 //     PC・タブレットでは表の形。どちらも role="table" などを付けて、読み上げでは表として読む
-// 穴埋め: keys のマスを空欄にする。選択肢は同じ列のほかの値+正解(混ぜる。最大4つ)。ほかの値が2つ未満なら、タップで答えを見て
+// 穴埋め: keys のマスを空欄にする(スマホの1行1枚のカードでは、カードの上から順に聞く。表の形では keys の順)。
+//         選択肢は同じ列のほかの値+正解(混ぜる。最大4つ)。ほかの値が2つ未満なら、タップで答えを見て
 //         自分で採点(○△×)。下に貼り付く欄で1マスずつ答え、答えるとすぐ次の空欄へ(前の空欄の判定は欄の上と表のマスに残す)。
 //         全部答えたら結果(正解の数・経験値・間違えたマスだけもう一度)
 // 記録: Storage `compareStats` = { 表の id: { c, w, last, done(穴埋めを終えた回数), lastOk, lastN, grade } }(js/cloze.js)
@@ -33,10 +34,11 @@ window.Views.compare = (function () {
   }
   const cell = (t, r, c) => String(t.rows[r].cells[c] == null ? `` : t.rows[r].cells[c]);
 
-  // 同じ列のほかの値(正解と同じ値は除く)
+  // 同じ列のほかの値(正解と同じ値と、「—」で始まる「該当しない」のマスは除く。「—」は一目で外せる選択肢になるため)。
+  // 残りが2つ未満なら、その空欄はタップで答えを見て自分で採点する
   function columnAlts(t, k) {
     const a = cell(t, k.r, k.c).trim();
-    return t.rows.map((row, i) => (i === k.r ? null : cell(t, i, k.c).trim())).filter((v) => v && v !== a);
+    return t.rows.map((row, i) => (i === k.r ? null : cell(t, i, k.c).trim())).filter((v) => v && v !== a && !/^—/.test(v));
   }
 
   function catsOf(list) {
@@ -80,7 +82,12 @@ window.Views.compare = (function () {
     box.className = `tl-groups`;
     box.dataset.role = `groups`;
     wrap.appendChild(box);
-    const groups = catsOf(list).map((c) => ({ c, items: list.filter((t) => t.cat === c.id) }));
+    // 税理士試験(消費税法)が目的の人は、消費税法の表を先に
+    let cs = catsOf(list);
+    let zei = false;
+    try { zei = !!window.Stats && Stats.goalExamTypeId() === `zeirishi`; } catch (e) { zei = false; }
+    if (zei) cs = cs.filter((c) => c.id === `shohiho`).concat(cs.filter((c) => c.id !== `shohiho`));
+    const groups = cs.map((c) => ({ c, items: list.filter((t) => t.cat === c.id) }));
     Cloze.lazyList(box, groups, (g) => {
       const sec = document.createElement(`section`);
       sec.className = `tl-group ${g.c.cls}`;
@@ -102,7 +109,7 @@ window.Views.compare = (function () {
           }).join(``)}
         </ul>`;
       return sec;
-    }, { chunk: 3 });
+    }, { chunk: 3, size: (g) => g.items.length, unit: `表` });
   }
 
   // ---------- 表 ----------
@@ -196,9 +203,12 @@ window.Views.compare = (function () {
     }
 
     // 穴埋め。list: 空欄にするマス(全部か、間違えたマスだけ)
+    // スマホ(599px 以下。1行が1枚のカード)では、カードの上から順(行 → 列)に聞く(空欄ごとにカードを行き来しないように)
     function startFill(list) {
       wrap.classList.add(`is-filling`);
-      const run = list.map((k, i) => {
+      const phone = typeof matchMedia === `function` && matchMedia(`(max-width: 599px)`).matches;
+      const ordered = phone ? list.slice().sort((a, b) => a.r - b.r || a.c - b.c) : list;
+      const run = ordered.map((k, i) => {
         const opts = Cloze.options(cell(t, k.r, k.c), columnAlts(t, k));
         return Object.assign({}, k, { n: i, answer: cell(t, k.r, k.c).trim(), opts, choose: opts.length >= 3, done: false, grade: null, picked: null });
       });
@@ -215,7 +225,8 @@ window.Views.compare = (function () {
         }
         const ok = b.grade >= 1;
         const word = b.choose ? (ok ? `正解` : `不正解`) : { 2: `覚えていた`, 1: `あいまい`, 0: `まだ` }[b.grade];
-        return `<span class="tl-blank is-filled ${b.grade === 2 ? `is-ok` : b.grade === 1 ? `is-shown` : `is-ng`}${Array.from(b.answer).length > 9 ? ` is-long` : ``}" data-key="${b.id}">${esc(b.answer)}<span class="sr-only">(${word}${b.choose && !ok && b.picked ? `。あなたの回答は ${esc(b.picked)}` : ``})</span></span>`;
+        // 読み上げ用の判定は札の外(すぐ後ろ)に置く。札の中の最後にあると、長い答えが行末で折り返すときに中身のない小さな札が次の行にできる
+        return `<span class="tl-blank is-filled ${b.grade === 2 ? `is-ok` : b.grade === 1 ? `is-shown` : `is-ng`}${Array.from(b.answer).length > 9 ? ` is-long` : ``}" data-key="${b.id}">${esc(b.answer)}</span><span class="sr-only">(${word}${b.choose && !ok && b.picked ? `。あなたの回答は ${esc(b.picked)}` : ``})</span>`;
       }
 
       function paintTable() {
@@ -246,7 +257,10 @@ window.Views.compare = (function () {
         b.picked = picked || null;
         Cloze.update(KEY, t.id, (s) => {
           const p = s || { c: 0, w: 0, done: 0 };
-          return Object.assign({}, p, { c: (p.c || 0) + (grade >= 1 ? 1 : 0), w: (p.w || 0) + (grade >= 1 ? 0 : 1), last: DateUtil.today() });
+          const nx = Object.assign({}, p, { c: (p.c || 0) + (grade >= 1 ? 1 : 0), w: (p.w || 0) + (grade >= 1 ? 0 : 1), last: DateUtil.today() });
+          // 終えるまでは点(grade)を付けない(前の点があればそのまま。null は残さない)
+          if (nx.grade == null) delete nx.grade;
+          return nx;
         });
         xp += Cloze.answered(`compare`, `${t.id}:${b.id}`, grade);
         const label = `「${t.rows[b.r].label}」の「${t.cols[b.c]}」`;
@@ -339,6 +353,9 @@ window.Views.compare = (function () {
             ans.appendChild(row);
             live.say(`答えは ${b.answer}`);
             row.querySelector(`[data-grade]`).focus({ preventScroll: true });
+            // 答えと ○△× で欄が高くなった分、いまのマスが欄の裏に隠れないように
+            wrap.style.setProperty(`--tl-panel-h`, `${panel.offsetHeight}px`);
+            keepCurVisible(true);
           };
           const fresh = Cloze.freshGuard();
           ans.querySelector(`[data-role="reveal"]`).addEventListener(`click`, (e) => { if (fresh(e)) reveal(); });
@@ -356,12 +373,15 @@ window.Views.compare = (function () {
         slot.appendChild(panel);
         // 空欄が貼り付く欄の裏に隠れないよう、欄の高さ分の余白を空欄に持たせる
         wrap.style.setProperty(`--tl-panel-h`, `${panel.offsetHeight}px`);
-        const curBtn = tableBox.querySelector(`.tl-blank.is-current`);
-        if (curBtn && afterAnswer) {
+        // いまの空欄が欄の裏・画面の上に隠れていれば見える所へ(開いた直後も。Router が上へ戻したあとのフレームで確かめる)
+        function keepCurVisible(smooth) {
+          const curBtn = tableBox.querySelector(`.tl-blank.is-current`);
+          if (!curBtn || !panel.isConnected) return;
           const r = curBtn.getBoundingClientRect();
           const pr = panel.getBoundingClientRect();
-          if (r.bottom > pr.top - 8 || r.top < 0) curBtn.scrollIntoView({ block: `nearest`, behavior: UI.prefersReducedMotion() ? `auto` : `smooth` });
+          if (r.bottom > pr.top - 8 || r.top < 0) curBtn.scrollIntoView({ block: `nearest`, behavior: smooth && !UI.prefersReducedMotion() ? `smooth` : `auto` });
         }
+        requestAnimationFrame(() => keepCurVisible(!!afterAnswer));
         if (afterAnswer) {
           const f = ans.querySelector(`.choice-btn, [data-role="reveal"]`);
           if (f && document.activeElement && (document.activeElement === document.body || !document.activeElement.isConnected || slot.contains(document.activeElement) || tableBox.contains(document.activeElement))) f.focus({ preventScroll: true });
