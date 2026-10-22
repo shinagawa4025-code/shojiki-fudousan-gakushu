@@ -186,8 +186,15 @@ window.AnswerLog = (function () {
       recentOf(quizId).sure += 1;
       saveRecent();
     }
+    // v14: 経験値(4択の解答はここで1回だけ数える。確認問題・解き直し・トピック詳細・ブックマークのカード)
+    awardXp(q.id, ok, unsure, opts.src);
     notify(quizId, `record`);
     return true;
+  }
+
+  // v14: 経験値を足す(js/xp.js。なくても記録は続ける)。src: quiz | exam(模擬試験の採点)
+  function awardXp(id, correct, unsure, src) {
+    try { if (window.Xp) Xp.award(`mc`, { id, correct, unsure, src: SOURCES.includes(src) ? src : `quiz` }); } catch (e) { console.error(`[解答の記録] 経験値を記録できませんでした`, e); }
   }
 
   // まとめて記録する(模擬試験の採点時など。日ごとの記録の読み書きは1回だけ)
@@ -219,6 +226,8 @@ window.AnswerLog = (function () {
     });
     if (changed) Storage.set(UNSURE_KEY, map);
     rows.forEach((r) => { if (r.unsure) noteDrill(r.id, src); });
+    // v14: 経験値(模擬試験の採点。記録した問題ごとに1回)
+    rows.forEach((r) => awardXp(r.id, r.ok, r.unsure, src));
     notify(null, `record`);
     return rows.length;
   }

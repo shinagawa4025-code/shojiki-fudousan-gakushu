@@ -4,13 +4,17 @@
 //         #ox/weak/<文ID>(例: quiz-K-01%232)は、間違えた文のうちその文を最初に出題する
 //         #ox/quiz/<問題ID,問題ID,…>(模擬試験・解き直しの結果から)は、その4択問題の文だけを出題する(問題は12問まで・文は40問まで)
 //         #ox/run(出題中・結果。セッションはメモリ上のみ。再読み込みするとトップに戻る)
+//         v14: #ox/freq/<テーマID>(出題頻度ランクのテーマ(論点)の文)/ #ox/freq/A・#ox/freq/AB(すべての分野の頻出Aだけ・AとBだけ)。
+//              どちらも末尾に /<問題数> を付けられる。ほかのディープリンク(cat/topic/weak/quiz)は出題頻度で絞らない
 // 間違えた文の元の4択は、解き直しの予定(Drill)にも入れる(翌日から #quiz/due に出る)
 // ディープリンク(cat/topic/weak)は条件を選んだ状態ですぐ出題を始め、URLを #ox/run に置き換える
 // 個数・組合せの問題(v12)は記述ア〜エが「問題ID#s0」〜「#s3」の文として出る(文の前に「ア」などの記号を付ける)
 // 記録: Storage `oxStats` = { [文ID 'quiz-K-01#2']: { c: 正解回数, w: 不正解回数, last: 'YYYY-MM-DD', lastOk: 直近の正誤, u?: 「たぶん」で正解した回数 } }
 //       (弱点分析でも読むため、この形を変えないこと。u は v12 で追加。1以上のときだけ持ち、c を超えない)
-//       Storage `oxPrefs` = { scope, filter, count, autoNext, confidence }(最後に出題を始めた条件と「正解したら自動で次へ」・
-//       「自信度も答える」(もちろん○/たぶん○/たぶん×/もちろん× の4つで答える。初期値はオフ))
+//       Storage `oxPrefs` = { scope, filter, count, autoNext, confidence, freq }(最後に出題を始めた条件と「正解したら自動で次へ」・
+//       「自信度も答える」(もちろん○/たぶん○/たぶん×/もちろん× の4つで答える。初期値はオフ)・
+//       v14: 出題頻度の絞り込み freq: all / A / AB(宅建士試験の過去問で出た回数のランク。js/freq.js)。
+//       scope は v14 から { type: 'theme', id: テーマID } も入る(出題頻度ランクのテーマ。このときは freq を使わない))
 // 「たぶん」で正解した文の元の4択は、解き直しの予定(Drill.noteUnsure)に3日後で入れる(○×は AnswerLog には記録しない)
 // v13(デザイン刷新): 見た目は4択(js/views/quiz.js・css/practice.css)と同じ部品。トップは分野のステッカーの札と大きな「開始」、
 //      出題中は上に貼り付く進み具合のバー・文の大きなカード・大きな ○ / × のボタン・画面の下の判定のバー(間違えたら解説を開く)、
@@ -42,12 +46,35 @@ window.Views.ox = (function () {
     { level: 4, said: false, sure: true, label: `もちろん` },
   ];
   const CONF_GRID_ORDER = [1, 2, 3, 4];
+  // v14: 出題頻度の絞り込み(js/freq.js の LEVELS)
+  const FREQS = [`all`, `A`, `AB`];
+  const FREQ_LABELS = { all: `すべて`, A: `Aだけ`, AB: `AとB` };
   const ic = (name, size) => UI.icon(name, { size: size || 18 });
   const esc = (s) => UI.escapeHtml(s);
 
   // 画面の再描画をまたいで保持する条件と、進行中のセッション(ページを再読み込みすると消える)
   // 条件は最初の表示のときに oxPrefs から読み込む
-  const prefs = { scope: { type: `all`, id: null }, filter: `all`, count: 10, autoNext: false, confidence: false };
+  const prefs = { scope: { type: `all`, id: null }, filter: `all`, count: 10, autoNext: false, confidence: false, freq: `all` };
+
+  // ===== 出題頻度(v14) =====
+
+  function freqOn() {
+    return !!(window.Freq && Freq.ready());
+  }
+
+  function freqTheme(id) {
+    return freqOn() && typeof id === `string` ? Freq.theme(id) : null;
+  }
+
+  // 文が出題頻度の絞り込みに合うか(テーマのない文は「すべて」のときだけ)
+  function matchesFreq(s, freq) {
+    return !freq || freq === `all` || !freqOn() || Freq.matchLevel(s.quizId, freq);
+  }
+
+  // 範囲がテーマ(論点)のときは出題頻度で絞らない
+  function freqFor(scope, freq) {
+    return scope && scope.type === `theme` ? `all` : (FREQS.includes(freq) ? freq : `all`);
+  }
   let prefsLoaded = false;
   let session = null;
 
@@ -138,6 +165,8 @@ window.Views.ox = (function () {
     if (u) entry.u = u;
     all[statementId] = entry;
     Storage.set(STATS_KEY, all);
+    // v14: 経験値(○×の解答はここで1回だけ数える)
+    try { if (window.Xp) Xp.award(`ox`, { id: statementId, correct: !!ok, unsure: !!(ok && unsure) }); } catch (e) { console.error(`[○×] 経験値を記録できませんでした`, e); }
     return all[statementId];
   }
 
@@ -148,6 +177,7 @@ window.Views.ox = (function () {
     if (sc.type === `all`) return { type: `all`, id: null };
     if (sc.type === `cat` && scopeCategories().some((c) => c.id === sc.id)) return { type: `cat`, id: sc.id };
     if (sc.type === `topic` && typeof sc.id === `string` && AppIndex.topicsById[sc.id]) return { type: `topic`, id: sc.id };
+    if (sc.type === `theme` && freqTheme(sc.id)) return { type: `theme`, id: sc.id };
     return null;
   }
 
@@ -160,6 +190,7 @@ window.Views.ox = (function () {
       count: COUNTS.includes(raw.count) ? raw.count : null,
       autoNext: raw.autoNext === true,
       confidence: raw.confidence === true,
+      freq: FREQS.includes(raw.freq) && freqOn() ? raw.freq : `all`,
     };
   }
 
@@ -172,6 +203,7 @@ window.Views.ox = (function () {
     if (s.count) prefs.count = s.count;
     prefs.autoNext = s.autoNext;
     prefs.confidence = s.confidence;
+    prefs.freq = s.freq;
   }
 
   // 前回出題を始めた条件(「前回の条件で開始」用)。なければ null
@@ -181,7 +213,7 @@ window.Views.ox = (function () {
   }
 
   function saveStartedPrefs() {
-    Storage.set(PREFS_KEY, { scope: Object.assign({}, prefs.scope), filter: prefs.filter, count: prefs.count, autoNext: prefs.autoNext, confidence: prefs.confidence });
+    Storage.set(PREFS_KEY, { scope: Object.assign({}, prefs.scope), filter: prefs.filter, count: prefs.count, autoNext: prefs.autoNext, confidence: prefs.confidence, freq: prefs.freq });
   }
 
   function saveAutoNext(on) {
@@ -201,6 +233,10 @@ window.Views.ox = (function () {
     if (scope.type === `cat`) return s.cats.includes(scope.id);
     if (scope.type === `topic`) return (s.topicIds || []).includes(scope.id);
     if (scope.type === `quiz`) return Array.isArray(scope.ids) && scope.ids.includes(s.quizId);
+    if (scope.type === `theme`) {
+      const t = freqOn() ? Freq.themeOfQuiz(s.quizId) : null;
+      return !!t && t.id === scope.id;
+    }
     return false;
   }
 
@@ -240,8 +276,10 @@ window.Views.ox = (function () {
     return true;
   }
 
-  function buildPool(statements, scope, filter, stats) {
-    return statements.filter((s) => inScope(s, scope) && matchesFilter(s, filter, stats));
+  // freq(v14・省略可): 出題頻度の絞り込み。範囲がテーマのときは使わない
+  function buildPool(statements, scope, filter, stats, freq) {
+    const fq = freqFor(scope, freq);
+    return statements.filter((s) => inScope(s, scope) && matchesFilter(s, filter, stats) && matchesFreq(s, fq));
   }
 
   // 「間違えたことがある」の出題順: 前回まちがえた文 → (不正解 − 正解)の多い順 → ランダム
@@ -315,6 +353,11 @@ window.Views.ox = (function () {
       const ids = quizScopeIds(id);
       if (ids.length) return { kind: `quiz`, ids };
     }
+    // v14: 出題頻度。#ox/freq/A・#ox/freq/AB(すべての分野)/ #ox/freq/<テーマID>
+    if (head === `freq` && freqOn()) {
+      if (id === `A` || id === `AB`) return { kind: `start`, scope: { type: `all`, id: null }, filter: `all`, count: countParam(parts[2]), freq: id };
+      if (freqTheme(id)) return { kind: `start`, scope: { type: `theme`, id }, filter: `all`, count: countParam(parts[2]) };
+    }
     return { kind: `landing`, invalid: true };
   }
 
@@ -322,6 +365,10 @@ window.Views.ox = (function () {
     if (!scope || scope.type === `all`) return `すべての分野`;
     if (scope.type === `cat`) return categoryName(scope.id);
     if (scope.type === `quiz`) return `間違えた問題の論点`;
+    if (scope.type === `theme`) {
+      const th = freqTheme(scope.id);
+      return th ? `論点: ${th.name}` : `論点`;
+    }
     const t = AppIndex.topicsById[scope.id];
     return t ? t.name : `トピック`;
   }
@@ -331,8 +378,10 @@ window.Views.ox = (function () {
     return f ? f.label : ``;
   }
 
-  function conditionLabel(scope, filter) {
-    return `${scopeLabel(scope)}・${filterLabel(filter)}`;
+  // freq(v14・省略可): 出題頻度で絞っているときは「頻出A」「頻出A・B」を足す
+  function conditionLabel(scope, filter, freq) {
+    const fq = freqFor(scope, freq);
+    return `${scopeLabel(scope)}・${filterLabel(filter)}${fq === `A` ? `・頻出A` : fq === `AB` ? `・頻出A・B` : ``}`;
   }
 
   // ===== セッション =====
@@ -346,7 +395,8 @@ window.Views.ox = (function () {
       scope: Object.assign({}, opts.scope),
       filter: opts.filter,
       count: opts.count,
-      label: opts.label || conditionLabel(opts.scope, opts.filter),
+      freq: freqFor(opts.scope, opts.freq),
+      label: opts.label || conditionLabel(opts.scope, opts.filter, opts.freq),
       retry: !!opts.retry,
       // トップの「開始」から始めたか(1つ前の履歴がトップ。1問も答えずに終了したら履歴を戻る)
       fromLanding: !!opts.fromLanding,
@@ -361,10 +411,10 @@ window.Views.ox = (function () {
   function startFromPrefs(avoidIds, firstId) {
     const stats = loadStats();
     const statements = loadStatements();
-    const pool = buildPool(statements, prefs.scope, prefs.filter, stats);
+    const pool = buildPool(statements, prefs.scope, prefs.filter, stats, prefs.freq);
     const first = firstId ? statements.find((s) => s.id === firstId) || null : null;
     if (!pool.length && !first) return false;
-    session = createSession(pickQuestions(pool, prefs.filter, prefs.count, stats, avoidIds, first), { scope: prefs.scope, filter: prefs.filter, count: prefs.count });
+    session = createSession(pickQuestions(pool, prefs.filter, prefs.count, stats, avoidIds, first), { scope: prefs.scope, filter: prefs.filter, count: prefs.count, freq: prefs.freq });
     return true;
   }
 
@@ -615,6 +665,8 @@ window.Views.ox = (function () {
     if (route.kind === `start`) {
       prefs.scope = route.scope;
       prefs.filter = route.filter;
+      // ディープリンクは出題頻度で絞らない(#ox/freq/A・AB だけ絞る。今日のメニューの○×の数と合わせるため)
+      prefs.freq = route.freq || `all`;
       if (route.count) prefs.count = route.count;
       if (startFromPrefs(null, route.first)) {
         // 戻る操作でリンク元に戻れるよう、履歴を増やさずに出題中のURLへ置き換える
@@ -627,12 +679,13 @@ window.Views.ox = (function () {
       return;
     }
     if (route.invalid) history.replaceState(null, ``, `#ox`);
-    renderLanding(wrap, ctx, { notice: route.invalid ? `リンク先の分野・トピックが見つかりませんでした。条件を選んで始めてください。` : `` });
+    renderLanding(wrap, ctx, { notice: route.invalid ? `リンク先の分野・トピック・論点が見つかりませんでした。条件を選んで始めてください。` : `` });
   }
 
   function emptyNotice(route) {
     if (!loadStatements().length) return ``;
     if (route.filter === `wrong`) return `間違えた文がまだないため、出題を始められませんでした。「すべて」か「未回答」を選んで解いてみましょう。`;
+    if (route.freq) return `出題頻度で絞り込んだ○×問題がまだないため、出題を始められませんでした。`;
     return `「${scopeLabel(route.scope)}」の○×問題がまだないため、出題を始められませんでした。`;
   }
 
@@ -653,6 +706,12 @@ window.Views.ox = (function () {
   function catTagHtml(id) {
     if (!id) return ``;
     return `<span class="ox-cat ${catCls(id)}">${catSticker(id, `ox-cat-sticker`, 13)}<span>${esc(categoryName(id))}</span></span>`;
+  }
+
+  // v14: 宅建士試験の出題頻度ランクの札(元の4択にテーマ(論点)がある文だけ。js/freq.js)
+  function freqChipHtml(s) {
+    const t = freqOn() && s ? Freq.themeOfQuiz(s.quizId) : null;
+    return t ? Freq.chipFor(t, { cls: `ox-freq-chip` }) : ``;
   }
 
   // 正解したときに、ときどき添えるひとこと(4択と同じ言葉。3問以上つづけて正解したときは回数)
@@ -717,7 +776,9 @@ window.Views.ox = (function () {
     const allAnswered = resumable && answeredCount(session) >= session.items.length;
     // 前回出題を始めた条件(1タップで始められるよう、条件の選択より上に出す)
     const last = lastStarted();
-    const lastPool = last ? buildPool(statements, last.scope, last.filter, stats).length : 0;
+    const lastPool = last ? buildPool(statements, last.scope, last.filter, stats, last.freq).length : 0;
+    // v14: 出題頻度(宅建士試験)の絞り込み。データがあり、宅建士試験が目的・目標(未設定も含む)か、絞り込み中のときだけ出す
+    const showFreq = freqOn() && (Freq.forTakken() || prefs.freq !== `all`);
 
     wrap.innerHTML = `
       <div class="view-head">
@@ -738,9 +799,9 @@ window.Views.ox = (function () {
             : `<a class="btn" href="#ox/run">${ic(`play`)}再開</a>`}
         </div>` : ``}
       ${total && last && lastPool && !resumable ? `
-        <button type="button" class="btn btn-secondary btn-lg btn-block ox-quick" data-role="quick" aria-label="前回の条件で開始(${esc(scopeLabel(last.scope))}・${esc(filterLabel(last.filter))}・${Math.min(lastPool, last.count)}問)">
+        <button type="button" class="btn btn-secondary btn-lg btn-block ox-quick" data-role="quick" aria-label="前回の条件で開始(${esc(conditionLabel(last.scope, last.filter, last.freq))}・${Math.min(lastPool, last.count)}問)">
           <span class="sticker sticker-sm ox-quick-sticker" aria-hidden="true">${ic(`play`, 18)}</span>
-          <span class="ox-quick-text"><span>前回の条件で開始</span><span class="ox-quick-meta">${esc(scopeLabel(last.scope))}・${esc(filterLabel(last.filter))}・${Math.min(lastPool, last.count)}問</span></span>
+          <span class="ox-quick-text"><span>前回の条件で開始</span><span class="ox-quick-meta">${esc(conditionLabel(last.scope, last.filter, last.freq))}・${Math.min(lastPool, last.count)}問</span></span>
           ${ic(`chevron-right`, 20)}
         </button>` : ``}
       ${opts.notice ? `<p class="ox-notice" role="status">${ic(`info`)}<span>${esc(opts.notice)}</span></p>` : ``}
@@ -749,6 +810,13 @@ window.Views.ox = (function () {
           <h3 class="sr-only" id="ox-setup-title">出題の条件</h3>
           <p class="ox-label" id="ox-scope-label">分野</p>
           <div class="ox-scope" role="group" aria-labelledby="ox-scope-label" data-role="scope"></div>
+          ${showFreq ? `
+          <div class="ox-freq-row" data-role="freq-row">
+            <p class="ox-label" id="ox-freq-label">出題頻度<span class="ox-freq-sub">(宅建士試験)</span></p>
+            <div class="segmented ox-freq" role="group" aria-labelledby="ox-freq-label" data-role="freq">
+              ${FREQS.map((f) => `<button type="button" class="segmented-item" data-freq="${f}" aria-pressed="false"><span>${FREQ_LABELS[f]}</span><span class="segmented-count num" data-role="fqcount"></span></button>`).join(``)}
+            </div>
+          </div>` : ``}
           <p class="ox-label" id="ox-filter-label">出題する文</p>
           <div class="segmented ox-filter" role="group" aria-labelledby="ox-filter-label" data-role="filter"></div>
           <p class="ox-label" id="ox-count-label">問題数</p>
@@ -803,14 +871,25 @@ window.Views.ox = (function () {
     // トピック指定で来た場合だけ、そのトピックの札を追加する
     const topicScope = prefs.scope.type === `topic` && AppIndex.topicsById[prefs.scope.id] ? prefs.scope.id : null;
     if (prefs.scope.type === `topic` && !topicScope) prefs.scope = { type: `all`, id: null };
+    // v14: 出題頻度ランクのテーマ(論点)を選んで来た場合は、そのテーマの札も足す
+    const themeScope = prefs.scope.type === `theme` ? freqTheme(prefs.scope.id) : null;
+    if (prefs.scope.type === `theme` && !themeScope) prefs.scope = { type: `all`, id: null };
     // 分野の札: 分野の色の丸いステッカー+分野名+文の数(すべて・トピックは緑)
     const scopeOptions = [{ key: `all`, scope: { type: `all`, id: null }, label: `すべて`, icon: `o-x`, cat: null }]
       .concat(scopeCategories().map((cat) => ({ key: `cat:${cat.id}`, scope: { type: `cat`, id: cat.id }, label: cat.name, icon: CAT_ICONS[cat.id] || `o-x`, cat: cat.id })))
-      .concat(topicScope ? [{ key: `topic:${topicScope}`, scope: { type: `topic`, id: topicScope }, label: `トピック: ${AppIndex.topicsById[topicScope].name}`, icon: AppIndex.topicsById[topicScope].icon || `book-open`, cat: null, wide: true }] : []);
-    scopeOptions.forEach((o) => { o.count = statements.filter((s) => inScope(s, o.scope)).length; });
+      .concat(topicScope ? [{ key: `topic:${topicScope}`, scope: { type: `topic`, id: topicScope }, label: `トピック: ${AppIndex.topicsById[topicScope].name}`, icon: AppIndex.topicsById[topicScope].icon || `book-open`, cat: null, wide: true }] : [])
+      .concat(themeScope ? [{ key: `theme:${themeScope.id}`, scope: { type: `theme`, id: themeScope.id }, label: `論点: ${themeScope.name}`, icon: `star`, cat: themeScope.cat, wide: true }] : []);
+    // 札の文の数は出題頻度の絞り込みも入れて数える(テーマの札は絞らない)
+    const countScopes = () => scopeOptions.forEach((o) => {
+      const fq = freqFor(o.scope, prefs.freq);
+      o.count = statements.filter((s) => inScope(s, o.scope) && matchesFreq(s, fq)).length;
+    });
+    countScopes();
     const keyOf = (scope) => (scope.type === `all` ? `all` : `${scope.type}:${scope.id}`);
 
     const scopeEl = wrap.querySelector(`[data-role="scope"]`);
+    const freqRow = wrap.querySelector(`[data-role="freq-row"]`);
+    const freqEl = wrap.querySelector(`[data-role="freq"]`);
     const filterEl = wrap.querySelector(`[data-role="filter"]`);
     const countEl = wrap.querySelector(`[data-role="count"]`);
     const noteEl = wrap.querySelector(`[data-role="note"]`);
@@ -829,13 +908,27 @@ window.Views.ox = (function () {
 
     function paint() {
       const curKey = keyOf(prefs.scope);
+      countScopes();
       scopeEl.querySelectorAll(`[data-scope]`).forEach((b) => {
         const o = scopeOptions.find((x) => x.key === b.dataset.scope);
         const on = b.dataset.scope === curKey;
         b.setAttribute(`aria-pressed`, String(on));
         b.disabled = !on && o.count === 0;
+        const cnt = b.querySelector(`.ox-chip-count`);
+        if (cnt && cnt.firstChild && cnt.firstChild.nodeType === 3) cnt.firstChild.textContent = String(o.count);
       });
-      const inScopeList = statements.filter((s) => inScope(s, prefs.scope));
+      const fq = freqFor(prefs.scope, prefs.freq);
+      const inScopeAll = statements.filter((s) => inScope(s, prefs.scope));
+      const inScopeList = fq === `all` ? inScopeAll : inScopeAll.filter((s) => matchesFreq(s, fq));
+      if (freqEl) {
+        // テーマ(論点)を選んでいるときは出題頻度の札を隠す(テーマで決まるため)
+        freqRow.hidden = prefs.scope.type === `theme`;
+        const base = inScopeAll.filter((s) => matchesFilter(s, prefs.filter, stats));
+        freqEl.querySelectorAll(`[data-freq]`).forEach((b) => {
+          b.setAttribute(`aria-pressed`, String(b.dataset.freq === prefs.freq));
+          b.querySelector(`[data-role="fqcount"]`).textContent = `${b.dataset.freq === `all` ? base.length : base.filter((s) => matchesFreq(s, b.dataset.freq)).length}文`;
+        });
+      }
       filterEl.querySelectorAll(`[data-filter]`).forEach((b) => {
         b.setAttribute(`aria-pressed`, String(b.dataset.filter === prefs.filter));
         b.querySelector(`[data-role="fcount"]`).textContent = `${inScopeList.filter((s) => matchesFilter(s, b.dataset.filter, stats)).length}文`;
@@ -848,7 +941,8 @@ window.Views.ox = (function () {
       startBtn.innerHTML = `${ic(`play`, 22)}<span>${poolSize ? `開始(${n}問)` : `開始`}</span>`;
       noteEl.classList.toggle(`is-empty`, poolSize === 0);
       const where = prefs.scope.type === `all` ? `` : `この分野の`;
-      if (!inScopeList.length) noteEl.textContent = `この分野の○×問題はまだありません。ほかの分野を選んでください。`;
+      if (!inScopeAll.length) noteEl.textContent = `この分野の○×問題はまだありません。ほかの分野を選んでください。`;
+      else if (!inScopeList.length) noteEl.textContent = `${where ? `この分野には、` : ``}選んだ出題頻度の文がありません。出題頻度の「すべて」を選んでください。`;
       else if (!poolSize && prefs.filter === `unanswered`) noteEl.textContent = `${where}文はすべて回答済みです。「すべて」か「間違えたことがある」を選んでください。`;
       else if (!poolSize) noteEl.textContent = `${where || `まだ`}間違えた文はありません。`;
       else noteEl.textContent = `条件に合う${poolSize}文から${n}問を${prefs.filter === `wrong` ? `、前回間違えた文から順に` : `ランダムに`}出題します。`;
@@ -868,7 +962,16 @@ window.Views.ox = (function () {
         prefs.scope = Object.assign({}, last.scope);
         prefs.filter = last.filter;
         prefs.count = last.count;
+        prefs.freq = last.freq || `all`;
         if (!begin()) paint();
+      });
+    }
+    if (freqEl) {
+      freqEl.addEventListener(`click`, (e) => {
+        const b = e.target.closest(`[data-freq]`);
+        if (!b || b.dataset.freq === prefs.freq) return;
+        prefs.freq = b.dataset.freq;
+        paint();
       });
     }
     wrap.querySelector(`[data-role="auto-next"]`).addEventListener(`change`, (e) => saveAutoNext(e.target.checked));
@@ -941,6 +1044,7 @@ window.Views.ox = (function () {
       <div class="ox-stage" data-role="stage">
         <div class="ox-q-meta">
           ${catTagHtml(s.cat)}
+          ${freqChipHtml(s)}
           ${s.level ? `<span class="badge badge-${esc(s.level)}">${esc(s.level)}</span>` : ``}
           ${prior ? `<span class="ox-prior ${prior.lastOk ? `is-ok` : `is-ng`}">前回 ${prior.lastOk ? `正解` : `不正解`}</span>` : ``}
         </div>
@@ -1226,7 +1330,7 @@ window.Views.ox = (function () {
     const complete = !sess.quit && sum.answered >= sum.total;
     const best = bestRun(sess);
     const stats = loadStats();
-    const nextPool = buildPool(loadStatements(), sess.scope, sess.filter, stats);
+    const nextPool = buildPool(loadStatements(), sess.scope, sess.filter, stats, sess.freq);
     const continueReason = nextPool.length ? ``
       : sess.filter === `unanswered` ? `この条件の未回答の文はもうありません。`
       : sess.filter === `wrong` ? `この条件で間違えた文はもうありません。`
@@ -1251,6 +1355,7 @@ window.Views.ox = (function () {
         <div class="ox-summary-actions">
           ${sum.wrong.length ? `<button type="button" class="btn btn-lg" data-role="retry-wrong">${ic(`repeat`)}間違えた文だけもう一度(${sum.wrong.length}問)</button>` : ``}
           <button type="button" class="btn btn-lg ${sum.wrong.length ? `btn-secondary` : ``}" data-role="continue"${nextPool.length ? `` : ` disabled`}>${ic(`refresh`)}同じ条件で続ける</button>
+          ${sess.scope.type === `theme` ? `<a class="btn btn-ghost" href="#freq">${ic(`star`)}出題頻度ランクへ</a>` : ``}
           <a class="btn btn-ghost" href="#ox">${ic(`arrow-left`)}○×トップへ</a>
         </div>
         ${continueReason ? `<p class="ox-summary-note">${continueReason}</p>` : ``}
@@ -1297,7 +1402,7 @@ window.Views.ox = (function () {
     const retryBtn = wrap.querySelector(`[data-role="retry-wrong"]`);
     if (retryBtn) {
       retryBtn.addEventListener(`click`, () => {
-        session = createSession(QuizEngine.shuffle(sum.wrong), { scope: sess.scope, filter: sess.filter, count: sess.count, label: `間違えた文をもう一度(${scopeLabel(sess.scope)})`, retry: true, fromLanding: sess.fromLanding });
+        session = createSession(QuizEngine.shuffle(sum.wrong), { scope: sess.scope, filter: sess.filter, count: sess.count, freq: sess.freq, label: `間違えた文をもう一度(${scopeLabel(sess.scope)})`, retry: true, fromLanding: sess.fromLanding });
         Router.navigate(`#ox/run`);
       });
     }
@@ -1310,6 +1415,7 @@ window.Views.ox = (function () {
       prefs.scope = Object.assign({}, sess.scope);
       prefs.filter = sess.filter;
       prefs.count = sess.count;
+      prefs.freq = sess.freq || `all`;
       if (startFromPrefs(new Set(sess.items.map((s) => s.id)))) {
         // 同じ履歴エントリ(#ox/run)のまま続けるので、1つ前の履歴は元のセッションと同じ
         session.fromLanding = sess.fromLanding;
@@ -1339,7 +1445,7 @@ window.Views.ox = (function () {
     _internal: {
       STATS_KEY, PREFS_KEY, COUNTS, CONF_LEVELS, prefs, parseParam, saveConfidence, scopeCategories, withCategory, loadStatements, cleanEntry, loadStats, recordAnswer,
       inScope, matchesFilter, buildPool, weakOrder, spreadByQuiz, pickQuestions, createSession, startFromPrefs,
-      answerCurrent, summarize, contextOf, termLink, conditionLabel, loadSavedPrefs, lastStarted, validScope, quizScopeIds, startQuizScope,
+      answerCurrent, summarize, contextOf, termLink, conditionLabel, loadSavedPrefs, lastStarted, validScope, quizScopeIds, startQuizScope, freqFor, matchesFreq,
       getSession: () => session,
       setSession: (s) => { session = s; },
     },

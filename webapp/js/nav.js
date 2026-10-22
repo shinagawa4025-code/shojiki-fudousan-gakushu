@@ -20,6 +20,14 @@ window.Nav = (function () {
     { view: `about`, label: `このアプリについて`, icon: `info`, mobile: `more`, section: `other` },
     { view: `settings`, label: `設定`, icon: `settings`, mobile: `more`, section: `bottom` },
     { view: `more`, label: `メニュー`, icon: `menu`, mobile: `more`, section: null },
+    // v14: 新しい練習と暗記のツール。PC はサイドバーの「問題」「学ぶ」の最後、スマホ・タブレットは「問題」「学ぶ」の画面の入口のタイル
+    // (tilesHtml)とメニューから開く(開いたときは下部タブの「問題」「学ぶ」を選んだ状態にする)。
+    // short: タイルの名前(なければ label)/ desc: タイルの小さな説明(広い画面では省く)/ tag: 名前の横の札 / tone: ステッカーの色(既定は緑)
+    { view: `challenge`, label: `今日のチャレンジ`, icon: `bolt`, mobile: `practice`, section: `practice`, desc: `3分で○×に挑戦`, tone: `sticker-gold` },
+    { view: `freq`, label: `出題頻度ランク`, icon: `star`, mobile: `practice`, section: `practice`, desc: `よく出る論点から` },
+    { view: `numbers`, label: `数字まとめドリル`, short: `数字まとめ`, icon: `percent`, mobile: `practice`, section: `practice`, desc: `期間・金額など` },
+    { view: `compare`, label: `比較表で覚える`, short: `比較表`, icon: `grid`, mobile: `learn`, section: `learn`, desc: `制度を見比べる` },
+    { view: `joubun`, label: `条文穴埋め(消費税法)`, short: `条文穴埋め`, icon: `scale`, mobile: `practice`, section: `practice`, desc: `消費税法の理論`, tag: `税理士` },
   ];
 
   const TABS = [
@@ -164,6 +172,17 @@ window.Nav = (function () {
     return nav;
   }
 
+  // v14: 「問題」「学ぶ」の画面の上に出す入口のタイル(押せる白いタイル+丸いステッカー。ホームの .quick と同じ形)。
+  // views: 画面名の並び(ITEMS にあるもの)、label: まとまりの名前(読み上げ用)。スマホでは1行で横にすべらせ、広い画面では折り返す(css/practice.css)
+  function tilesHtml(views, label) {
+    const tiles = views.map(itemOf).filter(Boolean).map((it) => `
+      <a class="quick hub-tile" href="#${it.view}" data-hub="${it.view}">
+        <span class="sticker sticker-sm${it.tone ? ` ${it.tone}` : ``}" aria-hidden="true">${ic(it.icon, 18)}</span>
+        <span><b>${it.short || it.label}${it.tag ? `<span class="hub-tile-badge">${it.tag}</span>` : ``}</b>${it.desc ? `<small>${it.desc}</small>` : ``}</span>
+      </a>`);
+    return tiles.length ? `<nav class="hub-tiles${tiles.length <= 2 ? ` is-few` : ``}" aria-label="${label}" data-role="hub-tiles">${tiles.join(``)}</nav>` : ``;
+  }
+
   function dueCount() {
     if (window.Stats && Stats.dueReviewCount) return Stats.dueReviewCount();
     if (!window.Srs || !Srs.getReviewDueIds) return 0;
@@ -185,5 +204,5 @@ window.Nav = (function () {
     });
   }
 
-  return { ITEMS, TABS, SUBNAVS, mount, update, subnavFor, refreshBadge, itemOf, tabOf, subnavOf, showGuide };
+  return { ITEMS, TABS, SUBNAVS, mount, update, subnavFor, refreshBadge, itemOf, tabOf, subnavOf, showGuide, tilesHtml };
 })();

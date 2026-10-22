@@ -76,6 +76,7 @@ window.Recommend = (function () {
   //   ④ 今日、基礎知識を1つ以上「学習済み」にした(basicsProgress の learnedAt)
   // 所要時間の目安: 復習カード1枚15秒・解き直し1問40秒・○×1問12秒・基礎知識1テーマ3分(ふつうの日の合計がおよそ15分)
   // 解き直しのない日は②を出さない。読める基礎知識が残っていない(今日学習済みにしたものもない)ときは④を出さない
+  // v14: 宅建士試験が目標のときは、④は頻出Aで成績の低いテーマの基礎知識、③(間違えた文がない日)は頻出Aのテーマの○×を先にする(freqPick)
   // opts(ホームから渡す。省略時はここで求める): { variant: 'exam'|'general', typeId, focusId, theme, oxFallback: { nav, label, scope } }
   // 戻り値: [{ id: 'review'|'retry'|'ox'|'basic', no, title, sub, minutes, nav, done, icon, count }]
   const MENU_SEC = { card: 15, retry: 40, ox: 12, basic: 180 };
@@ -101,6 +102,12 @@ window.Recommend = (function () {
     return out;
   }
 
+  // v14: 宅建士試験が目標のときは、出題頻度ランク(js/freq.js。公開版では詳細の束なので、届く前は使わない)で
+  // 頻出Aのうち成績の低いテーマを先にする。kind: 'basic'(次に読む基礎知識)/ 'ox'(○×の行き先)。使えなければ null
+  function freqPick(kind, o) {
+    try { return window.Freq && typeof Freq.menuPick === `function` ? Freq.menuPick(kind, o) : null; } catch (e) { return null; }
+  }
+
   function menuTheme(opts, variant, typeId) {
     if (opts.theme !== undefined) return opts.theme;
     if (variant !== `exam`) return generalPlan().theme;
@@ -113,7 +120,11 @@ window.Recommend = (function () {
           focusId = s && s.examTypeId === typeId && s.focus ? s.focus.id : null;
         } catch (e) { focusId = null; }
       }
-      const t = nextTheme({ order: examTopicOrder(type, focusId) });
+      const order = examTopicOrder(type, focusId);
+      const p = typeId === `takken` ? freqPick(`basic`, { cat: focusId, topics: order }) : null;
+      const b = p ? topicBasics(p.topicId) : null;
+      if (b && AppIndex.termsById[p.basicId]) return { topic: b.topic, basicId: p.basicId, basic: AppIndex.termsById[p.basicId], done: b.done, total: b.total, freq: p.theme };
+      const t = nextTheme({ order });
       if (t) return t;
     }
     return nextTheme({ order: generalTopicOrder(null) });
@@ -202,11 +213,13 @@ window.Recommend = (function () {
       });
       const useWeak = weak > 0;
       const n = useWeak ? Math.min(MENU_OX, weak) : MENU_OX;
-      const fb = opts.oxFallback && typeof opts.oxFallback.nav === `string` ? opts.oxFallback : { nav: `#ox`, scope: `` };
+      // 間違えた文がない宅建士試験向けは、頻出Aで成績の低いテーマの○×(文が問題数以上あるテーマだけ)
+      const fq = !useWeak && variant === `exam` && typeId === `takken` ? freqPick(`ox`, { min: MENU_OX, count: MENU_OX, cat: opts.focusId }) : null;
+      const fb = fq ? { nav: fq.nav, scope: fq.name } : opts.oxFallback && typeof opts.oxFallback.nav === `string` ? opts.oxFallback : { nav: `#ox`, scope: `` };
       const done = answeredToday >= n;
       steps.push({
         id: `ox`,
-        title: useWeak ? `苦手の○×` : `○×で腕試し`,
+        title: useWeak ? `苦手の○×` : fq ? `頻出Aの○×` : `○×で腕試し`,
         sub: done ? `今日${answeredToday}問に回答` : useWeak ? `間違えたことがある文から${n}問` : `${fb.scope ? `${fb.scope}・` : ``}${n}問`,
         minutes: done ? 0 : menuMinutes(n * MENU_SEC.ox),
         nav: useWeak ? `#ox/weak/${MENU_OX}` : fb.nav,
@@ -229,7 +242,7 @@ window.Recommend = (function () {
         id: `basic`,
         title: `新しい基礎知識を1テーマ`,
         sub: done ? `「${AppIndex.termsById[doneId].name}」を学習済み`
-          : `${theme.topic.name}「${theme.basic ? theme.basic.name : theme.topic.name}」`,
+          : `${theme.freq ? `頻出A・` : ``}${theme.topic.name}「${theme.basic ? theme.basic.name : theme.topic.name}」`,
         minutes: done ? 0 : menuMinutes(MENU_SEC.basic),
         nav: theme ? `#topics/${theme.topic.id}/${theme.basicId}` : doneTopic ? `#topics/${doneTopic.id}/${doneId}` : `#topics`,
         done,

@@ -1,5 +1,6 @@
 // 学習トピックビュー: 目的別(暮らし・取引/宅建士試験/税理士試験)のトピック一覧 + トピック詳細(基礎知識/問題/用語/法律)
 // ルート: #topics / #topics/<topicId> / #topics/<topicId>/<基礎知識ID>
+// v14: 宅建士試験のトピックでは、基礎知識の小見出しと項目に出題頻度ランクの札(「頻出A」など。js/freq.js)を付ける
 window.Views = window.Views || {};
 window.Views.topics = (function () {
   const ic = (name, size) => UI.icon(name, { size: size || 20 });
@@ -11,6 +12,8 @@ window.Views.topics = (function () {
     { id: `takken`, label: `宅建士試験` },
     { id: `zeirishi`, label: `税理士試験` },
   ];
+  // v14: 一覧の上に出す、覚えるためのツールの入口(js/nav.js の ITEMS の画面名)
+  const HUB_VIEWS = [`compare`, `numbers`];
   // 暮らし・取引のまとまり(まだないトピックは表示しない)
   const LIFE_GROUPS = [
     { id: `rent`, name: `住まいを借りる`, ids: [`topicI`, `topicA`] },
@@ -47,6 +50,22 @@ window.Views.topics = (function () {
   function obj(key) {
     const v = Storage.get(key, {});
     return v && typeof v === `object` && !Array.isArray(v) ? v : {};
+  }
+
+  // v14: 宅建士試験の出題頻度ランクの札(js/freq.js。テーマ(論点)のある基礎知識と、その小見出しだけ)
+  function freqOn() {
+    return !!(window.Freq && Freq.ready());
+  }
+
+  function basicFreqChip(id) {
+    const t = freqOn() ? Freq.themeOfBasic(id) : null;
+    return t ? Freq.chipFor(t, { cls: `basics-freq-chip` }) : ``;
+  }
+
+  // 小見出しの札は、その中でいちばん高いランク
+  function sectionFreqChip(topicId, sec) {
+    const t = freqOn() ? Freq.sectionBest(topicId, sec.name, sec.ids) : null;
+    return t ? Freq.chipFor(t, { cls: `basics-freq-chip`, prefix: `この中でいちばん高いランクは` }) : ``;
   }
 
   function isLearned(progress, id) {
@@ -124,6 +143,7 @@ window.Views.topics = (function () {
         <h2>学習トピック</h2>
         <button type="button" class="btn btn-icon learn-info-btn" data-role="info" aria-label="学習トピックについて" aria-haspopup="dialog">${ic(`info`)}</button>
       </div>
+      ${window.Nav && Nav.tilesHtml ? Nav.tilesHtml(HUB_VIEWS, `覚えるためのツール`) : ``}
       <div class="segmented seg-bold topic-tracks" role="group" aria-label="表示するトピック">
         ${TRACKS.map((t) => `<button type="button" class="segmented-item" data-track="${t.id}" aria-pressed="${t.id === track}">${t.label}</button>`).join(``)}
       </div>
@@ -513,6 +533,7 @@ window.Views.topics = (function () {
         <details>
           <summary>
             <span class="basics-name">${concept.name}</span>
+            ${basicFreqChip(id)}
             ${hasDiagram ? `<span class="basics-fig" title="図解あり">${ic(`diagram`, 18)}<span class="sr-only">図解あり</span></span>` : ``}
             <span class="chevron">${ic(`chevron-down`, 18)}</span>
           </summary>
@@ -542,7 +563,7 @@ window.Views.topics = (function () {
         li.dataset.sec = String(i);
         li.innerHTML = `
           <details>
-            <summary class="basics-section-head"><span class="chevron">${ic(`chevron-down`, 18)}</span><span class="basics-section-name">${esc(s.name)}</span><span class="basics-section-count num" data-role="sec-count"></span></summary>
+            <summary class="basics-section-head"><span class="chevron">${ic(`chevron-down`, 18)}</span><span class="basics-section-name">${esc(s.name)}</span>${sectionFreqChip(topic.id, s)}<span class="basics-section-count num" data-role="sec-count"></span></summary>
             <ul class="basics-checklist"></ul>
           </details>`;
         const ul = li.querySelector(`ul`);

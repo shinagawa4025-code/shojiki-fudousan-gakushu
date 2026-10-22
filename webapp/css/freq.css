@@ -1,0 +1,112 @@
+/* 出題頻度ランク(#freq)・ランクの札・頻出の絞り込み・学習の進捗の「頻出Aで伸ばしたい論点」(v14。js/freq.js・js/views/freq.js) */
+
+/* ---- ランクの札「頻出A」(4択・○×の問題の見出し、基礎知識の小見出しと項目、#freq の行)----
+   A は金色(ごほうびと同じ)、B は緑、C は灰色。見た目の文字は読み上げず、sr-only の「出題頻度A(直近12回中11回)」を読む */
+.freq-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-family: var(--font-display);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-display);
+  line-height: 1.5;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  font-feature-settings: "palt";
+}
+.freq-chip.is-a { background: var(--gold); color: var(--gold-ink); box-shadow: inset 0 -2px 0 var(--gold-lip); }
+/* B は緑の枠(レベルの札「超入門」「中級」の緑の面と見分けられるように) */
+.freq-chip.is-b { background: var(--color-surface); color: var(--color-success); box-shadow: inset 0 0 0 1.5px var(--color-success); }
+.freq-chip.is-c { background: var(--color-surface-muted); color: var(--color-text-muted); }
+/* 基礎知識の小見出し(太い見出しの中)と項目の札は少し大きく */
+.basics-section-head .freq-chip { font-size: var(--fs-xs); padding: 2px 8px; }
+.basics-item summary .freq-chip { position: relative; }
+
+/* ---- 4択の絞り込みのシート・○×のトップの「出題頻度」 ---- */
+.filter-sheet .filter-sheet-freq .segmented-item { flex-direction: column; gap: 0; min-height: 48px; padding: var(--sp-1) var(--sp-2); line-height: 1.25; white-space: normal; text-align: center; }
+.filter-sheet-freq .segmented-count { margin-left: 0; }
+.filter-sheet-freq .segmented-item:disabled { opacity: .5; cursor: default; }
+.freq-sheet-note { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--sp-2); margin: var(--sp-2) 0 0; font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--color-text-muted); }
+.freq-sheet-note .link-btn { min-height: 44px; font-size: var(--fs-sm); }
+.ox-freq-sub { font-weight: 400; }
+.ox-freq .segmented-item { flex: 1 1 0; flex-direction: column; gap: 0; min-height: 48px; padding: var(--sp-1) var(--sp-2); line-height: 1.25; white-space: normal; text-align: center; }
+.ox-freq .segmented-count { margin-left: 0; }
+
+/* ---- #freq ---- */
+.freq-view .view-head { display: flex; align-items: center; gap: var(--sp-1); margin: 0 0 var(--sp-3); }
+.freq-view .view-head h2 { margin: 0; min-width: 0; }
+.freq-intro { display: flex; flex-direction: column; gap: var(--sp-3); }
+.freq-intro > * { margin: 0; }
+.freq-intro-lead { font-size: var(--fs-md); line-height: var(--lh-snug); color: var(--color-text); }
+.freq-intro-lead b { color: var(--color-heading); }
+.freq-legend { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.freq-legend li { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); font-weight: 600; color: var(--color-text); }
+.freq-legend .freq-chip { font-size: var(--fs-xs); padding: 2px 8px; }
+.freq-intro-note { font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); }
+.freq-intro-meta { display: flex; align-items: flex-start; gap: var(--sp-1); font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--color-text-muted); }
+.freq-intro-meta .icon { flex-shrink: 0; margin-top: 2px; }
+.freq-intro-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* この画面と進捗のカードの押せる部品は 44px 以上(.btn-sm は 36〜40px のため) */
+.freq-intro-actions .btn, .freq-row-actions .btn, .freq-prog-actions .btn, .freq-prog-card .card-actions .link-btn { min-height: 44px; }
+
+/* 分野のタブ(5つを画面の幅に収める。件数は名前の下に小さく) */
+.freq-tabs { margin: 0 0 var(--sp-4); }
+.freq-tabs .segmented-item { flex: 1 1 0; min-width: min-content; flex-direction: column; gap: 0; min-height: 48px; padding: var(--sp-1) 2px; line-height: 1.2; }
+.freq-tabs .segmented-count { margin-left: 0; }
+
+.freq-group { margin: 0 0 var(--sp-6); }
+.freq-group-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-3); font-size: var(--fs-base); line-height: var(--lh-tight); }
+.freq-group-title .freq-chip { font-size: var(--fs-xs); padding: 2px 8px; }
+.freq-group-count { margin-left: auto; font-size: var(--fs-sm); color: var(--color-text-muted); }
+.freq-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-3); }
+@media (min-width: 768px) {
+  .freq-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.freq-row { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; margin: 0; }
+.freq-row:focus { outline: none; }
+.freq-row:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.freq-row-top { display: flex; align-items: flex-start; gap: var(--sp-2); }
+.freq-row-top .freq-chip { margin-top: 3px; }
+.freq-row-name { margin: 0; min-width: 0; font-family: var(--font-display); font-size: var(--fs-base); font-weight: var(--fw-display); line-height: var(--lh-snug); color: var(--color-heading); word-break: auto-phrase; overflow-wrap: anywhere; font-feature-settings: "palt"; }
+.freq-row-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-3); margin: 0; font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text-muted); }
+.freq-row-hits { color: var(--color-text); font-weight: 600; }
+.freq-row-hits b { margin: 0 1px; font-family: var(--font-display); font-size: var(--fs-lg); font-weight: var(--fw-display); color: var(--color-heading); }
+.freq-row-meta > .link-btn.freq-row-read { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; text-decoration: none; }
+.freq-row-none { font-size: var(--fs-sm); color: var(--color-text-muted); }
+
+/* 自分の正答率(バーは分野の色。8割以上は金色、6割未満は数字を赤で) */
+.freq-mastery { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); margin: 0; }
+.freq-mastery .progress-bar { flex: 1 1 96px; height: 8px; }
+.freq-rate { flex-shrink: 0; font-size: var(--fs-sm); font-weight: 700; color: var(--color-text); }
+.freq-rate b { font-family: var(--font-display); font-size: var(--fs-base); font-weight: var(--fw-display); }
+.freq-rate small { margin-left: 2px; font-size: var(--fs-xs); font-weight: 400; color: var(--color-text-muted); }
+.freq-mastery.is-weak .freq-rate b { color: var(--color-danger); }
+.freq-mastery.is-good .freq-rate b { color: var(--gold-text); }
+.freq-mastery.is-none { font-size: var(--fs-sm); color: var(--color-text-muted); }
+
+.freq-row-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
+.freq-row-actions .btn { flex: 1 1 8.5em; min-width: 0; gap: var(--sp-1); }
+.freq-btn-count { font-size: var(--fs-xs); font-weight: 600; opacity: .85; }
+
+/* ---- 学習の進捗のカード(FreqUi.renderProgress) ---- */
+.freq-prog-list { list-style: none; margin: 0; padding: 0; }
+.freq-prog-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) 0; border-top: 1px solid var(--color-border); }
+.freq-prog-row:first-child { border-top: 0; padding-top: 0; }
+.freq-prog-main { flex: 1 1 auto; min-width: 0; }
+.freq-prog-main > p { margin: 0; }
+.freq-prog-name { display: flex; align-items: flex-start; gap: var(--sp-2); font-weight: 700; line-height: var(--lh-snug); color: var(--color-heading); overflow-wrap: anywhere; }
+.freq-prog-name .freq-chip { margin-top: 2px; }
+.freq-prog-main > .freq-prog-sub { margin-top: 2px; font-size: var(--fs-sm); color: var(--color-text-muted); }
+.freq-prog-sub.is-weak { color: var(--color-danger); font-weight: 600; }
+.freq-prog-main .progress-bar { display: block; height: 6px; margin-top: var(--sp-1); }
+.freq-prog-actions { display: flex; gap: var(--sp-2); flex-shrink: 0; }
+.freq-btn-mini { min-width: 60px; padding-inline: var(--sp-2); gap: 2px; }
+@media (max-width: 400px) {
+  .freq-prog-row { flex-wrap: wrap; }
+  .freq-prog-actions { width: 100%; }
+  .freq-prog-actions .btn { flex: 1 1 0; }
+}

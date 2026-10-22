@@ -1218,13 +1218,36 @@ window.Views.progress = (function () {
     const weak = themeWeakCard(snap);
     const time = safeCard(studyTimeCard);
     const badges = safeCard(badgeCard);
-    // 記録のカウンターを先頭に(試験の表示と同じ並び)
-    const cards = [summaryCard(themeScope(ids, isLearned)), theme, weak, time, srsCard(), heatmapCard()];
+    // 記録のカウンターを先頭に(試験の表示と同じ並び)。v14: そのあとにレベル、苦手なポイントのあとに出題頻度ランク
+    const cards = [summaryCard(themeScope(ids, isLearned)), levelMount(), theme, weak, freqMount(), time, srsCard(), heatmapCard()];
     if (examPoints().length) cards.push(examCard());
     cards.push(badges, otherThemesCard(chosen.length ? ids : LIFE_ORDER), dataNote());
     cards.filter(Boolean).forEach((el) => grid.appendChild(el));
     const jump = param === `weak` ? weak || theme : param === `time` ? time : param === `badges` ? badges : null;
     if (jump) requestAnimationFrame(() => jump.scrollIntoView({ block: `start`, behavior: `auto` }));
+  }
+
+  // v14: ほかの機能が描くカードの置き場所(data-role="level-card" は LevelUi(レベルと経験値)・"freq-card" は FreqUi(出題頻度ランク))。
+  // 公開版で詳細がまだ届いていなければ、届いたあとにもう一度描く。中身がないうちは場所を取らない(css/features.css の .prog-mount:empty)。
+  // 置き場所は .prog-grid の1マス(PC は2列。横いっぱいにするときは描く側が span-all を付ける)
+  function mountCard(role, fill) {
+    const box = document.createElement(`div`);
+    box.className = `prog-mount`;
+    box.dataset.role = role;
+    const paint = () => { try { fill(box); } catch (e) { console.error(`[progress] ${role} を描けませんでした`, e); } };
+    paint();
+    if (window.AppData && typeof AppData.hasDetail === `function` && !AppData.hasDetail()) {
+      AppData.whenDetail().then(() => { if (box.isConnected) paint(); }).catch(() => { /* 届かなければ空のまま */ });
+    }
+    return box;
+  }
+
+  function levelMount() {
+    return mountCard(`level-card`, (el) => { if (window.LevelUi && typeof LevelUi.renderProgress === `function`) LevelUi.renderProgress(el); });
+  }
+
+  function freqMount() {
+    return mountCard(`freq-card`, (el) => { if (window.FreqUi && typeof FreqUi.renderProgress === `function`) FreqUi.renderProgress(el); });
   }
 
   // v12 の新しいカードは、作れなくても進捗の画面はこれまでどおり出す
@@ -1254,8 +1277,9 @@ window.Views.progress = (function () {
     const time = safeCard(studyTimeCard);
     const badges = safeCard(badgeCard);
     const predictFirst = state.typeId === `takken`;
-    // 並び: 記録のカウンター → (合格予測) → 弱点分析 → (合格予測) → 模擬試験の推移 → 学習時間 → 定着度 → カレンダー → バッジ → トピック別
-    [summaryCard(), predictFirst ? predict : null, analysis, predictFirst ? null : predict, examCard(), time, srsCard(), heatmapCard(), badges, topicCard(), dataNote()]
+    // 並び: 記録のカウンター → レベル(v14) → (合格予測) → 弱点分析 → 出題頻度ランク(v14) → (合格予測) → 模擬試験の推移 → 学習時間 →
+    //       定着度 → カレンダー → バッジ → トピック別
+    [summaryCard(), levelMount(), predictFirst ? predict : null, analysis, freqMount(), predictFirst ? null : predict, examCard(), time, srsCard(), heatmapCard(), badges, topicCard(), dataNote()]
       .filter(Boolean).forEach((el) => grid.appendChild(el));
     const jumps = { weak: analysis, predict, time, badges };
     const jump = param && Object.prototype.hasOwnProperty.call(jumps, param) ? jumps[param] : null;

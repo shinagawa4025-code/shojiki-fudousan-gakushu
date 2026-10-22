@@ -5,6 +5,8 @@
 //          文字列 → PENDING(「…」)、空でない別々の文字列の配列 → 「…」「……」「………」…(長さ・別々であること・空でないことを保つ)
 //          それ以外の型・空の値は本体のまま(詳細に回さない)
 //   詳細: { 集まりの名前: { f: [項目名…], r: [[id, 値…], …] } }。値 0 は「その項目は本体のまま」
+//   v14: DETAIL_KEYS の項目(ホームと起動時に使わない新しい機能のデータ)は丸ごと詳細に回す。本体には null を置き(項目の位置を保つ)、
+//        詳細の WHOLE(`$whole`)に { 項目名: 値 } で入れる(webapp/js/appData.js の _merge が null を本物に置き換える)
 // CODE_FILES(APP_DATA 以外のもの = SITE・ContentPack を作るファイル)はコードのまま本体に入れ、ほかのファイルは APP_DATA の
 // 中身として入れる。ほかのファイルが APP_DATA 以外のグローバルを作る・書き換えるとき、データが JSON にできないとき、
 // 同じオブジェクトを2か所から参照しているときは失敗にする(分けると元と同じに動かないため)
@@ -26,6 +28,10 @@ const DETAIL_FIELDS = {
   sources: ['orgName', 'description', 'url', 'category'],
 };
 const CODE_FILES = ['js/siteConfig.js', 'data/contentPack.js'];
+// v14: 丸ごと詳細に回す APP_DATA の項目(出題頻度ランク・数字まとめ・比較表・条文穴埋め。使う画面と js/freq.js などは詳細の束にあり、
+// 本体のコード(ホーム・js/recommend.js など)は null のときは使わない。詳細が届いたら 'appdata:detail' で描き直す)
+const DETAIL_KEYS = ['frequency', 'numbers', 'compareTables', 'joubun'];
+const WHOLE = '$whole';
 const BASE_GLOBALS = ['console', 'location', 'window'];
 
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -160,6 +166,15 @@ function splitData(data) {
     });
     if (rows.length) detail[key] = { f: fields, r: rows };
   });
+  const whole = {};
+  DETAIL_KEYS.forEach((key) => {
+    if (!hasOwn(core, key) || core[key] === null) return;
+    if (hasOwn(DETAIL_FIELDS, key)) throw new Error(`APP_DATA.${key} は DETAIL_FIELDS と DETAIL_KEYS の両方にあります`);
+    whole[key] = core[key];
+    core[key] = null;
+    moved[key] = '丸ごと';
+  });
+  if (Object.keys(whole).length) detail[WHOLE] = whole;
   return { core, detail, moved };
 }
 
@@ -167,6 +182,10 @@ function splitData(data) {
 function mergeForCheck(core, detail) {
   const out = JSON.parse(JSON.stringify(core));
   Object.keys(detail).forEach((key) => {
+    if (key === WHOLE) {
+      Object.keys(detail[key]).forEach((k) => { out[k] = detail[key][k]; });
+      return;
+    }
     const byId = new Map(out[key].map((o) => [o.id, o]));
     detail[key].r.forEach((row) => {
       const o = byId.get(row[0]);
@@ -201,4 +220,4 @@ function firstDifference(a, b, p) {
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-module.exports = { PENDING, DETAIL_FIELDS, CODE_FILES, snapshotData, splitData, mergeForCheck, firstDifference, assertJsonSafe, sha, standIn, keepInCore };
+module.exports = { PENDING, DETAIL_FIELDS, DETAIL_KEYS, WHOLE, CODE_FILES, snapshotData, splitData, mergeForCheck, firstDifference, assertJsonSafe, sha, standIn, keepInCore };

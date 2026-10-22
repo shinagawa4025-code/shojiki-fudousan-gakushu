@@ -6,6 +6,8 @@
 /* ---------- 学習の進捗 ---------- */
 .prog-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
 .prog-grid > * { margin: 0; min-width: 0; }
+/* v14: ほかの機能が描くカードの置き場所(js/views/progress.js の mountCard)。中身がないうちは場所を取らない */
+.prog-grid > .prog-mount:empty { display: none; }
 .prog-grid .recommend-head > .card-title { margin: 0; }
 .prog-note { font-size: var(--fs-sm); color: var(--color-text-muted); line-height: var(--lh-snug); margin: 0 0 var(--sp-3); }
 .prog-note strong { color: var(--color-text); }

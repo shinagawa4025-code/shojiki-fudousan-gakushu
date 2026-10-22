@@ -425,6 +425,8 @@ window.Views.review = (function () {
       // 評価後のカード(保存できなかったとき=容量不足でも、次に出す日を通知に出せるよう戻り値を使う)
       const graded = Srs.grade(term.id, g);
       const counted = activityCount(day) > actBefore;
+      // v14: 経験値(今日の復習の評価。4択・○×で間違えたときの Srs.grade(…, 1, { silent }) は数えない)。g: 1 もう一度 / 2 難しい / 3 普通 / 4 簡単
+      try { if (window.Xp) Xp.award(`review`, { id: term.id, correct: g >= 2, unsure: g === 2, grade: g }); } catch (e) { console.error(`[復習] 経験値を記録できませんでした`, e); }
       // 別のタブでの変更を消さないよう、保存前に最新の値を読み直してから反映する
       const latestKnown = Storage.get(`flashcards`, {});
       Object.keys(known).forEach((k) => { if (!(k in latestKnown)) delete known[k]; });

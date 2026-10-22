@@ -1,7 +1,9 @@
 // クイズビュー: 確認問題(本試験と同じ4択。選択肢ごとの○×の理由・SRS連携) + 自動生成クイズ(トピック絞り込み・苦手優先・根拠法令問題)
 // ルート: #quiz / #quiz/<topicId> / #quiz/q/<問題ID> / #quiz/auto / #quiz/auto/<topicId> / #quiz/auto/weak / #quiz/auto/<topicId>/weak
+//         v14: #quiz/freq/<テーマID>(出題頻度ランクのテーマ(論点)の問題だけ)/ #quiz/freq/A・#quiz/freq/AB(頻出Aだけ・AとBだけにして保存)
 // 戻る・再読み込みで回答の途中から続けられるよう、画面の状態を履歴エントリの state に保存する
-//   qState:    { level, topic, status, format, shown, answered: { 問題ID: 選んだ番号 } }(確認問題。format: all / plain / styled = 個数・組合せ)
+//   qState:    { level, topic, status, format, freq, theme, shown, answered: { 問題ID: 選んだ番号 } }(確認問題。format: all / plain / styled = 個数・組合せ。
+//              freq: all / A / AB = 出題頻度の絞り込み、theme: テーマID か null)
 //   autoState: { level, topic, weak, count, lawOnly, weakOpen, weakIds,
 //                questions: [{ termId, type, stem, choices: [{ text, correct }], picked }] }(自動生成クイズ)
 // 確認問題の絞り込みと自動生成クイズの問題数は Storage `quizPrefs` にも保存する(タブから開き直しても同じ条件で表示)
@@ -27,10 +29,17 @@ window.Views.quiz = (function () {
   const FORMAT_LABELS = { all: `すべて`, plain: `通常の4択`, styled: `個数・組合せ` };
   // カードの見出しの「4択」の横に付ける形式の名前
   const STYLE_LABELS = { count: `個数`, combo: `組合せ` };
+  // v14: 出題頻度(宅建士試験の過去問で出た回数のランク。js/freq.js)の絞り込み。保存は quizPrefs.freq。
+  // テーマ(論点)の指定(#quiz/freq/<テーマID>)は、その場だけの条件(quizPrefs には保存しない。戻る・再読み込みでは qState から)
+  const FREQS = [`all`, `A`, `AB`];
+  const FREQ_LABELS = { all: `すべて`, A: `Aだけ`, AB: `AとB` };
+  const FREQ_CHIPS = { A: `頻出A`, AB: `頻出A・B` };
   const AUTO_COUNTS = [5, 10, 20];
   const DEFAULT_AUTO_COUNT = 10;
   const PASS_PCT = 70; // 合格の目安(○×一問一答と共通)
   const PREFS_KEY = `quizPrefs`;
+  // v14: #quiz の上に出す、ほかの練習の入口(js/nav.js の ITEMS の画面名。条文穴埋めは税理士試験(消費税法)向け)
+  const HUB_VIEWS = [`challenge`, `freq`, `numbers`, `compare`, `joubun`];
   // 答えたあとに「つづける」として押すボタン(キーの Enter・キーで答えたあとのフォーカス先)
   const NEXT_SEL = `[data-role="next-q"], [data-role="due-next"], [data-role="step-finish"]`;
   const ic = (name, size) => UI.icon(name, { size: size || 18 });
@@ -56,6 +65,33 @@ window.Views.quiz = (function () {
     return FORMATS.includes(f) && (f === `all` || hasStyled()) ? f : `all`;
   }
 
+  // 出題頻度のデータ(js/freq.js)が使えるか。使えなければ絞り込みは「すべて」として扱う
+  function freqOn() {
+    return !!(window.Freq && Freq.ready());
+  }
+
+  function validFreq(f) {
+    return FREQS.includes(f) && (f === `all` || freqOn()) ? f : `all`;
+  }
+
+  function validTheme(id) {
+    return freqOn() && typeof id === `string` && Freq.theme(id) ? id : null;
+  }
+
+  // テーマを指定しているときはそのテーマの問題だけ(出題頻度の絞り込みは使わない)
+  function matchesFreq(q, freq, theme) {
+    if (theme) {
+      const t = freqOn() ? Freq.themeOfQuiz(q.id) : null;
+      return !!t && t.id === theme;
+    }
+    return freq === `all` || !freqOn() || Freq.matchLevel(q.id, freq);
+  }
+
+  function themeName(id) {
+    const t = id && freqOn() ? Freq.theme(id) : null;
+    return t ? t.name : ``;
+  }
+
   function loadPrefs() {
     const p = Storage.get(PREFS_KEY, {});
     return {
@@ -63,6 +99,7 @@ window.Views.quiz = (function () {
       topic: validTopic(p.topic) ? p.topic : ALL,
       status: STATUSES.includes(p.status) ? p.status : `all`,
       format: validFormat(p.format),
+      freq: validFreq(p.freq),
       autoCount: AUTO_COUNTS.includes(p.autoCount) ? p.autoCount : DEFAULT_AUTO_COUNT,
     };
   }
@@ -108,7 +145,12 @@ window.Views.quiz = (function () {
     let topicParam = null;
     let initialWeak = false;
     let focusQuizId = null;
-    if (param === `auto` || (param && param.startsWith(`auto/`))) {
+    let entry = null; // v14: #quiz/freq/… で開いたときの出題頻度の条件 { freq } / { theme }
+    if (param && param.startsWith(`freq/`)) {
+      const v = param.slice(`freq/`.length);
+      if (v !== `all` && validFreq(v) === v) entry = { freq: v };
+      else if (validTheme(v)) entry = { theme: v };
+    } else if (param === `auto` || (param && param.startsWith(`auto/`))) {
       startMode = `auto`;
       const parts = param === `auto` ? [] : param.slice(`auto/`.length).split(`/`);
       if (parts[0] === `weak`) initialWeak = true;
@@ -128,6 +170,8 @@ window.Views.quiz = (function () {
     try { dueNow = window.Drill ? Drill.dueCount() : 0; } catch (e) { dueNow = 0; }
 
     okRun = 0;
+    // v14: 「問題」のタブの最初の画面(#quiz)だけ、ほかの練習の入口のタイルを出す(問題・トピックを指定して開いたときは出さない)
+    const hubTiles = !param && window.Nav && Nav.tilesHtml ? Nav.tilesHtml(HUB_VIEWS, `ほかの練習`) : ``;
     const wrap = document.createElement(`div`);
     wrap.className = `view quiz-view quiz-stepper`;
     wrap.innerHTML = `
@@ -136,6 +180,7 @@ window.Views.quiz = (function () {
         ${infoBtnHtml(`4択問題について`)}
         ${dueNow ? `<a class="chip chip-small quiz-due-chip" href="#quiz/due" aria-label="解き直し ${dueNow}問">${ic(`repeat`, 14)}<span>解き直し</span><span class="num">${dueNow}</span></a>` : ``}
       </div>
+      ${hubTiles}
       <div class="segmented quiz-mode" role="group" aria-label="出題モード" data-role="mode-chips">
         <button type="button" class="segmented-item" data-mode="fixed" aria-pressed="${startMode === `fixed`}">${ic(`list`, 16)}確認問題(${fixedCount}問)</button>
         <button type="button" class="segmented-item" data-mode="auto" aria-pressed="${startMode === `auto`}">${ic(`sparkles`, 16)}自動生成クイズ</button>
@@ -176,7 +221,8 @@ window.Views.quiz = (function () {
     });
 
     if (startMode === `auto`) renderAuto(body, initialTopic, initialWeak, ctx);
-    else renderFixed(body, initialTopic, focusQuizId, ctx);
+    else renderFixed(body, initialTopic, focusQuizId, ctx, entry);
+    if (param && param.startsWith(`freq/`) && !entry) UI.toast(`指定された論点が見つかりませんでした`, `default`);
   }
 
   // デスクトップのキーボード操作: 1〜4 で画面内の最初の未回答の問題に回答、Enter で次の問題へ
@@ -839,6 +885,8 @@ window.Views.quiz = (function () {
       topic: validTopic(raw.topic) ? raw.topic : ALL,
       status: STATUSES.includes(raw.status) ? raw.status : `all`,
       format: validFormat(raw.format),
+      freq: validFreq(raw.freq),
+      theme: validTheme(raw.theme),
       shown: Number.isInteger(shown) && shown > 0 ? Math.min(shown, total) : 0,
       // 直リンクで途中から表示した一覧の先頭の位置(0 = 最初から)
       start: Number.isInteger(start) && start > 0 ? Math.min(start, total - 1) : 0,
@@ -848,21 +896,31 @@ window.Views.quiz = (function () {
     };
   }
 
-  function renderFixed(body, initialTopic, focusQuizId, ctx) {
+  // entry(v14): #quiz/freq/… で開いたとき { freq: 'A' | 'AB' }(ほかの条件を外して保存)/ { theme: テーマID }(ほかの条件を外す。保存しない)
+  function renderFixed(body, initialTopic, focusQuizId, ctx, entry) {
     const qHistory = getHistory();
     const saved = parseQState(historyState().qState);
     const levelState = { value: ALL };
     const topicState = { value: ALL };
     let statusFilter = `all`;
     let formatFilter = `all`;
+    let freqFilter = `all`;
+    let themeFilter = null;
     if (saved) {
       // 戻る・再読み込み: 絞り込み・表示件数・回答済みのカードを元に戻す
       levelState.value = saved.level;
       topicState.value = saved.topic;
       statusFilter = saved.status;
       formatFilter = saved.format;
+      freqFilter = saved.freq;
+      themeFilter = saved.theme;
     } else if (focusQuizId) {
       // 直リンクは全問の中から探す
+    } else if (entry && entry.theme) {
+      themeFilter = entry.theme;
+    } else if (entry && entry.freq) {
+      freqFilter = entry.freq;
+      savePrefs({ level: ALL, topic: ALL, status: `all`, format: `all`, freq: freqFilter });
     } else if (initialTopic && initialTopic !== ALL) {
       topicState.value = initialTopic;
     } else {
@@ -871,6 +929,7 @@ window.Views.quiz = (function () {
       topicState.value = prefs.topic;
       statusFilter = prefs.status;
       formatFilter = prefs.format;
+      freqFilter = prefs.freq;
     }
     let restoreShown = saved ? saved.shown : 0;
     let restoreStart = saved ? saved.start : 0;
@@ -913,10 +972,10 @@ window.Views.quiz = (function () {
 
     function saveState() {
       const cur = stepCurrent(list);
-      patchHistoryState({ qState: { level: levelState.value, topic: topicState.value, status: statusFilter, format: formatFilter, shown: shownCount, start: startIdx, answered: answeredMap, cur: cur ? cur.dataset.quizId : null } });
+      patchHistoryState({ qState: { level: levelState.value, topic: topicState.value, status: statusFilter, format: formatFilter, freq: freqFilter, theme: themeFilter, shown: shownCount, start: startIdx, answered: answeredMap, cur: cur ? cur.dataset.quizId : null } });
     }
 
-    const cond = () => ({ level: levelState.value, topic: topicState.value, status: statusFilter, format: formatFilter });
+    const cond = () => ({ level: levelState.value, topic: topicState.value, status: statusFilter, format: formatFilter, freq: freqFilter, theme: themeFilter });
 
     // 条件に合う問題(restoring: 戻るで再現する回答済みのカードは、条件から外れていても残す)
     function filterQuestions(c, restoring) {
@@ -924,6 +983,7 @@ window.Views.quiz = (function () {
         if (c.level !== ALL && q.level !== c.level) return false;
         if (c.topic !== ALL && !(q.topicIds || []).includes(c.topic)) return false;
         if (!matchesFormat(q, c.format)) return false;
+        if (!matchesFreq(q, c.freq || `all`, c.theme || null)) return false;
         if (restoring && answeredMap[q.id] != null) return true;
         if (c.status === `ng` && qHistory[q.id] !== `ng`) return false;
         if (c.status === `unanswered` && (qHistory[q.id] === `ok` || qHistory[q.id] === `ng`)) return false;
@@ -935,8 +995,10 @@ window.Views.quiz = (function () {
     // 選んでいる条件: ボタンの件数と、外せるチップ(「宅建業法 ×」)
     function paintFilterRow() {
       const parts = [];
+      if (themeFilter) parts.push({ key: `theme`, label: `論点: ${themeName(themeFilter)}` });
       if (levelState.value !== ALL) parts.push({ key: `level`, label: levelLabel(levelState.value) });
       if (formatFilter !== `all`) parts.push({ key: `format`, label: FORMAT_LABELS[formatFilter] });
+      if (freqFilter !== `all` && !themeFilter) parts.push({ key: `freq`, label: FREQ_CHIPS[freqFilter] });
       if (topicState.value !== ALL) parts.push({ key: `topic`, label: topicLabel(topicState.value) });
       if (statusFilter !== `all`) parts.push({ key: `status`, label: STATUS_LABELS[statusFilter] });
       filterCount.hidden = !parts.length;
@@ -951,7 +1013,10 @@ window.Views.quiz = (function () {
       topicState.value = next.topic;
       statusFilter = next.status;
       formatFilter = validFormat(next.format);
-      savePrefs({ level: next.level, topic: next.topic, status: next.status, format: formatFilter });
+      freqFilter = validFreq(next.freq);
+      themeFilter = validTheme(next.theme);
+      // テーマ(論点)はその場だけの条件なので保存しない
+      savePrefs({ level: next.level, topic: next.topic, status: next.status, format: formatFilter, freq: freqFilter });
       renderList();
       if (window.scrollY > 0) window.scrollTo(0, 0);
     }
@@ -967,6 +1032,8 @@ window.Views.quiz = (function () {
       if (b.dataset.clear === `level`) next.level = ALL;
       else if (b.dataset.clear === `topic`) next.topic = ALL;
       else if (b.dataset.clear === `format`) next.format = `all`;
+      else if (b.dataset.clear === `freq`) next.freq = `all`;
+      else if (b.dataset.clear === `theme`) next.theme = null;
       else next.status = `all`;
       applyFilter(next);
       // 外したチップが消えるので、フォーカスは「絞り込み」ボタンへ
@@ -980,6 +1047,8 @@ window.Views.quiz = (function () {
       content.className = `filter-sheet`;
       // 形式(個数・組合せ)は、その問題があるときだけ出す。件数は今選んでいるほかの条件で数える
       const showFormat = hasStyled();
+      // v14: 出題頻度(宅建士試験)は、データがあり、宅建士試験が目的・目標(未設定も含む)か、絞り込み中のときだけ出す
+      const showFreq = freqOn() && (Freq.forTakken() || draft.freq !== `all` || !!draft.theme);
       content.innerHTML = `
         <p class="filter-sheet-label" id="qf-level-label">レベル</p>
         <div class="chip-row" data-role="level-chips" role="group" aria-labelledby="qf-level-label"></div>
@@ -988,6 +1057,12 @@ window.Views.quiz = (function () {
         <div class="segmented filter-sheet-format" role="group" aria-labelledby="qf-format-label" data-role="format">
           ${FORMATS.map((f) => `<button type="button" class="segmented-item" data-format="${f}" aria-pressed="false"><span>${FORMAT_LABELS[f]}</span><span class="segmented-count num" data-role="format-count"></span></button>`).join(``)}
         </div>` : ``}
+        ${showFreq ? `
+        <p class="filter-sheet-label" id="qf-freq-label">出題頻度(宅建士試験)</p>
+        <div class="segmented filter-sheet-freq" role="group" aria-labelledby="qf-freq-label" aria-describedby="qf-freq-note" data-role="freq">
+          ${FREQS.map((f) => `<button type="button" class="segmented-item" data-freq="${f}" aria-pressed="false"><span>${FREQ_LABELS[f]}</span><span class="segmented-count num" data-role="freq-count"></span></button>`).join(``)}
+        </div>
+        <p class="filter-sheet-note freq-sheet-note" id="qf-freq-note" data-role="freq-note"></p>` : ``}
         <p class="filter-sheet-label" id="qf-topic-label">トピック</p>
         <div class="chip-row filter-sheet-topics" data-role="topic-chips" role="group" aria-labelledby="qf-topic-label"></div>
         <p class="filter-sheet-label" id="qf-status-label">表示する問題</p>
@@ -1002,6 +1077,8 @@ window.Views.quiz = (function () {
       const applyBtn = content.querySelector(`[data-role="filter-apply"]`);
       const statusEl = content.querySelector(`[data-role="status"]`);
       const formatEl = content.querySelector(`[data-role="format"]`);
+      const freqEl = content.querySelector(`[data-role="freq"]`);
+      const freqNote = content.querySelector(`[data-role="freq-note"]`);
       const paints = [];
       function paint() {
         paints.forEach((p) => p());
@@ -1011,6 +1088,17 @@ window.Views.quiz = (function () {
             b.setAttribute(`aria-pressed`, String(b.dataset.format === draft.format));
             b.querySelector(`[data-role="format-count"]`).textContent = `${filterQuestions(Object.assign({}, draft, { format: b.dataset.format }), false).length}問`;
           });
+        }
+        if (freqEl) {
+          // テーマ(論点)を指定しているあいだは使わない(外すボタンを出す)
+          freqEl.querySelectorAll(`[data-freq]`).forEach((b) => {
+            b.setAttribute(`aria-pressed`, String(!draft.theme && b.dataset.freq === draft.freq));
+            b.disabled = !!draft.theme;
+            b.querySelector(`[data-role="freq-count"]`).textContent = draft.theme ? `` : `${filterQuestions(Object.assign({}, draft, { freq: b.dataset.freq }), false).length}問`;
+          });
+          freqNote.innerHTML = draft.theme
+            ? `<span>論点「${esc(themeName(draft.theme))}」の問題だけを表示しています。</span><button type="button" class="link-btn" data-role="theme-clear">論点の指定を外す</button>`
+            : `<span>過去の本試験で出た回数のランク(目安)です。</span>`;
         }
         applyBtn.textContent = `この条件で表示(${filterQuestions(draft, false).length}問)`;
       }
@@ -1030,11 +1118,29 @@ window.Views.quiz = (function () {
           paint();
         });
       }
+      if (freqEl) {
+        freqEl.addEventListener(`click`, (e) => {
+          const b = e.target.closest(`[data-freq]`);
+          if (!b || b.disabled || b.dataset.freq === draft.freq) return;
+          draft.freq = b.dataset.freq;
+          paint();
+        });
+        freqNote.addEventListener(`click`, (e) => {
+          if (!e.target.closest(`[data-role="theme-clear"]`)) return;
+          draft.theme = null;
+          paint();
+          // 押したボタンが消えるので、フォーカスは出題頻度の「すべて」へ
+          const first = freqEl.querySelector(`[data-freq]`);
+          if (first) first.focus({ preventScroll: true });
+        });
+      }
       content.querySelector(`[data-role="filter-clear"]`).addEventListener(`click`, () => {
         draft.level = ALL;
         draft.topic = ALL;
         draft.status = `all`;
         draft.format = `all`;
+        draft.freq = `all`;
+        draft.theme = null;
         paint();
       });
       paint();
@@ -1130,7 +1236,8 @@ window.Views.quiz = (function () {
         <div class="card-actions quiz-finish-actions">
           <button type="button" class="btn btn-lg" data-role="end-filter">${filterIconHtml()}条件を変えて解く</button>
           <button type="button" class="btn btn-secondary btn-lg" data-role="end-first">${ic(`repeat`)}最初の問題へ</button>
-          <a class="btn btn-ghost" href="#home">${ic(`home`)}ホームへ</a>
+          ${themeFilter && freqOn() && Freq.statementCountOf(themeFilter) ? `<a class="btn btn-secondary btn-lg" href="#ox/freq/${encodeURIComponent(themeFilter)}" data-role="end-ox">${ic(`o-x`)}この論点を○×で確かめる</a>` : ``}
+          ${themeFilter ? `<a class="btn btn-ghost" href="#freq">${ic(`star`)}出題頻度ランクへ</a>` : `<a class="btn btn-ghost" href="#home">${ic(`home`)}ホームへ</a>`}
         </div>
       `;
       endEl.querySelector(`[data-role="end-filter"]`).addEventListener(`click`, () => filterBtn.click());
@@ -1366,6 +1473,12 @@ window.Views.quiz = (function () {
 
   let afterSeq = 0;
 
+  // v14: 宅建士試験の出題頻度ランクの札(テーマ(論点)のある問題だけ。js/freq.js)
+  function freqChipHtml(quizId) {
+    const t = freqOn() ? Freq.themeOfQuiz(quizId) : null;
+    return t ? Freq.chipFor(t, { cls: `quiz-freq-chip` }) : ``;
+  }
+
   // 確認問題のカード。topics.js(トピック詳細)・bookmarks.js からも使う
   // opts: { history, onResult(result, card, picked, restored, drill), onGotoNg, onBookmark(on, card), restoreChoice, onUnsure(card, on) }
   // onUnsure: 「勘で当たった」を付け外ししたあと(解き直しの画面だけが使う)
@@ -1395,6 +1508,7 @@ window.Views.quiz = (function () {
     card.innerHTML = `
       <div class="quiz-card-head">
         <span class="badge badge-${q.level}">${q.level}</span>
+        ${freqChipHtml(q.id)}
         ${isMc ? `` : `<span class="source-tag">記述</span>`}
         ${style ? `<span class="source-tag source-tag-style">${STYLE_LABELS[style]}</span>` : ``}
         ${priorTag}
@@ -2202,6 +2316,8 @@ window.Views.quiz = (function () {
       stats[termId][correct ? `correct` : `wrong`] = (Number(stats[termId][correct ? `correct` : `wrong`]) || 0) + 1;
       Storage.set(`autoQuizStats`, stats);
       if (window.Streak) Streak.recordToday();
+      // v14: 経験値(自動生成クイズ。確認問題の4択は AnswerLog.record が数える)
+      try { if (window.Xp) Xp.award(`mc`, { id: `auto:${termId}`, correct: !!correct, unsure: false, src: `auto` }); } catch (e) { console.error(`[クイズ] 経験値を記録できませんでした`, e); }
       if (!correct) Srs.grade(termId, 1, { silent: true });
     }
 

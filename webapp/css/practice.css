@@ -935,3 +935,23 @@ body.has-storage-banner .review-view .review-grade-row { bottom: calc(var(--stor
   .review-view .card-grid.single-col, .review-view .review-grade-row, .review-tip, .rv-done { max-width: 640px; }
   .review-view [data-role="review-area"] { scroll-margin-top: var(--sp-4); }
 }
+/* ---------- v14: 「問題」「学ぶ」の画面の入口のタイル(js/nav.js の Nav.tilesHtml。タイルの形はホームの .quick) ---------- */
+/* PC はサイドバーに同じ入口があるので出さない(js/nav.js の ITEMS)。スマホ: 1行に並べて横にすべらせる(画面全体は横にスクロールしない。ふちと押したときの沈み・フォーカスの枠が切れないよう内側に余白)。
+   広い画面: 1行に同じ幅で並べ、説明は省く(問題が画面の上の方から始まるように。名前はステッカーの下)。2つ以下(is-few)は横に2つ(とても狭い画面では縦に) */
+.hub-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(184px, 1fr); gap: var(--sp-3); margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-1)) var(--sp-3); padding: var(--sp-1) var(--sp-1) 10px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scroll-padding-inline: var(--sp-1); scrollbar-width: thin; }
+.hub-tile { scroll-snap-align: start; }
+/* 名前と説明は省略せずに折り返す(home.css の .quick b・.quick small より強く)。語の途中(「今日のチャレ/ンジ」)で切らない */
+.hub-tiles .hub-tile :is(b, small) { overflow: visible; white-space: normal; text-overflow: clip; word-break: auto-phrase; }
+/* 名前の横の札(条文穴埋めの「税理士」。メニューの .more-row-badge と同じ形) */
+.hub-tile-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; background: var(--color-surface-muted); color: var(--color-text-muted); font-family: var(--font-sans); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.6; vertical-align: 1px; white-space: nowrap; }
+.hub-tiles.is-few { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+@media (max-width: 359px) { .hub-tiles.is-few { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 768px) {
+  .hub-tiles { grid-auto-columns: minmax(0, 1fr); overflow: visible; }
+  .hub-tiles:not(.is-few) .hub-tile small { display: none; }
+  /* 1行に5つ並べるときは、ステッカーの下に名前(名前を途中で折り返さないように) */
+  .hub-tiles:not(.is-few) .hub-tile { flex-direction: column; justify-content: center; gap: 6px; padding: 10px 8px; text-align: center; }
+  .hub-tiles:not(.is-few) .hub-tile > span:last-child { align-items: center; }
+}
+/* PC(サイドバーのある幅)はサイドバーに同じ入口があるので出さない */
+@media (min-width: 1024px) { .hub-tiles { display: none; } }

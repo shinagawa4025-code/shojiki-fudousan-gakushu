@@ -26,6 +26,8 @@
 
 /* 上: 記録のカウンター+マスコット(スマホは縦に、PC は左右に) */
 .home-head { display: flex; flex-direction: column; gap: var(--sp-4); margin: var(--sp-1) 0 var(--sp-6); }
+/* v14: レベルと経験値の置き場所(js/xp.js が描く。中身がないうちは場所を取らない) */
+.home-level:empty { display: none; }
 
 /* 記録のカウンター(3つ。押すとそれぞれの記録へ) */
 .home-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--card-border); border-radius: var(--radius-card); background: var(--color-surface); box-shadow: var(--shadow-card); }

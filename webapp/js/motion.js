@@ -7,7 +7,7 @@
 // - streak(bar, n): 連続正解 3・5・10(以後10ごと)で、判定のバーに「n問連続!」と小さな紙吹雪
 // - 今日の目標の達成('goal:met'。js/goals.js が1日1回送る)で、画面の上に小さなお祝い
 // - tapMascot(el): ホームのマスコットをタップすると跳ねて表情が変わる(飾りなので読み上げない・フォーカスしない)
-// - busy(blocking): 演出を待つべきか(模擬試験の解答中・初回ガイド・裏のタブ。blocking はさらに、ほかのダイアログ・4択/○×/復習の途中)
+// - busy(blocking): 演出を待つべきか(模擬試験の解答中・初回ガイド・裏のタブ。blocking はさらに、ほかのダイアログ・4択/○×/復習の途中と、addBusyCheck(fn) で足した条件)
 window.Motion = (function () {
   const doc = document;
   const reduced = () => !!(window.matchMedia && window.matchMedia(`(prefers-reduced-motion: reduce)`).matches);
@@ -15,11 +15,16 @@ window.Motion = (function () {
   function tabGet(k) { try { return JSON.parse(sessionStorage.getItem(`fudomana.${k}`)); } catch (e) { return null; } }
   function tabSet(k, v) { try { sessionStorage.setItem(`fudomana.${k}`, JSON.stringify(v)); } catch (e) { /* 無視 */ } }
 
+  // (v14)詳細の束の画面が「途中」の条件を足す(addBusyCheck。js/cloze.js の数字ドリル・比較表/条文の穴埋め)。
+  // 画面の部品の名前はここに書かない(本体のコードに出てくる名前の規則は、最初の表示の CSS に入るため。tools/lib/cssplit.js)
+  const busyChecks = [];
+  function addBusyCheck(fn) { if (typeof fn === `function`) busyChecks.push(fn); }
   function busy(blocking) {
     const b = doc.body;
     if (!b || doc.visibilityState === `hidden` || b.classList.contains(`exam-active`) || doc.querySelector(`.onb-overlay`)) return true;
     if (!blocking) return false;
     if (doc.querySelector(`.modal-overlay, .sheet-backdrop, .ox-view.is-run, .quiz-stepper:not(.is-finished)`)) return true;
+    if (busyChecks.some((fn) => { try { return !!fn(); } catch (e) { return false; } })) return true;
     try { return !!doc.querySelector(`.review-view:not(:has(.rv-done)) .flip-card`); } catch (e) { return false; }
   }
 
@@ -187,5 +192,5 @@ window.Motion = (function () {
     el.addEventListener(`click`, () => Mascot.react(el));
   }
 
-  return { page, countUp, countIn, streak, burst, tapMascot, busy, reduced };
+  return { page, countUp, countIn, streak, burst, tapMascot, busy, addBusyCheck, reduced };
 })();

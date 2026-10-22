@@ -13,6 +13,11 @@
 //   8. 見出し用の書体(警告のみ): 画面の文言・データの名前に、fonts/fudomana-rounded-800-*.woff2 にない文字がない。
 //      最初の画面の漢字が kanji-core のファイルにあり、css/style.css の kanji-core の unicode-range とそのファイルの文字が一致する
 //      (あれば node tools/font_subset.js で作り直す。作り直さなくても、その文字だけ端末の書体で表示される)
+//   9. 機能ごとの確認(v14〜): tools/lib/checks/*.js をすべて実行する(名前の順)。各ファイルは
+//      module.exports = function (ctx, info) { return { errors: [...], warnings: [...] }; } の形(文字列の配列)。
+//      ctx = 3 で読み込んだアプリ(Node の vm。APP_DATA・AppIndex・QuizEngine・Search・Stats・DateUtil・Storage など。画面のコードは読まない。
+//      配列は別の vm のものなので instanceof Array ではなく Array.isArray で見る)、info = { webapp: webapp のフォルダ, root: リポジトリの直下 }。
+//      errors は公開を止め、warnings は知らせるだけ。例外を投げたらエラーとして扱う
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -70,8 +75,10 @@ step('スクリプトの存在と構文');
 step('データの読み込みと整合性(AppIndex.issues)');
 let summary = null;
 let styledNote = '';
+let appCtx = null; // 9. の機能ごとの確認に渡す
 try {
   const { ctx, logs } = loadApp(WEBAPP, { hostname: 'localhost' });
+  appCtx = ctx;
   summary = summarize(ctx);
   const issues = ctx.AppIndex ? ctx.AppIndex.issues : null;
   if (!issues) E('AppIndex が作られませんでした');
@@ -178,6 +185,34 @@ try {
   }
 } catch (e) {
   W(`見出し用の書体の確認ができませんでした: ${e.message}`);
+}
+
+// 9. 機能ごとの確認(tools/lib/checks/*.js)
+step('機能ごとの確認(tools/lib/checks/*.js)');
+{
+  const dir = path.join(__dirname, 'lib', 'checks');
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.js')).sort() : [];
+  if (!files.length) console.log('なし');
+  else if (!appCtx) E('データを読み込めなかったため、機能ごとの確認(tools/lib/checks)を実行できません');
+  else {
+    const info = { webapp: WEBAPP, root: path.resolve(__dirname, '..') };
+    files.forEach((f) => {
+      const rel = `tools/lib/checks/${f}`;
+      try {
+        const fn = require(path.join(dir, f));
+        if (typeof fn !== 'function') { E(`${rel} が関数を書き出していません(module.exports = function (ctx, info) { … })`); return; }
+        const r = fn(appCtx, info);
+        if (!r || typeof r !== 'object') { E(`${rel} の結果が { errors: [], warnings: [] } の形ではありません`); return; }
+        const errs = Array.isArray(r.errors) ? r.errors : [];
+        const ws = Array.isArray(r.warnings) ? r.warnings : [];
+        errs.forEach((m) => E(`${f}: ${m}`));
+        ws.forEach((m) => W(`${f}: ${m}`));
+        console.log(`${f}: エラー ${errs.length}件・警告 ${ws.length}件`);
+      } catch (e) {
+        E(`${rel} を実行できませんでした: ${e.message}`);
+      }
+    });
+  }
 }
 
 console.log(`\n確認の結果: エラー ${errors.length}件・警告 ${warns.length}件${summary ? `(問題 ${summary.quiz}${styledNote}・○×の文 ${summary.statements})` : ''}`);

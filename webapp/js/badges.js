@@ -1,7 +1,7 @@
 // バッジ(v12): 学習の記録から自動で付く達成の印。初めて使うときは取得済みのものを通知せずに反映し、以後は新しく取ったときだけ知らせる
 // 保存: Storage `badges` = { seeded: true, at: { [バッジID]: 'YYYY-MM-DD' } }
 // 判定に使うのは既存の記録だけ(activityLog・quizHistory・quizUnsure・oxStats・examHistory・srsCards・flashcards・basicsProgress・
-// studyTime・goalDays・drillStats)。新しい記録は作らない
+// studyTime・goalDays・drillStats。v14 から経験値 xp(js/xp.js)・今日のチャレンジ challenge)。新しい記録は作らない
 // 確かめるのは、学習の操作('study:action')・学習時間の保存・目標の達成のあと2秒以上たってから、手の空いたとき(最初の表示を遅らせない)
 window.Badges = (function () {
   const KEY = `badges`;
@@ -109,6 +109,16 @@ window.Badges = (function () {
     c.studySec = once(`studySec`, () => (window.StudyTime ? StudyTime.totalSeconds() : 0));
     c.goalDays = once(`goalDays`, () => (window.Goals ? Goals.metDaysCount() : 0));
     c.graduated = once(`graduated`, () => (window.Drill && Drill.stats ? Drill.stats().graduated : cnt(obj(`drillStats`).graduated)));
+    // v14: 経験値(js/xp.js)と、レベル L になるのに要る XP(Xp がない版でも同じ式)
+    c.xp = once(`xp`, () => (window.Xp && Xp.total ? Xp.total() : 0));
+    c.lvStart = (L) => (window.Xp && Xp.startOf ? Xp.startOf(L) : Math.round(30 * Math.pow(L - 1, 1.5)) * 10);
+    // v14: 今日のチャレンジ(Storage `challenge` = { best: 最後までやった回の最高の正解数, days: { 日付: { best, runs: 最後までやった回数 } } })
+    c.challenge = once(`challenge`, () => {
+      const v = obj(`challenge`);
+      const days = Storage.isPlainObject(v.days) ? v.days : {};
+      const runs = Object.keys(days).reduce((s, d) => s + (Storage.isPlainObject(days[d]) ? cnt(days[d].runs) : 0), 0);
+      return { best: cnt(v.best), runs };
+    });
     return c;
   }
 
@@ -145,6 +155,13 @@ window.Badges = (function () {
     { id: `hours50`, name: `学習50時間`, desc: `学習時間の合計が50時間になる(操作している時間だけを数えます)`, icon: `clock`, progress: (c) => p(c.studySec() / 3600, 50, `時間`) },
     { id: `goal7`, name: `目標達成7日`, desc: `1日の目標を達成した日が合計7日になる`, icon: `star`, progress: (c) => p(c.goalDays(), 7, `日`) },
     { id: `styled10`, name: `個数・組合せ10問`, desc: `4択問題で、個数問題・組合せ問題に10問正解する(模擬試験は含みません。同じ問題は1問と数えます)`, icon: `grid`, progress: (c) => p(c.mc().styledOk, 10, `問`) },
+    // v14: レベル(進み具合はそのレベルまでの経験値)と今日のチャレンジ
+    ...[[5, `star`], [10, `star`], [20, `star-fill`], [30, `star-fill`], [50, `trophy`]].map(([L, icon]) => ({
+      id: `level${L}`, name: `レベル${L}`, desc: `経験値をためて Lv.${L} になる(4択・○×・復習などで経験値がたまります)`, icon,
+      progress: (c) => p(c.xp(), c.lvStart(L), `XP`),
+    })),
+    { id: `challengeFirst`, name: `チャレンジ初挑戦`, desc: `今日のチャレンジ(3分間の○×)を最後までやる`, icon: `bolt`, progress: (c) => p(c.challenge().runs, 1, `回`) },
+    { id: `challenge30`, name: `チャレンジ30問`, desc: `今日のチャレンジの1回で、30問以上正解する`, icon: `bolt`, progress: (c) => p(c.challenge().best, 30, `問`) },
   ];
 
   function isMet(pr) {

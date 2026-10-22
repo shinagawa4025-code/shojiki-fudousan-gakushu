@@ -491,6 +491,14 @@ window.Views.home = (function () {
     return sec;
   }
 
+  // v14: レベルと経験値の置き場所(記録のカウンターのすぐ下)。中身は js/xp.js の Xp.renderHome が描く(なければ空のまま。CSS で隠す)
+  function levelMount() {
+    const box = el(`div`, `home-level`);
+    box.dataset.role = `level`;
+    try { if (window.Xp && Xp.renderHome) Xp.renderHome(box); } catch (e) { console.error(`[ホーム] レベルを表示できませんでした`, e); }
+    return box;
+  }
+
   // ---- マスコットのあいさつ(表情とひとことは、いまの記録から1つだけ選ぶ)と大きな主ボタン ----
   function moodOf(ctx, st) {
     const plan = ctx.plan;
@@ -1481,6 +1489,7 @@ window.Views.home = (function () {
       go = hero.primary;
     }
     head.appendChild(statusEl(ctx));
+    head.appendChild(levelMount());
     head.appendChild(greetEl(ctx, st, go));
     if (!side.children.length) wrap.querySelector(`.home-layout`).classList.add(`is-single`);
     live = { wrap, main, ctx, day: DateUtil.today() };

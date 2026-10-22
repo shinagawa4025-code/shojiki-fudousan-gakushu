@@ -27,6 +27,8 @@ window.AppData = (function () {
   const cfg = window.__APP_DETAIL__ && typeof window.__APP_DETAIL__.src === `string` ? window.__APP_DETAIL__ : null;
   const CSS = cfg && typeof cfg.css === `string` && cfg.css ? cfg.css : null; // 詳細の CSS(古いビルドの本体にはない)
   const PENDING = `…`; // 詳細が届くまでの仮の値(build.js と同じ)
+  // v14: 丸ごと詳細に回した項目(tools/lib/split.js の DETAIL_KEYS)の入れ物の名前。本体ではその項目が null
+  const WHOLE = `$whole`;
   const RETRY_DELAYS = [1500, 4000]; // 読み込みに失敗したときの再試行までの待ち時間
   // 詳細より先に呼ばれることがある、DOM 要素を返す関数(読み込み中の表示を返し、届いたら差し替える)
   //   quiz.buildFixedCard: 初回ガイドの「まずは1問」(js/onboarding.js)
@@ -215,6 +217,7 @@ window.AppData = (function () {
   }
 
   // data: { 集まりの名前: { f: [項目名…], r: [[id, 値…], …] } }。値 0 は「その項目は本体のまま」
+  //       v14: data.$whole = { 項目名: 値 }(丸ごと詳細に回した項目。本体では null)
   // 先にすべて確かめてから置き換える(途中で食い違いが見つかったら何も変えずに false)
   function mergeDetail(id, data) {
     if (!cfg || id !== cfg.id) throw new Error(`詳細データの版が本体と違います(${id} / ${cfg ? cfg.id : `なし`})`);
@@ -223,6 +226,13 @@ window.AppData = (function () {
     const ops = [];
     Object.keys(data).forEach((key) => {
       const part = data[key];
+      if (key === WHOLE) {
+        Object.keys(part).forEach((k) => {
+          if (!hasOwn(D, k) || D[k] !== null) throw new Error(`詳細データの ${k} が本体で仮の値(null)になっていません`);
+          ops.push([D, k, part[k]]);
+        });
+        return;
+      }
       const list = Array.isArray(D[key]) ? D[key] : null;
       if (!list) throw new Error(`詳細データの ${key} が本体にありません`);
       const byId = Object.create(null);

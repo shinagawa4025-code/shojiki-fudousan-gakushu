@@ -16,6 +16,8 @@ window.Views.settings = (function () {
     // v12: 解答の記録・自信なし・学習時間・目標・バッジ・各機能の設定
     answerDaily: `object`, quizUnsure: `object`, studyTime: `object`, dailyGoal: `object`, goalDays: `object`, badges: `object`,
     drillStats: `object`, answerPrefs: `object`, predictPrefs: `object`, planPrefs: `object`,
+    // v14: 経験値・今日のチャレンジ・数字まとめ/比較表/条文穴埋めの記録・それぞれの設定
+    xp: `object`, challenge: `object`, numbersStats: `object`, compareStats: `object`, joubunStats: `object`, toolPrefs: `object`, freqPrefs: `object`,
     examSession: `object|null`, examRetryResult: `object|null`,
     examHistory: `array`, examTargets: `array`,
     reviewNewLimit: `number`, ttsRate: `number`, lastBackupAt: `number`, backupNoteDismissedAt: `number`,

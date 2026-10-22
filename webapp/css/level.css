@@ -1,0 +1,134 @@
+/* レベルと経験値・今日のチャレンジ(#challenge)・レベルアップのお祝い(v14。js/xp.js・js/views/challenge.js)
+   1. ホームのレベルの札  2. 進捗のカード  3. レベルアップのダイアログ(バッジの知らせ .fd-badge と同じ形)  4. 今日のチャレンジ
+   動き(お祝い・正誤の光り方)は prefers-reduced-motion: no-preference の中だけ */
+
+/* ---------- 1. ホームのレベルの札(記録のカウンターの下。左: レベルのメダルと次のレベルまでのバー / 右: 今日のチャレンジ) ---------- */
+.xp-home { display: flex; align-items: stretch; overflow: hidden; border: 1px solid var(--card-border); border-radius: var(--radius-card); background: var(--color-surface); box-shadow: var(--shadow-card); }
+.xp-main, .xp-ch { display: flex; align-items: center; min-width: 0; color: var(--color-text); text-decoration: none; transition: background var(--dur-1); }
+.xp-main { flex: 1 1 auto; gap: var(--sp-3); padding: 10px var(--sp-3); }
+.xp-main:active, .xp-ch:active { background: var(--color-press); }
+@media (hover: hover) { :is(.xp-main, .xp-ch):hover { background: var(--color-surface-muted); } }
+:is(.xp-main, .xp-ch):focus-visible { outline-offset: -4px; border-radius: var(--radius-card); }
+/* 金色の丸いメダル(Lv. と数字) */
+.xp-medal { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%; background: var(--gold); color: var(--gold-ink); box-shadow: inset 0 0 0 3px var(--gold-lip), 0 3px 0 var(--gold-lip); font-family: var(--font-display); font-weight: var(--fw-display); line-height: 1; }
+.xp-medal small { font-size: 10px; letter-spacing: .02em; }
+.xp-medal b { font-size: 1.25rem; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.xp-body { display: flex; flex-direction: column; gap: 5px; flex: 1 1 auto; min-width: 0; }
+.xp-next { font-size: var(--fs-xs); font-weight: 700; line-height: 1.3; color: var(--color-heading); }
+.xp-today { font-size: var(--fs-2xs); font-weight: 700; line-height: 1.2; color: var(--gold-text); font-variant-numeric: tabular-nums; }
+/* 次のレベルまでのバー(金色) */
+.xp-bar { position: relative; display: block; height: 10px; border-radius: var(--radius-pill); background: var(--color-surface-muted); box-shadow: inset 0 0 0 1px var(--color-border); overflow: hidden; }
+.xp-bar > span { position: absolute; top: 0; bottom: 0; left: 0; border-radius: inherit; background: var(--gold); }
+/* 今日のチャレンジ(稲妻のステッカー。区切りの線で分ける) */
+.xp-ch { position: relative; flex: 0 0 auto; gap: var(--sp-2); padding: 8px var(--sp-3) 8px var(--sp-4); }
+.xp-ch::before { content: ""; position: absolute; top: 12px; bottom: 12px; left: 0; border-left: 2px solid var(--color-border); }
+.xp-ch > .icon { flex-shrink: 0; width: 34px; height: 34px; padding: 7px; border-radius: 50%; background: var(--gold); color: var(--gold-ink); }
+.xp-ch > span { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.xp-ch b { font-family: var(--font-display); font-size: var(--fs-sm); font-weight: var(--fw-display); color: var(--color-heading); white-space: nowrap; }
+.xp-ch small { font-size: var(--fs-2xs); font-weight: 700; color: var(--color-text-muted); white-space: nowrap; }
+/* スマホ(狭い幅)と PC(右の細い列に置く)は2段: 上にレベル、下に今日のチャレンジ(横いっぱい) */
+@media (max-width: 599px), (min-width: 1280px) {
+  .xp-home { flex-direction: column; }
+  .xp-ch { min-height: 48px; padding: 6px var(--sp-3); }
+  .xp-ch::before { top: 0; bottom: auto; left: 12px; right: 12px; border-left: 0; border-top: 2px solid var(--color-border); }
+  .xp-ch > .icon { width: 30px; height: 30px; padding: 6px; }
+  .xp-ch > span { flex: 1 1 auto; flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--sp-2); }
+}
+/* PC(1280px〜)のホームは左にあいさつ、右に記録のカウンターとレベル */
+@media (min-width: 1280px) {
+  .home-head > .home-level { grid-column: 2; grid-row: 2; }
+  .home-head > .home-greet { grid-row: 1 / span 2; }
+}
+
+/* ---------- 2. 進捗のカード(LevelUi.renderProgress) ---------- */
+.xp-card { margin: 0; }
+.xp-prog-head { display: flex; align-items: center; gap: var(--sp-4); margin-top: var(--sp-3); }
+.xp-medal-lg { width: 72px; height: 72px; box-shadow: inset 0 0 0 4px var(--gold-lip), 0 4px 0 var(--gold-lip); }
+.xp-medal-lg small { font-size: var(--fs-xs); }
+.xp-medal-lg b { font-size: 2rem; }
+.xp-prog-main { flex: 1 1 auto; min-width: 0; }
+.xp-prog-level { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--sp-2); margin: 0 0 var(--sp-2); font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-display); color: var(--color-heading); line-height: var(--lh-tight); }
+.xp-prog-level b { font-size: var(--fs-2xl); font-weight: var(--fw-display); }
+.xp-prog-total { font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); }
+.xp-bar-lg { height: 14px; }
+.xp-prog-next { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); font-weight: 700; color: var(--color-text); line-height: var(--lh-snug); }
+.xp-chart .st-bar { background: var(--gold); }
+.xp-chart .st-col.is-today .st-day { background: var(--gold); color: var(--gold-ink); }
+.xp-ch-row { display: flex; align-items: center; gap: var(--sp-3); min-height: 56px; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 2px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); text-decoration: none; }
+@media (hover: hover) { .xp-ch-row:hover { background: var(--color-surface-muted); } }
+.xp-ch-row:active { background: var(--color-press); }
+.xp-ch-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; line-height: 1.35; }
+.xp-ch-text b { font-family: var(--font-display); font-weight: var(--fw-display); color: var(--color-heading); }
+.xp-ch-text small { font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); }
+.xp-ch-row > .icon:last-child { flex-shrink: 0; color: var(--color-text-muted); }
+.xp-how { margin-top: var(--sp-2); }
+.xp-how summary { display: flex; align-items: center; gap: var(--sp-2); min-height: 48px; cursor: pointer; list-style: none; font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); }
+.xp-how summary::-webkit-details-marker { display: none; }
+.xp-how summary > .icon:last-child { margin-left: auto; transition: transform var(--dur-2) var(--ease-std); }
+.xp-how[open] summary > .icon:last-child { transform: rotate(180deg); }
+.xp-how ul { margin: 0 0 var(--sp-2); padding-left: 1.2em; font-size: var(--fs-sm); line-height: var(--lh-body); color: var(--color-text); }
+.xp-how .prog-note { margin: 0; }
+
+/* ---------- 3. レベルアップのダイアログ(.fd-badge の形。メダルの代わりにマスコットと Lv. のメダル) ---------- */
+.xp-up-art { position: relative; width: 132px; height: 112px; margin: var(--sp-3) auto var(--sp-3); }
+.xp-up-art .xp-up-mascot { position: absolute; left: 0; bottom: 0; width: 104px; height: 104px; }
+.xp-up-medal { position: absolute; right: 0; top: 0; width: 56px; height: 56px; }
+.xp-up-medal b { font-size: 1.5rem; }
+@media (max-height: 500px) {
+  .xp-up-art { width: 100px; height: 80px; margin: var(--sp-2) auto; }
+  .xp-up-art .xp-up-mascot { width: 76px; height: 76px; }
+  .xp-up-medal { width: 44px; height: 44px; }
+  .xp-up-medal b { font-size: 1.125rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .xp-up .xp-up-medal { animation: fd-medal-in 600ms var(--ease-pop) 120ms both; }
+  .xp-up .xp-up-mascot { animation: fd-hop 560ms var(--ease-out) 380ms 2; }
+}
+
+/* ---------- 4. 今日のチャレンジ(#challenge。出題中・結果は○×一問一答の部品 css/ox.css を使う) ---------- */
+.ch-view .ox-glyph-inline { width: 1.2em; height: 1.2em; }
+.ch-start { padding: var(--sp-5) var(--sp-4); }
+.ch-hero { display: flex; align-items: center; gap: var(--sp-3); }
+.ch-mascot { flex-shrink: 0; width: 80px; height: 80px; }
+.ch-lead { margin: 0; font-family: var(--font-display); font-size: var(--fs-xl); font-weight: var(--fw-display); line-height: var(--lh-tight); color: var(--color-heading); text-wrap: balance; word-break: auto-phrase; }
+.ch-rules { list-style: none; margin: var(--sp-4) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.ch-rules li { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--fs-sm); line-height: var(--lh-snug); color: var(--color-text); }
+.ch-rules li > .icon { flex-shrink: 0; margin-top: 1px; color: var(--gold-icon); }
+.ch-bests { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); margin-top: var(--sp-4); }
+.ch-best { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: var(--sp-3) var(--sp-2); border-radius: var(--radius-md); background: var(--color-surface-muted); text-align: center; }
+.ch-best.is-all { background: var(--gold-soft); }
+.ch-best-label { font-size: var(--fs-xs); font-weight: 700; color: var(--color-text-muted); }
+.ch-best-num { display: flex; align-items: baseline; gap: 2px; font-family: var(--font-display); color: var(--color-heading); }
+.ch-best-num b { font-size: var(--fs-3xl); font-weight: var(--fw-display); line-height: 1.1; }
+.ch-best-num small { font-size: var(--fs-sm); font-weight: 700; }
+.ch-best-sub { font-size: var(--fs-2xs); font-weight: 700; color: var(--color-text-muted); }
+.ch-pool { margin-top: var(--sp-4); }
+.ch-pool-label { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--color-text); }
+.ch-seg { display: flex; }
+.ch-seg .segmented-item { flex: 1 1 0; min-width: min-content; min-height: 44px; }
+.ch-pool-note { margin: var(--sp-2) 0 0; font-size: var(--fs-xs); color: var(--color-text-muted); line-height: var(--lh-snug); }
+.ch-go { min-height: 60px; margin-top: var(--sp-5); gap: var(--sp-2); font-size: var(--fs-lg); letter-spacing: .08em; }
+
+/* 出題中: 上のバー(残り時間の太いバー・正解の数・残りの時間)。残り30秒からは赤 */
+.ch-bar .ch-fill { transition: width 120ms linear, background var(--dur-2); }
+.ch-bar .ch-fill.is-low { background: var(--color-danger-fill); }
+.ch-score { display: inline-flex; flex-shrink: 0; align-items: center; gap: 2px; font-family: var(--font-display); font-size: var(--fs-md); font-weight: var(--fw-display); color: var(--color-heading); }
+.ch-score .ox-glyph { width: 20px; height: 20px; color: var(--color-success); }
+.ch-time { min-width: 3em; }
+.ch-stage { margin-top: var(--sp-3); }
+.ch-stage .ox-btn[aria-disabled="true"] { cursor: default; }
+.ch-stage .ox-btn[aria-disabled="true"]:not(.is-answer):not(.is-wrong) { opacity: .45; }
+@media (prefers-reduced-motion: no-preference) {
+  .ch-stage.ch-flash-ok .ox-btn.is-answer .ox-glyph { animation: ox-pop 300ms var(--ease-out); }
+  .ch-stage.ch-flash-ng .ox-btn.is-wrong { animation: shake-x 300ms var(--ease-std); }
+}
+
+/* 結果: 正解の数・経験値・ベスト */
+.ch-result { padding: var(--sp-6) var(--sp-4) var(--sp-5); text-align: center; }
+.ch-result-sub { margin: var(--sp-1) 0 0; font-size: var(--fs-sm); font-weight: 700; color: var(--color-text-muted); }
+.ch-result-stats { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); max-width: 420px; margin: var(--sp-4) auto 0; padding: 0; }
+.ch-result-stats li { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: var(--sp-2) 4px; border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.ch-result-stats li.is-xp { background: var(--gold-soft); }
+.ch-result-stats span { font-size: var(--fs-2xs); font-weight: 700; color: var(--color-text-muted); }
+.ch-result-stats b { font-family: var(--font-display); font-size: var(--fs-lg); font-weight: var(--fw-display); color: var(--color-heading); white-space: nowrap; }
+.ch-result-stats small { font-size: var(--fs-2xs); line-height: 1.3; color: var(--color-text-muted); }

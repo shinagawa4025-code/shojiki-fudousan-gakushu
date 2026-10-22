@@ -684,6 +684,19 @@ window.Views.exam = (function () {
     }
   }
 
+  // v14: 経験値(用語から作った問題の分。4択の確認問題は noteAnswers → AnswerLog.recordMany が数える)。未回答は数えない
+  function awardTermXp(s) {
+    if (!window.Xp) return;
+    try {
+      s.questions.forEach((q, i) => {
+        if (!q || q.kind === `fixed`) return;
+        const chosen = Number.isInteger(s.answers[i]) ? s.answers[i] : null;
+        if (chosen === null) return;
+        Xp.award(`mc`, { id: `term:${q.termId || q.refId || i}`, correct: chosen === q.correctIndex, unsure: false, src: `exam` });
+      });
+    } catch (e) { console.error(`[経験値] 模擬試験の結果を記録できませんでした`, e); }
+  }
+
   // 記録(解き直しの予定・解答の記録・復習・ストリーク)を済ませた試験: 試験ID → 「自信なし」の数。
   // 履歴を保存できずに受験中のデータが残った試験を、もう一度提出・自動採点したときに数え直さないようにする
   // (受験中のデータにも logged として残す。それも保存できないときは、このページを開いている間だけこの表で防ぐ)
@@ -711,6 +724,7 @@ window.Views.exam = (function () {
       if (!done) {
         noteDrill(s);
         markLogged(s, entry, noteAnswers(s));
+        awardTermXp(s);
         if (window.Streak) Streak.recordToday();
       }
       Storage.set(RETRY_RESULT_KEY, entry);
@@ -726,6 +740,7 @@ window.Views.exam = (function () {
     if (!done) {
       noteDrill(s);
       markLogged(s, entry, noteAnswers(s));
+      awardTermXp(s);
       const graded = new Set();
       entry.wrong.forEach((w) => {
         // 未回答は「もう一度」にしない(解けなかったとは限らず、長い復習間隔を消してしまうため)

@@ -14,7 +14,10 @@ window.Onboarding = (function () {
   const IGNORE_KEYS = [`themePreference`, `ttsRate`, `oxPrefs`, `quizPrefs`, `srsMigrated`, `schemaVersion`, `onboardingDone`, `seenWhatsNew`,
     `lastBackupAt`, `backupNoteDismissedAt`, `installNoteDismissedAt`, `learnerProfile`, `seenReviewTip`, `glossaryMode`, `audience`,
     // v12: 開いただけで作られる記録・設定(学習した記録ではない)
-    `studyTime`, `studyTimeLock`, `dailyGoal`, `goalDays`, `badges`, `answerPrefs`, `predictPrefs`, `planPrefs`];
+    `studyTime`, `studyTimeLock`, `dailyGoal`, `goalDays`, `badges`, `answerPrefs`, `predictPrefs`, `planPrefs`,
+    // v14: 経験値(起動時に以前の記録から自動で作る)・今日のチャレンジの集計(自己ベストなど)・各機能の設定
+    // (数字まとめ・比較表・条文穴埋めの記録 numbersStats・compareStats・joubunStats は学習した記録なので含めない)
+    `xp`, `challenge`, `toolPrefs`, `freqPrefs`];
   // 目的ごとの最初の1問(なければ最初の4択)
   const FIRST_QUESTION = { takken: `quiz-K-01`, life: `quiz-beg-01`, work: `quiz-beg-03`, zeirishi: `quiz-O-01` };
   // 試験日を登録するときの表示名

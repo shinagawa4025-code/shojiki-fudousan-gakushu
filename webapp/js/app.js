@@ -46,7 +46,9 @@
   // about・works は新しい画面(読み込めなかったときはエラー画面を出す)。#summary は #works の別名(古いURL・リンク用)
   const Views = window.Views || {};
   [`home`, `topics`, `glossary`, `bookmarks`, `figures`, `review`, `quiz`, `ox`, `exam`, `progress`,
-    `works`, `calculators`, `sources`, `settings`, `more`, `about`, `plan`].forEach((name) => {
+    `works`, `calculators`, `sources`, `settings`, `more`, `about`, `plan`,
+    // v14: 数字まとめドリル・比較表・条文穴埋め(消費税法)・今日のチャレンジ・出題頻度ランク
+    `numbers`, `compare`, `joubun`, `challenge`, `freq`].forEach((name) => {
     const view = Views[name] || (name === `works` ? Views.summary : null);
     if (view) { Router.register(name, view); return; }
     console.warn(`[app] 画面 ${name} が見つかりません`);

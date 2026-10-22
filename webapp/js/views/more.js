@@ -12,6 +12,14 @@ window.Views.more = (function () {
     { nav: `#about`, icon: `info`, title: `このアプリについて`, desc: `運営者・プライバシー・免責事項・更新履歴` },
     { report: true, icon: `flag`, title: `誤り・ご意見を送る`, desc: `報告フォームが開きます` },
   ];
+  // v14: 練習と暗記のツール(「問題」「学ぶ」の画面の入口のタイルと同じ行き先)
+  const TOOL_ROWS = [
+    { nav: `#challenge`, icon: `bolt`, tone: `sticker-gold`, title: `今日のチャレンジ`, desc: `3分間の○×タイムアタック。自己ベストと経験値` },
+    { nav: `#freq`, icon: `star`, title: `出題頻度ランク`, desc: `宅建士試験の論点ごとの出題頻度(A・B・C)` },
+    { nav: `#numbers`, icon: `percent`, title: `数字まとめドリル`, desc: `期間・金額・面積・割合などの数字をカードと4択で` },
+    { nav: `#compare`, icon: `grid`, title: `比較表で覚える`, desc: `似た制度を表で見比べて、穴埋めで確かめる` },
+    { nav: `#joubun`, icon: `scale`, title: `条文穴埋め(消費税法)`, badge: `税理士`, desc: `理論の条文の大事な語句を穴埋めで覚える` },
+  ];
   const CORNER_ROWS = [
     { nav: `#works`, icon: `play-square`, title: `作品で学ぶ`, badge: `任意`, desc: `公式チャンネルの動画をテーマ別に紹介` },
   ];
@@ -40,6 +48,10 @@ window.Views.more = (function () {
       <h2>メニュー</h2>
       <nav class="more-list" aria-label="メニュー">
         ${ROWS.map(rowHtml).join(``)}
+      </nav>
+      <h3 class="more-group-title" id="more-tools-title">練習と暗記のツール</h3>
+      <nav class="more-list" aria-labelledby="more-tools-title" data-role="more-tools">
+        ${TOOL_ROWS.map(rowHtml).join(``)}
       </nav>
       <h3 class="more-group-title" id="more-corner-title">コーナー</h3>
       <nav class="more-list" aria-labelledby="more-corner-title">
